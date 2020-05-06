@@ -1,0 +1,75 @@
+#!/usr/bin/make -f
+
+%:
+	dh $@ --with autoreconf
+
+# We divert the shared libraries (which are all internal to
+# Hercules) into /usr/lib/hercules, which in turn means the plugins would
+# normally go in /usr/lib/hercules/hercules.
+# 
+# However, Hercules will actually look in ${prefix}/lib/hercules for 
+# plugins (and that path makes more sense anyway), so we override it
+# at build/install time by changing the make arguments.
+#
+# Hopefully this will become unnecessary if upstream add a --with-modexecdir
+# option or something. It might need changing in new upstream releases if
+# they stop hard-coding ${prefix}/lib/hercules.
+
+# Deprecated ./configure options (since Hercules 3.13):
+#  --disable-external-gui  disable external GUI interface
+
+# Unused ./configure options:
+#  --enable-extpkgs=DIR    define base External Packages installation directory
+#  --enable-hqa=DIR        define HQA_DIR override directory
+#  --disable-enhanced-configincludes
+#                          disable enhanced-mode 'include' file support in
+#                          configuration file
+#  --disable-automatic-operator
+#                          disable Hercules Automatic Operator feature
+#  --disable-fthreads      disable use of fish threads instead of posix threads
+#  --enable-interlocked-access-facility-2=yes|no
+#                          enable/disable Interlocked Access Facility 2
+#                          (default yes)
+#  --enable-setuid-hercifc=yes|no|GROUPNAME
+#                          install hercifc as setuid root, and allow execution
+#                          by users in group GROUPNAME
+#  --enable-getoptwrapper  force use of the getopt wrapper kludge
+
+CONFIGURE_ARGS := --prefix=/usr \
+	--enable-optimization="$(CFLAGS)" \
+	--libdir=/usr/lib/hercules \
+	--mandir=/usr/share/man \
+	--docdir=/usr/share/doc/hercules \
+	--htmldir=/usr/share/doc/hercules/html \
+	--disable-object-rexx \
+	--enable-regina-rexx \
+	--enable-ipv6 \
+	--enable-cckd-bzip2 \
+	--enable-het-bzip2 \
+	--enable-custom=UbuntuPPA \
+	--enable-multi-cpu=64 \
+	--enable-capabilities \
+	--disable-ltdl-install \
+	--without-included-ltdl
+
+MAKE_ARGS := modexecdir=/usr/lib/hercules
+
+export DH_VERBOSE = 0
+export DEB_BUILD_MAINT_OPTIONS  = hardening=+all
+export DEB_CFLAGS_MAINT_APPEND  = -Wall -pedantic
+export DEB_LDFLAGS_MAINT_APPEND = -Wl,--as-needed -lltdl
+
+override_dh_autoreconf:
+	dh_autoreconf autoreconf -- -fvi -Im4 -Iautoconf
+
+override_dh_auto_configure:
+	dh_auto_configure -- $(CONFIGURE_ARGS)
+
+override_dh_auto_build:
+	dh_auto_build -- $(MAKE_ARGS)
+
+override_dh_auto_install:
+	$(MAKE) install DESTDIR=$(CURDIR)/debian/sdl-hercules $(MAKE_ARGS)
+	sed -i "/dependency_libs/ s/'.*'/''/" `find $(CURDIR)/debian/sdl-hercules -name '*.la'`
+	rm -f $(CURDIR)/debian/sdl-hercules/usr/bin/bldlvlck
+	rm -f $(CURDIR)/debian/sdl-hercules/usr/bin/herclin

@@ -1,0 +1,370 @@
+The first version of this package was debianized by Cheng H. Lee
+<cheng.h.lee@gmail.com> on Wed, 06 May 2020 01:44:54 -0500.
+
+The current version was downloaded from https://github.com/SDL-Hercules-390/hyperion.
+
+Upstream Authors:
+
+       Hercules was created by Roger Bowler and is maintained by Jay
+       Maynard.  Jan Jaeger designed and implemented many of the
+       advanced features of Hercules, including dynamic
+       reconfiguration, integrated console, interpretive execution,
+       and z/Architecture support.
+
+Copyright:
+    Copyright 1991-2014 Roger Bowler
+    Copyright 1995-2005 Free Software Foundation, Inc.
+    Copyright 1999 Volker Bandke
+    Copyright 1999-2001 Nobody
+    Copyright 1999-2009 Peter Kuschnerus
+    Copyright 1999-2013 Jan Jaeger
+    Copyright 2000-2009 Leland Lucius
+    Copyright 2000-2007 Malcolm Beattie
+    Copyright 2000-2009 Willem Konynenberg
+    Copyright 2000-2009 Bernard van der Helm
+    Copyright 2001-2009 Fritz Elfert
+    Copyright 2001-2010 James M. Morrison
+    Copyright 2001-2009 Vic Cross
+    Copyright 2002-2014 David B.Trout
+    Copyright 2002-2010 Greg Smith
+    Copyright 2002-2012 James A. Pierson
+    Copyright 2003-2006 Mark L. Gaubatz
+    Copyright 2003-2009 Ivan Warren
+    Copyright 2000-2007 Jay Maynard
+    Copyright 2010 TurboHercules, SAS
+    Copyright 2012 Enrico Sorichetti
+    Copyright 2014 Peter J. Jansen
+    Copyright 2016-2018 Stephen R. Orso
+    "and others"
+
+Licensing:
+    All materials in this distribution are
+    copyrighted by Roger Bowler and others.
+
+    Hercules may be distributed under the terms
+    of the Q Public License Version 1.0
+
+    Please refer to:
+    http://www.hercules-390.org/herclic.html
+    for details.
+
+    In the context of this license, the initial developers of
+    the software are Roger Bowler, Jan Jaeger, and Jay Maynard.
+
+(A copy of the Q Public License 1.0 from the referenced web page is appended to
+this file. It is the same as the original Trolltech version available from
+opensource.org, except that the Choice of Law at the end has been changed
+to England.)
+
+Copyright on differently-licensed parts:
+
+crypto/sha2.c, crypto.sha2.h:
+    Copyright (c) 2000-2001, Aaron D. Gifford
+    All rights reserved.
+
+    Redistribution and use in source and binary forms, with or without
+    modification, are permitted provided that the following conditions
+    are met:
+    1. Redistributions of source code must retain the above copyright
+       notice, this list of conditions and the following disclaimer.
+    2. Redistributions in binary form must reproduce the above copyright
+       notice, this list of conditions and the following disclaimer in the
+       documentation and/or other materials provided with the distribution.
+    3. Neither the name of the copyright holder nor the names of contributors
+       may be used to endorse or promote products derived from this software
+       without specific prior written permission.
+
+    THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTOR(S) ``AS IS'' AND
+    ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+    IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+    ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTOR(S) BE LIABLE
+    FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+    DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
+    OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+    HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+    LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
+    OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+    SUCH DAMAGE.
+
+crypto/des.c:
+    PuTTY is copyright 1997-2005 Simon Tatham.
+    Portions copyright Robert de Bath, Joris van Rantwijk, Delian
+    Delchev, Andreas Schultz, Jeroen Massar, Wez Furlong, Nicolas Barry,
+    Justin Bradford, Ben Harris, Malcolm Smith, Ahmad Khalifa, Markus
+    Kuhn, and CORE SDI S.A.
+
+    Permission is hereby granted, free of charge, to any person
+    obtaining a copy of this software and associated documentation files
+    (the "Software"), to deal in the Software without restriction,
+    including without limitation the rights to use, copy, modify, merge,
+    publish, distribute, sublicense, and/or sell copies of the Software,
+    and to permit persons to whom the Software is furnished to do so,
+    subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be
+    included in all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+    EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+    MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+    NONINFRINGEMENT.  IN NO EVENT SHALL THE COPYRIGHT HOLDERS BE LIABLE
+    FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF
+    CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+    WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+hercules.m4:
+    Modeled after 'AC_C99_FLEXIBLE_ARRAY' macro copyright
+    by Erik de Castro Lopo <erikd AT mega-nerd DOT com>
+
+    Permission to use, copy, modify, distribute, and sell this file
+    for any purpose is hereby granted without fee, provided that the
+    above copyright and this permission notice appear in all copies.
+    No representations are made about the suitability of this software
+    for any purpose.  It is provided "as is" without express or
+    implied warranty.
+
+decNumber/*:
+    Copyright (c) 1995-2005 International Business Machines Corporation and
+    others. All rights reserved.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the
+    "Software"), to deal in the Software without restriction, including
+    without limitation the rights to use, copy, modify, merge, publish,
+    distribute, and/or sell copies of the Software, and to permit persons
+    to whom the Software is furnished to do so, provided that the above
+    copyright notice(s) and this permission notice appear in all copies of
+    the Software and that both the above copyright notice(s) and this
+    permission notice appear in supporting documentation.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+    OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+    MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT
+    OF THIRD PARTY RIGHTS. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR
+    HOLDERS INCLUDED IN THIS NOTICE BE LIABLE FOR ANY CLAIM, OR ANY SPECIAL
+    INDIRECT OR CONSEQUENTIAL DAMAGES, OR ANY DAMAGES WHATSOEVER RESULTING
+    FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT,
+    NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION
+    WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+
+    Except as contained in this notice, the name of a copyright holder
+    shall not be used in advertising or otherwise to promote the sale, use
+    or other dealings in this Software without prior written authorization
+    of the copyright holder.
+
+getopt.c:
+ * Copyright (c) 1987, 1993, 1994, 1996
+ *  The Regents of the University of California.  All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ * 3. All advertising materials mentioning features or use of this software
+ *    must display the following acknowledgement:
+ *  This product includes software developed by the University of
+ *  California, Berkeley and its contributors.
+ * 4. Neither the name of the University nor the names of its contributors
+ *    may be used to endorse or promote products derived from this software
+ *    without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE REGENTS AND CONTRIBUTORS ``AS IS'' AND
+ * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED.  IN NO EVENT SHALL THE REGENTS OR CONTRIBUTORS BE LIABLE
+ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
+ * OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+ * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+ * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
+ * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+ * SUCH DAMAGE.
+
+getopt.h:
+ * Copyright (c) 2000 The NetBSD Foundation, Inc.
+ * All rights reserved.
+ *
+ * This code is derived from software contributed to The NetBSD Foundation
+ * by Dieter Baron and Thomas Klausner.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ * 3. All advertising materials mentioning features or use of this software
+ *    must display the following acknowledgement:
+ *        This product includes software developed by the NetBSD
+ *        Foundation, Inc. and its contributors.
+ * 4. Neither the name of The NetBSD Foundation nor the names of its
+ *    contributors may be used to endorse or promote products derived
+ *    from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE NETBSD FOUNDATION, INC. AND CONTRIBUTORS
+ * ``AS IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED
+ * TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE FOUNDATION OR CONTRIBUTORS
+ * BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+
+parts of hscutl.[ch]:
+ * Copyright (c) 1998 Todd C. Miller <Todd.Miller@courtesan.com>
+ *
+ * Permission to use, copy, modify, and distribute this software for any
+ * purpose with or without fee is hereby granted, provided that the above
+ * copyright notice and this permission notice appear in all copies.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+ * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ * ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+ * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+ * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+
+tt32api.h
+  Copyright (c) Software Development Laboratories, aka "Fish" (David B. Trout)
+
+  Licensed under terms of the ZLIB/LIBPNG Open Source Software License
+  http://www.opensource.org/licenses/zlib-license.php
+
+  THIS SOFTWARE IS PROVIDED 'AS-IS', WITHOUT ANY EXPRESS OR IMPLIED WARRANTY.
+  IN NO EVENT WILL THE AUTHOR(S) BE HELD LIABLE FOR ANY DAMAGES ARISING FROM
+  THE USE OF THIS SOFTWARE.
+
+  Permission is granted to anyone to use this software for any purpose, including
+  commercial applications, and to alter it and redistribute it freely, subject to
+  the following restrictions:
+
+   1. The origin of this software must not be misrepresented; you must not claim
+      that you wrote the original software. If you use this software in a product,
+      an acknowledgment in the product documentation would be appreciated but is
+      not required.
+
+   2. Altered source versions must be plainly marked as such, and must not be
+      misrepresented as being the original software.
+
+   3. This notice nor the above Copyright information may not be removed or altered
+      from any source distribution.
+
+util/awssl-v19g:
+    * Copyright (C) 2002, By Reed H. Petty, rhp@draper.net                *
+    *                                                                     *
+    * You are free to make any changes you like to this code for any      *
+    * purpose (including commercial for profit use) PROVIDED that you     *
+    * carry the credits forward into derived works.                       *
+    *                                                                     *
+    * NO WARRANTY OF ANY KIND IS MADE!  USE AT YOUR OWN RISK!             *
+
+part of w32util.c:
+    Copyright 2000 Petter Reinholdtsen
+    (with the same copyright/permission notice as crypto/des.c)
+
+-----------------------------------------------------------------------
+
+THE Q PUBLIC LICENSE version 1.0
+
+Copyright (C) 1999 Trolltech AS, Norway.
+Everyone is permitted to copy and
+distribute this license document.
+
+The intent of this license is to establish freedom to share and change the
+software regulated by this license under the open source model.
+
+This license applies to any software containing a notice placed by the
+copyright holder saying that it may be distributed under the terms of the Q
+Public License version 1.0. Such software is herein referred to as the
+Software. This license covers modification and distribution of the Software,
+use of third-party application programs based on the Software, and development
+of free software which uses the Software.
+
+                                Granted Rights
+
+1. You are granted the non-exclusive rights set forth in this license provided
+you agree to and comply with any and all conditions in this license. Whole or
+partial distribution of the Software, or software items that link with the
+Software, in any form signifies acceptance of this license.
+
+2. You may copy and distribute the Software in unmodified form provided that
+the entire package, including - but not restricted to - copyright, trademark
+notices and disclaimers, as released by the initial developer of the Software,
+is distributed.
+
+3. You may make modifications to the Software and distribute your
+modifications, in a form that is separate from the Software, such as patches.
+The following restrictions apply to modifications:
+
+    a. Modifications must not alter or remove any copyright notices in the
+    Software.
+
+    b. When modifications to the Software are released under this license, a
+    non-exclusive royalty-free right is granted to the initial developer of the
+    Software to distribute your modification in future versions of the Software
+    provided such versions remain available under these terms in addition to
+    any other license(s) of the initial developer.
+
+4. You may distribute machine-executable forms of the Software or
+machine-executable forms of modified versions of the Software, provided that
+you meet these restrictions:
+
+    a. You must include this license document in the distribution.
+
+    b. You must ensure that all recipients of the machine-executable forms are
+    also able to receive the complete machine-readable source code to the
+    distributed Software, including all modifications, without any charge
+    beyond the costs of data transfer, and place prominent notices in the
+    distribution explaining this.
+
+    c. You must ensure that all modifications included in the
+    machine-executable forms are available under the terms of this license.
+
+5. You may use the original or modified versions of the Software to compile,
+link and run application programs legally developed by you or by others.
+
+6. You may develop application programs, reusable components and other software
+items that link with the original or modified versions of the Software. These
+items, when distributed, are subject to the following requirements:
+
+    a. You must ensure that all recipients of machine-executable forms of these
+    items are also able to receive and use the complete machine-readable source
+    code to the items without any charge beyond the costs of data transfer.
+
+    b. You must explicitly license all recipients of your items to use and
+    re-distribute original and modified versions of the items in both
+    machine-executable and source code forms. The recipients must be able to do
+    so without any charges whatsoever, and they must be able to re-distribute
+    to anyone they choose.
+
+    c. If the items are not available to the general public, and the initial
+    developer of the Software requests a copy of the items, then you must
+    supply one.
+
+                           Limitations of Liability
+
+In no event shall the initial developers or copyright holders be liable for any
+damages whatsoever, including - but not restricted to - lost revenue or profits
+or other direct, indirect, special, incidental or consequential damages, even
+if they have been advised of the possibility of such damages, except to the
+extent invariable law, if any, provides otherwise.
+
+                                  No Warranty
+
+The Software and this license document are provided AS IS with NO WARRANTY OF
+ANY KIND, INCLUDING THE WARRANTY OF DESIGN, MERCHANTABILITY AND FITNESS FOR A
+PARTICULAR PURPOSE.
+
+                                 Choice of Law
+
+This license is governed by the Laws of England.

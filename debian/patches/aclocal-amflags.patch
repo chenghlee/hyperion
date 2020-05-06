@@ -1,0 +1,19 @@
+`autoreconf` does not support a multi-line `ACLOCAL_AMFLAGS`; using it
+will cause `dh_autoreconf` to fail with the following error:
+
+  autoreconf: running: aclocal -I m4 -I autoconf --force \
+  aclocal: error: non-option arguments are not accepted: '\'.
+
+--- sdl-hercules-4.2.1/Makefile.am
++++ sdl-hercules-4.2.1/Makefile.am
+@@ -15,9 +15,7 @@
+ 
+ #------------------------------------------------------------------------------
+ 
+-ACLOCAL_AMFLAGS =   \
+-  -I autoconf       \
+-  -I m4
++ACLOCAL_AMFLAGS = -I autoconf -I m4
+ 
+ AM_CPPFLAGS =       \
+   -I $(top_srcdir)  \

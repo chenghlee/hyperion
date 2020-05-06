@@ -1,0 +1,3 @@
+aclocal-amflags.patch
+autoconf-libtool.patch
+htmldoc-install.patch

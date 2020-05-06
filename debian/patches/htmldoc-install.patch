@@ -1,0 +1,38 @@
+Autotools changes so we don't need additional Makefile commands to
+install upstream-provided HTML documentation in the right place.
+
+--- sdl-hercules-4.2.1/html/Makefile.am
++++ sdl-hercules-4.2.1/html/Makefile.am
+@@ -1,5 +1,5 @@
+ 
+-dist_pkgdata_DATA =   \
++htmldoc_sources =     \
+     cckddasd.html     \
+     fishgui.html      \
+     hercconf.html     \
+@@ -58,11 +58,15 @@ dist_pkgdata_DATA =   \
+     tasks.html        \
+     telnet.html
+ 
++htmldoc_pkgdatadir = $(htmldir)
++
++dist_htmldoc_pkgdata_DATA = $(htmldoc_sources)
++
+ include_sources =           \
+     include/footer.htmlpart \
+     include/header.htmlpart
+ 
+-include_pkgdatadir = $(pkgdatadir)/include
++include_pkgdatadir = $(htmldir)/include
+ 
+ dist_include_pkgdata_DATA = $(include_sources)
+ 
+@@ -120,7 +124,7 @@ images_sources =                        \
+     images/waitoffu.gif                 \
+     images/waitonu.gif
+ 
+-images_pkgdatadir = $(pkgdatadir)/images
++images_pkgdatadir = $(htmldir)/images
+ 
+ dist_images_pkgdata_DATA = $(images_sources)
+ 
