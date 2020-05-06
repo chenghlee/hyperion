@@ -1,0 +1,14 @@
+Tweak the filename of the required shared library so end-users don't need
+to install the "-dev" package to get the desired functionality.
+
+--- sdl-hercules-4.2.1/hRexx_r.c
++++ sdl-hercules-4.2.1/hRexx_r.c
+@@ -70,7 +70,7 @@
+   #define REXX_LIBNAME      "libregina.dylib"
+   #define REXX_APILIBNAME   ""
+ #else // *nix
+-  #define REXX_LIBNAME      "libregina.so"
++  #define REXX_LIBNAME      "libregina.so.3"
+   #define REXX_APILIBNAME   ""
+ #endif
+ 

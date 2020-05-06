@@ -20,8 +20,10 @@ Standards-Version: 3.6.2
 Package: sdl-hercules
 Architecture: amd64
 Depends: ${shlibs:Depends}, ${misc:Depends}
-Conflicts: hercules
+Recommends: libregina3
 Suggests: x3270 | c3270, regina-rexx
+Conflicts: hercules
+Provides: hercules (= 4.2)
 Description: System/370, ESA/390 and z/Architecture Emulator
  Hercules is an open source software implementation of the mainframe System/370
  and ESA/390 architectures, in addition to the new 64-bit z/Architecture.
