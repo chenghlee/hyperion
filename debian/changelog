@@ -1,3 +1,12 @@
+sdl-hercules (4.2.1-1ppa3~ubuntu18.04) bionic; urgency=medium
+
+  * Use post-install script to configure `hercifc` so members of the
+    "hercules" group to execute it as (setuid) root.  This allows such users
+    to operate guest (emulated) systems with TCP/IP networking without having
+    to run Hercules as root.
+
+ -- Cheng H. Lee <cheng.h.lee@gmail.com>  Sat, 09 May 2020 16:33:07 -0500
+
 sdl-hercules (4.2.1-1ppa2~ubuntu18.04) bionic; urgency=medium
 
   * Add "libregina3" as a recommended dependency to suppress warnings about
