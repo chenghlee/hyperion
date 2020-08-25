@@ -963,8 +963,7 @@ static int  loc3270_init_handler( DEVBLK* dev, int argc, char* argv[] )
             if ((dev->acc_ipaddr = inet_addr( argv[ac] )) == (in_addr_t)(-1))
             {
                 // "%1d:%04X COMM: option %s value %s invalid"
-                WRMSG( HHC01007, "E", LCSS_DEVNUM,
-                      "IP address", argv[ac] );
+                WRMSG( HHC01007, "E", LCSS_DEVNUM, "IP address", argv[ac] );
                 return -1;
             }
             else
@@ -976,11 +975,17 @@ static int  loc3270_init_handler( DEVBLK* dev, int argc, char* argv[] )
                     dev->acc_ipmask = (in_addr_t)(-1);
                 else
                 {
-                    if ((dev->acc_ipmask = inet_addr(argv[ac])) == (in_addr_t)(-1))
+                    char mask[16] = {0};
+                    static const char* badmask = "0.0.0.0";
+
+                    if (0
+                        || inet_pton( AF_INET, argv[ac], &dev->acc_ipmask ) <= 0
+                        || str_eq( badmask, inet_ntop( AF_INET, &dev->acc_ipmask,
+                                   mask, (int) sizeof( mask )))
+                    )
                     {
                         // "%1d:%04X COMM: option %s value %s invalid"
-                        WRMSG( HHC01007, "E", LCSS_DEVNUM,
-                              "mask value", argv[ac] );
+                        WRMSG( HHC01007, "E", LCSS_DEVNUM, "mask", argv[ac] );
                         return -1;
                     }
 
@@ -990,8 +995,7 @@ static int  loc3270_init_handler( DEVBLK* dev, int argc, char* argv[] )
                     if (argc > 0)   // too many args?
                     {
                         // "%1d:%04X COMM: unrecognized parameter %s"
-                        WRMSG( HHC01019, "E", LCSS_DEVNUM,
-                              argv[ac] );
+                        WRMSG( HHC01019, "E", LCSS_DEVNUM, argv[ac] );
                         return -1;
                     }
                 }
@@ -1098,10 +1102,17 @@ static int  constty_init_handler( DEVBLK* dev, int argc, char* argv[] )
                     dev->acc_ipmask = (in_addr_t)(-1);
                 else
                 {
-                    if ((dev->acc_ipmask = inet_addr( argv[ac] )) == (in_addr_t)(-1))
+                    char mask[16] = {0};
+                    static const char* badmask = "0.0.0.0";
+
+                    if (0
+                        || inet_pton( AF_INET, argv[ac], &dev->acc_ipmask ) <= 0
+                        || str_eq( badmask, inet_ntop( AF_INET, &dev->acc_ipmask,
+                                   mask, (int) sizeof( mask )))
+                    )
                     {
                         // "%1d:%04X COMM: option %s value %s invalid"
-                        WRMSG( HHC01007, "E", LCSS_DEVNUM, "mask value", argv[ac] );
+                        WRMSG( HHC01007, "E", LCSS_DEVNUM, "mask", argv[ac] );
                         return -1;
                     }
 
@@ -1930,17 +1941,13 @@ static void  loc3270_redrive_pselect( DEVBLK* dev )
 /*-------------------------------------------------------------------*/
 /*              Halt device / Clear Subchannel                       */
 /*-------------------------------------------------------------------*/
-static BYTE  constty_halt_or_clear( DEVBLK* dev )
+static void constty_halt_or_clear( DEVBLK* dev )
 {
-    BYTE unitstat = 0;
     constty_redrive_pselect( dev );
-    return unitstat;
 }
-static BYTE  loc3270_halt_or_clear( DEVBLK* dev )
+static void loc3270_halt_or_clear( DEVBLK* dev )
 {
-    BYTE unitstat = 0;
     loc3270_redrive_pselect( dev );
-    return unitstat;
 }
 
 /*-------------------------------------------------------------------*/
@@ -3266,6 +3273,89 @@ static void consto()    // (select timeout)
 }
 
 /*-------------------------------------------------------------------*/
+/*      Obtain a new console_connection_handler listening socket     */
+/*-------------------------------------------------------------------*/
+static int get_listening_socket()
+{
+int                    rc = 0;          /* Return code               */
+int                    lsock;           /* Socket for listening      */
+int                    optval;          /* Argument for setsockopt   */
+struct sockaddr_in    *server;          /* Server address structure  */
+
+    /* Obtain a socket */
+    lsock = socket( AF_INET, SOCK_STREAM, 0 );
+
+    if (lsock < 0)
+    {
+        // "COMM: error in function %s: %s"
+        WRMSG( HHC01034, "E", "socket()", strerror( HSO_errno ));
+        return -1;
+    }
+
+    /* Allow previous instance of socket to be reused */
+    optval = 1;
+    rc = setsockopt( lsock, SOL_SOCKET, SO_REUSEADDR,
+                     (GETSET_SOCKOPT_T*) &optval, sizeof( optval ));
+    if (rc < 0)
+    {
+        // "COMM: error in function %s: %s"
+        WRMSG( HHC01034, "E", "setsockopt()", strerror( HSO_errno ));
+        close_socket( lsock );
+        return -1;
+    }
+
+    /* Prepare the sockaddr structure for the bind */
+    if (!(server = parse_sockspec( sysblk.cnslport )))
+    {
+        char msgbuf[64];
+        MSGBUF( msgbuf, "%s = %s", "CNSLPORT", sysblk.cnslport );
+        // "COMM: invalid parameter %s"
+        WRMSG( HHC01017, "E", msgbuf );
+        close_socket( lsock );
+        return -1;
+    }
+
+    /* Attempt to bind the socket to the port */
+    do
+    {
+        rc = bind( lsock, (struct sockaddr*) server,
+            sizeof( struct sockaddr_in ));
+
+        if (rc == 0 || HSO_errno != HSO_EADDRINUSE)
+            break;
+
+        // "Waiting for port %u to become free for console connections"
+        WRMSG( HHC01023, "W", ntohs( server->sin_port ));
+        SLEEP( 10 );
+    }
+    while (console_cnslcnt > 0);
+
+    if (rc != 0)
+    {
+        // "COMM: error in function %s: %s"
+        WRMSG( HHC01034, "E", "bind()", strerror( HSO_errno ));
+        free( server );
+        close_socket( lsock );
+        return -1;
+    }
+
+    /* Put the socket into listening state */
+    if ((rc = listen ( lsock, 10 )) < 0)
+    {
+        // "COMM: error in function %s: %s"
+        WRMSG( HHC01034, "E", "listen()", strerror( HSO_errno ));
+        free( server );
+        close_socket( lsock );
+        return -1;
+    }
+
+    // "Waiting for console connections on port %u"
+    WRMSG( HHC01024, "I", ntohs( server->sin_port ));
+    free( server );
+    return lsock;
+}
+
+/*-------------------------------------------------------------------*/
 /*        CONSOLE CONNECTION AND ATTENTION HANDLER THREAD            */
 /*-------------------------------------------------------------------*/
 static void* console_connection_handler( void* arg )
@@ -3273,16 +3363,15 @@ static void* console_connection_handler( void* arg )
 int                    rc = 0;          /* Return code               */
 int                    lsock;           /* Socket for listening      */
 int                    csock;           /* Socket for conversation   */
-struct sockaddr_in    *server;          /* Server address structure  */
 fd_set                 readset;         /* Read bit map for pselect  */
 int                    maxfd;           /* Highest fd for pselect    */
-int                    optval;          /* Argument for setsockopt   */
 int                    scan_complete;   /* DEVBLK scan complete      */
 int                    scan_retries;    /* DEVBLK scan retries       */
 TID                    tidneg;          /* Negotiation thread id     */
 DEVBLK                *dev;             /* -> Device block           */
 BYTE                   unitstat;        /* Status after receive data */
 TELNET                *tn;              /* Telnet Control Block      */
+const char*            curr_cnslport;   /* Current sysblk.cnslport   */
 
 int prev_rlen3270;
 
@@ -3301,77 +3390,26 @@ int prev_rlen3270;
     if (sysblk.herclogo == NULL)
         init_logo();
 
-    /* Obtain a socket */
-    lsock = socket( AF_INET, SOCK_STREAM, 0 );
-
-    if (lsock < 0)
-    {
-        // "COMM: error in function %s: %s"
-        WRMSG( HHC01034, "E", "socket()", strerror( HSO_errno ));
-        return NULL;
-    }
-
-    /* Allow previous instance of socket to be reused */
-    optval = 1;
-    rc = setsockopt( lsock, SOL_SOCKET, SO_REUSEADDR,
-                     (GETSET_SOCKOPT_T*) &optval, sizeof( optval ));
-    if (rc < 0)
-    {
-        // "COMM: error in function %s: %s"
-        WRMSG( HHC01034, "E", "setsockopt()", strerror( HSO_errno ));
-        return NULL;
-    }
-
-    /* Prepare the sockaddr structure for the bind */
-    if (!(server = parse_sockspec( sysblk.cnslport )))
-    {
-        char msgbuf[64];
-        MSGBUF( msgbuf, "%s = %s", "CNSLPORT", sysblk.cnslport );
-        // "COMM: invalid parameter %s"
-        WRMSG( HHC01017, "E", msgbuf );
-        return NULL;
-    }
-
-    /* Attempt to bind the socket to the port */
-    do
-    {
-        rc = bind( lsock, (struct sockaddr*) server,
-            sizeof( struct sockaddr_in ));
-
-        if (rc == 0 || HSO_errno != HSO_EADDRINUSE)
-            break;
-
-        // "Waiting for port %u to become free for console connections"
-        WRMSG( HHC01023, "W", ntohs( server->sin_port ));
-        SLEEP(10);
-    }
-    while (console_cnslcnt > 0);
-
-    if (rc != 0)
-    {
-        // "COMM: error in function %s: %s"
-        WRMSG( HHC01034, "E", "bind()", strerror( HSO_errno ));
-        free( server );
-        return NULL;
-    }
-
-    /* Put the socket into listening state */
-    if ((rc = listen ( lsock, 10 )) < 0)
-    {
-        // "COMM: error in function %s: %s"
-        WRMSG( HHC01034, "E", "listen()", strerror( HSO_errno ));
-        free( server );
-        return NULL;
-    }
-
-    // "Waiting for console connections on port %u"
-    WRMSG( HHC01024, "I", ntohs( server->sin_port ));
-    free( server );
-    server = NULL;
+    /* Save starting sysblk.cnslport value
+       and create starting listening socket */
+    curr_cnslport = strdup( sysblk.cnslport );
+    lsock = get_listening_socket();
 
     /* Handle connection requests and attention interrupts */
     while (console_cnslcnt > 0)
     {
+        /* Did they set a new CNSLPORT value? */
+        if (strcmp( curr_cnslport, sysblk.cnslport ) != 0)
+        {
+            /* Close the current listening socket, save
+               the new CNSLPORT value and obtain a fresh
+               listening socket. */
+            close_socket( lsock );
+            free( curr_cnslport );
+            curr_cnslport = strdup( sysblk.cnslport );
+            lsock = get_listening_socket();
+        }
+
         /* Initialize scan flags */
         scan_complete = TRUE;
         scan_retries = 0;
@@ -3764,6 +3802,8 @@ int prev_rlen3270;
         } /* end for(;;) check connected consoles for available data */
 
     } /* end while (console_cnslcnt > 0) */
+
+    free( curr_cnslport );
 
     /* Initialize scan flags */
     scan_complete = TRUE;
@@ -4178,7 +4218,7 @@ BYTE            buf[BUFLEN_3270];       /* tn3270 write buffer       */
                 release_lock (&dev->lock);
                 break;
             }
- 
+
             /* Set AID in buffer flag */
             aid = 1;
 

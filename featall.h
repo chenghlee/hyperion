@@ -22,6 +22,48 @@
 #define OPTION_900_MODE                 /* Generate z/Arch support   */
 #endif
 
+/*-------------------------------------------------------------------*/
+/*               Research/Workaround build options                   */
+/*-------------------------------------------------------------------*/
+/*                                                                   */
+/* The following build options either fix or workaround a problem    */
+/* we were having where we were unsure exactly what was causing the  */
+/* problem (and thus were unsure whether the implemented workaround  */
+/* is proper/correct or not) and are thus technically *temporary*    */
+/* in nature/spirit until such time as the root cause can be found.  */
+/*                                                                   */
+/* They're implemented as #define build OPTIONS so the developer is  */
+/* able to see both what the original code WAS doing as well as how  */
+/* the fix/workaround was implemented. This allow us, at any time,   */
+/* to disable the fix/workaround and restore the original code if    */
+/* we think we might have discovered the root cause of the original  */
+/* problem and wish to test a possible permanent fix for it.         */
+/*                                                                   */
+/*-------------------------------------------------------------------*/
+// Fishtest...
+
+#define FISHTEST_TXF_STATS              // gather/track TXF metrics
+
+//#define OPTION_TXF_SINGLE_THREAD        // one transaction at a time
+
+/*-------------------------------------------------------------------*/
+
+#define OPTION_DEPRECATE_TXF_LASTACC    // Deprecate 'txf_lastacc'
+#define OPTION_FIX_SIE_ICODE_BUG        // fix possible SIE icode bug
+#define OPTION_NO_TXF_MADDR_L_ABORT     // Don't call abort_transaction directly from txf_maddr_l
+#define OPTION_HARDWARE_SYNC_ALL        // All PERFORM_SERIALIZATION
+//#define OPTION_HARDWARE_SYNC_BCR_ONLY   // ONLY the BCR instructions
+#if defined( OPTION_HARDWARE_SYNC_ALL ) && defined( OPTION_HARDWARE_SYNC_BCR_ONLY )
+  #error OPTION_HARDWARE_SYNC_ALL and OPTION_HARDWARE_SYNC_BCR_ONLY are mutually exclusive!
+#endif
+#define OPTION_IODELAY_KLUDGE           // IODELAY kludge for Linux
+#define OPTION_MVS_TELNET_WORKAROUND    // Handle non-std MVS telnet
+#define OPTION_NO_E3_OPTINST            // (temporary?)
+#define OPTION_GH275_PIC12_FIX          // GitHub #275 PIC 12 fix
+#define OPTION_SIE_PURGE_DAT_ALWAYS     // Ivan 2016-07-30: purge DAT
+                                        // ALWAYS at entry to SIE
+/*-------------------------------------------------------------------*/
+
 #define VECTOR_SECTION_SIZE         128 /* Vector section size       */
 #define VECTOR_PARTIAL_SUM_NUMBER     1 /* Vector partial sum number */
 
@@ -35,12 +77,7 @@
 #define MAX_TOD_UPDATE_USECS    1000000 /* Max TOD updt freq (usecs) */
 
 #define MAX_DEVICE_THREAD_IDLE_SECS 300 /* 5 Minute thread timeout   */
-
-#define OPTION_SINGLE_CPU_DW            /* Performance option (ia32) */
-#define OPTION_IODELAY_KLUDGE           /* IODELAY kludge for linux  */
-#define OPTION_MVS_TELNET_WORKAROUND    /* Handle non-std MVS telnet */
 //efine OPTION_LONG_HOSTINFO            /* Detailed host & logo info */
-
 #undef  OPTION_FOOTPRINT_BUFFER /* 2048 ** Size must be a power of 2 */
 #undef  OPTION_INSTRUCTION_COUNTING     /* First use trace and count */
 #define OPTION_CKD_KEY_TRACING          /* Trace CKD search keys     */
@@ -52,11 +89,11 @@
 #define FEATURE_LCSS_MAX              4 /* Number of supported lcss's*/
 //efine SIE_DEBUG_PERFMON               /* SIE performance monitor   */
 
+#define OPTION_SINGLE_CPU_DW            /* Performance option (ia32) */
+
 #if !defined( OPTION_OPTINST ) && !defined( NO_OPTINST )
 #define OPTION_OPTINST                  /* Optimized instructions    */
 #endif
-
-#define OPTION_NO_E3_OPTINST            /* Temporary?                */
 
 #if defined( HAVE_FULL_KEEPALIVE )
   #if !defined( HAVE_PARTIAL_KEEPALIVE ) || !defined( HAVE_BASIC_KEEPALIVE )
@@ -84,6 +121,12 @@
 #elif defined( OPTION_SHARED_DEVICES )
 // Leave FBA_SHARED alone, either #defined or #undefined, as desired.
 #endif // OPTION_SHARED_DEVICES
+
+#if defined( OPTION_WATCHDOG ) && defined( OPTION_NO_WATCHDOG )
+  #error Either OPTION_WATCHDOG or OPTION_NO_WATCHDOG must be specified, not both
+#elif !defined( OPTION_WATCHDOG ) && !defined( OPTION_NO_WATCHDOG )
+  #define OPTION_WATCHDOG
+#endif
 
 /*-------------------------------------------------------------------*/
 /*                  Hercules Mutex Locks Model                       */
@@ -141,34 +184,34 @@
 #undef  FEATURE_004_IDTE_SC_SEGTAB_FACILITY
 #undef  FEATURE_005_IDTE_SC_REGTAB_FACILITY
 #undef  FEATURE_006_ASN_LX_REUSE_FACILITY
-#undef  FEATURE_007_STFL_EXTENDED_FACILITY                      /*@Z9*/
-#undef  FEATURE_008_ENHANCED_DAT_FACILITY_1                     /*208*/
-#undef  FEATURE_009_SENSE_RUN_STATUS_FACILITY                   /*@Z9*/
-#undef  FEATURE_010_CONDITIONAL_SSKE_FACILITY                   /*407*/
-#undef  FEATURE_011_CONFIG_TOPOLOGY_FACILITY                    /*208*/
-#undef  FEATURE_013_IPTE_RANGE_FACILITY                         /*810*/
-#undef  FEATURE_014_NONQ_KEY_SET_FACILITY                       /*810*/
+#undef  FEATURE_007_STFL_EXTENDED_FACILITY
+#undef  FEATURE_008_ENHANCED_DAT_FACILITY_1
+#undef  FEATURE_009_SENSE_RUN_STATUS_FACILITY
+#undef  FEATURE_010_CONDITIONAL_SSKE_FACILITY
+#undef  FEATURE_011_CONFIG_TOPOLOGY_FACILITY
+#undef  FEATURE_013_IPTE_RANGE_FACILITY
+#undef  FEATURE_014_NONQ_KEY_SET_FACILITY
 #undef  FEATURE_016_EXT_TRANSL_FACILITY_2
 #undef  FEATURE_017_MSA_FACILITY
 #undef  DYNINST_017_MSA_FACILITY                           /*dyncrypt*/
 #undef  FEATURE_018_LONG_DISPL_INST_FACILITY
 #undef  FEATURE_019_LONG_DISPL_HPERF_FACILITY
 #undef  FEATURE_020_HFP_MULT_ADD_SUB_FACILITY
-#undef  FEATURE_021_EXTENDED_IMMED_FACILITY                     /*@Z9*/
+#undef  FEATURE_021_EXTENDED_IMMED_FACILITY
 #undef  FEATURE_022_EXT_TRANSL_FACILITY_3
-#undef  FEATURE_023_HFP_UNNORM_EXT_FACILITY                     /*@Z9*/
-#undef  FEATURE_024_ETF2_ENHANCEMENT_FACILITY                   /*@Z9*/
-#undef  FEATURE_025_STORE_CLOCK_FAST_FACILITY                   /*@Z9*/
-#undef  FEATURE_026_PARSING_ENHANCE_FACILITY                    /*208*/
-#undef  FEATURE_027_MVCOS_FACILITY                              /*208*/
-#undef  FEATURE_028_TOD_CLOCK_STEER_FACILITY                    /*@Z9*/
-#undef  FEATURE_030_ETF3_ENHANCEMENT_FACILITY                   /*@Z9*/
-#undef  FEATURE_031_EXTRACT_CPU_TIME_FACILITY                   /*407*/
-#undef  FEATURE_032_CSS_FACILITY                                /*407*/
-#undef  FEATURE_033_CSS_FACILITY_2                              /*208*/
+#undef  FEATURE_023_HFP_UNNORM_EXT_FACILITY
+#undef  FEATURE_024_ETF2_ENHANCEMENT_FACILITY
+#undef  FEATURE_025_STORE_CLOCK_FAST_FACILITY
+#undef  FEATURE_026_PARSING_ENHANCE_FACILITY
+#undef  FEATURE_027_MVCOS_FACILITY
+#undef  FEATURE_028_TOD_CLOCK_STEER_FACILITY
+#undef  FEATURE_030_ETF3_ENHANCEMENT_FACILITY
+#undef  FEATURE_031_EXTRACT_CPU_TIME_FACILITY
+#undef  FEATURE_032_CSS_FACILITY
+#undef  FEATURE_033_CSS_FACILITY_2
 #undef  FEATURE_034_GEN_INST_EXTN_FACILITY
-#undef  FEATURE_035_EXECUTE_EXTN_FACILITY                       /*208*/
-#undef  FEATURE_036_ENH_MONITOR_FACILITY                        /*810*/
+#undef  FEATURE_035_EXECUTE_EXTN_FACILITY
+#undef  FEATURE_036_ENH_MONITOR_FACILITY
 #undef  FEATURE_037_FP_EXTENSION_FACILITY
 #undef  FEATURE_038_OP_CMPSC_FACILITY
 #undef  FEATURE_040_LOAD_PROG_PARAM_FACILITY
@@ -176,16 +219,16 @@
 #undef  FEATURE_041_DFP_ROUNDING_FACILITY
 #undef  FEATURE_041_FPR_GR_TRANSFER_FACILITY
 #undef  FEATURE_041_FPS_SIGN_HANDLING_FACILITY
-#undef  FEATURE_041_IEEE_EXCEPT_SIM_FACILITY                    /*407*/
+#undef  FEATURE_041_IEEE_EXCEPT_SIM_FACILITY
 #undef  FEATURE_042_DFP_FACILITY                                /*DFP*/
 #undef  FEATURE_043_DFP_HPERF_FACILITY
-#undef  FEATURE_044_PFPO_FACILITY                               /*407*/
-#undef  FEATURE_045_DISTINCT_OPERANDS_FACILITY                  /*810*/
-#undef  FEATURE_045_FAST_BCR_SERIAL_FACILITY                    /*810*/
-#undef  FEATURE_045_HIGH_WORD_FACILITY                          /*810*/
-#undef  FEATURE_045_INTERLOCKED_ACCESS_FACILITY_1               /*810*/
-#undef  FEATURE_045_LOAD_STORE_ON_COND_FACILITY_1               /*810*/
-#undef  FEATURE_045_POPULATION_COUNT_FACILITY                   /*810*/
+#undef  FEATURE_044_PFPO_FACILITY
+#undef  FEATURE_045_DISTINCT_OPERANDS_FACILITY
+#undef  FEATURE_045_FAST_BCR_SERIAL_FACILITY
+#undef  FEATURE_045_HIGH_WORD_FACILITY
+#undef  FEATURE_045_INTERLOCKED_ACCESS_FACILITY_1
+#undef  FEATURE_045_LOAD_STORE_ON_COND_FACILITY_1
+#undef  FEATURE_045_POPULATION_COUNT_FACILITY
 #undef  FEATURE_047_CMPSC_ENH_FACILITY
 #undef  FEATURE_048_DFP_ZONE_CONV_FACILITY
 #undef  FEATURE_049_EXECUTION_HINT_FACILITY
@@ -200,12 +243,12 @@
 #undef  FEATURE_054_EE_CMPSC_FACILITY
 #undef  FEATURE_057_MSA_EXTENSION_FACILITY_5
 #undef  FEATURE_058_MISC_INSTR_EXT_FACILITY_2
-#undef  FEATURE_066_RES_REF_BITS_MULT_FACILITY                  /*810*/
+#undef  FEATURE_066_RES_REF_BITS_MULT_FACILITY
 #undef  FEATURE_067_CPU_MEAS_COUNTER_FACILITY
 #undef  FEATURE_068_CPU_MEAS_SAMPLNG_FACILITY
 #undef  FEATURE_073_TRANSACT_EXEC_FACILITY
 #undef  FEATURE_074_STORE_HYPER_INFO_FACILITY
-#undef  FEATURE_075_ACC_EX_FS_INDIC_FACILITY                    /*810*/
+#undef  FEATURE_075_ACC_EX_FS_INDIC_FACILITY
 #undef  FEATURE_076_MSA_EXTENSION_FACILITY_3
 #undef  DYNINST_076_MSA_EXTENSION_FACILITY_3               /*dyncrypt*/
 #undef  FEATURE_077_MSA_EXTENSION_FACILITY_4
@@ -251,11 +294,11 @@
 #undef  FEATURE_COMPARE_AND_MOVE_EXTENDED
 #undef  FEATURE_CMPSC
 #undef  FEATURE_CPU_RECONFIG
-#undef  FEATURE_DAT_ENHANCEMENT_FACILITY_2                      /*@Z9*/
+#undef  FEATURE_DAT_ENHANCEMENT_FACILITY_2
 #undef  FEATURE_DUAL_ADDRESS_SPACE
 #undef  FEATURE_ECPSVM
 #undef  FEATURE_EMULATE_VM
-#undef  FEATURE_ENHANCED_SUPPRESSION_ON_PROTECTION              /*208*/
+#undef  FEATURE_ENHANCED_SUPPRESSION_ON_PROTECTION
 #undef  FEATURE_EXPANDED_STORAGE
 #undef  FEATURE_EXPEDITED_SIE_SUBSET
 #undef  FEATURE_EXTENDED_DIAG204
@@ -281,9 +324,9 @@
 #undef  FEATURE_IO_ASSIST
 #undef  FEATURE_LINKAGE_STACK
 #undef  FEATURE_LOCK_PAGE
-#undef  FEATURE_MSA_EXTENSION_FACILITY_1                        /*@Z9*/
+#undef  FEATURE_MSA_EXTENSION_FACILITY_1
 #undef  FEATURE_MSA_EXTENSION_FACILITY_2
-#undef  FEATURE_MIDAW_FACILITY                                  /*@Z9*/
+#undef  FEATURE_MIDAW_FACILITY
 #undef  FEATURE_MOVE_PAGE_FACILITY_2
 #undef  FEATURE_MPF_INFO
 #undef  FEATURE_MSSF_CALL
@@ -294,17 +337,17 @@
 #undef  FEATURE_PER
 #undef  FEATURE_PER1
 #undef  FEATURE_PER2
-#undef  FEATURE_PER3                                            /*@Z9*/
+#undef  FEATURE_PER3
 #undef  FEATURE_PERFORM_LOCKED_OPERATION
 #undef  FEATURE_PRIVATE_SPACE
-#undef  FEATURE_PROGRAM_DIRECTED_REIPL                          /*@Z9*/
+#undef  FEATURE_PROGRAM_DIRECTED_REIPL
 #undef  FEATURE_PROTECTION_INTERCEPTION_CONTROL
 #undef  FEATURE_QDIO_TDD
 #undef  FEATURE_QDIO_THININT
 #undef  FEATURE_QEBSM
 #undef  FEATURE_QUEUED_DIRECT_IO
 #undef  FEATURE_REGION_RELOCATE
-#undef  FEATURE_RESTORE_SUBCHANNEL_FACILITY                     /*208*/
+#undef  FEATURE_RESTORE_SUBCHANNEL_FACILITY
 #undef  FEATURE_RESUME_PROGRAM
 #undef  FEATURE_S370_CHANNEL
 #undef  FEATURE_S370_S390_VECTOR_FACILITY

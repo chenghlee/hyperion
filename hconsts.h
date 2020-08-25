@@ -17,24 +17,26 @@
 #include "hercules.h"
 
 /*-------------------------------------------------------------------*/
-/* Maximum CPU Engines                                               */
+/*                     Maximum CPU Engines                           */
 /*-------------------------------------------------------------------*/
 
-#if !defined( MAX_CPU_ENGINES )
-  #if defined( HAVE___UINT128_T ) && defined( SIZEOF_LONG_LONG ) && SIZEOF_LONG_LONG >= 16
-    #define MAX_CPU_ENGINES     128
+#if !defined( MAX_CPU_ENGS )
+  #if defined( HAVE___INT128_T )
+    #define MAX_CPU_ENGS      128
   #else
-    #define MAX_CPU_ENGINES      64
+    #define MAX_CPU_ENGS       64
   #endif
 #endif
 
-// (PREFERRED default MAX_CPU_ENGINES)
-#define PREF_DEF_MAXCPU           8     /*  Default sysblk.maxcpu
-                                            to 8 according to old
-                                            MAX_CPU_ENGINES default  */
+// (PREFERRED default MAX_CPU_ENGS)
+#define PREF_DEF_MAXCPU         8       /* Default sysblk.maxcpu
+                                           to 8 according to old
+                                           MAX_CPU_ENGS default      */
+
+#define MAX_CPU_LOOPS         256       /* UNROLLED_EXECUTE loops    */
 
 /*-------------------------------------------------------------------*/
-/*      Some handy quantity definitions                              */
+/*               Some handy quantity definitions                     */
 /*-------------------------------------------------------------------*/
 #define  ONE_KILOBYTE   ((U32)                     (1024))  /* 2^10 (16^2)  * 4  */
 #define  TWO_KILOBYTE   ((U32)(2           *        1024))  /* 2^11 (16^2)  * 8  */
@@ -395,7 +397,8 @@
 /* Special value for arn parameter for translate functions in dat.c  */
 /*-------------------------------------------------------------------*/
 #define USE_INST_SPACE          (-1)    /* Instruction space virtual */
-#define USE_REAL_ADDR           (-2)    /* Real address              */
+#define USE_REAL_ADDR           (-2)    /* Real address (DAT access)
+                                           (prevents TLB hit/use)    */
 #define USE_PRIMARY_SPACE       (-3)    /* Primary space virtual     */
 #define USE_SECONDARY_SPACE     (-4)    /* Secondary space virtual   */
 #define USE_HOME_SPACE          (-5)    /* Home space virtual        */
@@ -405,8 +408,8 @@
 /*              Interception codes used by longjmp/SIE               */
 /*-------------------------------------------------------------------*/
 #define SIE_NO_INTERCEPT        (-1)    /* Continue (after pgmint)   */
-#define SIE_HOST_INTERRUPT      (-2)    /* Host interrupt pending    */
-#define SIE_HOST_PGMINT         (-3)    /* Host program interrupt    */
+#define SIE_HOST_INT_PEND       (-2)    /* Host interrupt pending    */
+#define SIE_HOST_PGM_INT        (-3)    /* Host program interrupt    */
 #define SIE_INTERCEPT_INST      (-4)    /* Instruction interception  */
 #define SIE_INTERCEPT_INSTCOMP  (-5)    /* Instr. int TS/CS/CDS      */
 #define SIE_INTERCEPT_EXTREQ    (-6)    /* External interrupt        */
@@ -421,16 +424,20 @@
 #define SIE_INTERCEPT_IOINT    (-15)    /* I/O Interruption          */
 #define SIE_INTERCEPT_IOINTP   (-16)    /* I/O Interruption pending  */
 #define SIE_INTERCEPT_IOINST   (-17)    /* I/O Instruction           */
+#define SIE_MAX_NEG            (-17)    /* (maximum negative value)  */
+
 #if defined( SIE_DEBUG_PERFMON )
 #define SIE_PERF_ENTER         ( 0 )    /* SIE performance monitor   */
-#define SIE_PERF_ENTER_F       (-31)    /* Enter Fast (retain state) */
-#define SIE_PERF_EXIT          (-30)    /* SIE exit                  */
-#define SIE_PERF_RUNSIE        (-29)    /* run_sie entered           */
-#define SIE_PERF_RUNLOOP_1     (-28)    /* run_sie runloop 1         */
-#define SIE_PERF_RUNLOOP_2     (-27)    /* run_sue runloop 2         */
-#define SIE_PERF_INTCHECK      (-26)    /* run_sie intcheck          */
-#define SIE_PERF_EXEC          (-25)    /* run_sie execute inst      */
+#define SIE_MIN_NEG_DEBUG      (-24)    /* (minimum negative value)  */
 #define SIE_PERF_EXEC_U        (-24)    /* run_sie unrolled exec     */
+#define SIE_PERF_EXEC          (-25)    /* run_sie execute inst      */
+#define SIE_PERF_INTCHECK      (-26)    /* run_sie intcheck          */
+#define SIE_PERF_RUNLOOP_2     (-27)    /* run_sue runloop 2         */
+#define SIE_PERF_RUNLOOP_1     (-28)    /* run_sie runloop 1         */
+#define SIE_PERF_RUNSIE        (-29)    /* run_sie entered           */
+#define SIE_PERF_EXIT          (-30)    /* SIE exit                  */
+#define SIE_PERF_ENTER_F       (-31)    /* Enter Fast (retain state) */
+#define SIE_MAX_NEG_DEBUG      (-31)    /* (maximum negative value)  */
 #endif
 
 /*-------------------------------------------------------------------*/
@@ -441,6 +448,10 @@
 #define CTC_PTP                 3       /* PTP link to TCP/IP stack  */
 #define CTC_CTCE                4       /* Enhanced CTC link via TCP */
 #define CTC_CTCT                6       /* CTC link via TCP          */
+
+#define CTCE_TRACE_ON          -1       /* CTCE permanent tracing on */
+#define CTCE_TRACE_OFF         -2       /* CTCE tracing turned off   */
+#define CTCE_TRACE_STARTUP     20       /* CTCE startup tracing max  */
 
 /*-------------------------------------------------------------------*/
 /*                Script processing constants                        */
@@ -459,6 +470,13 @@
 #define MAX_RUNTEST_FACTOR  (((4.0 * 1024.0 * 1024.0 * 1024.0) - 1.0) \
                             / 1000000.0 /* (usecs) */                 \
                             / MAX_RUNTEST_DUR)
+
+/*-------------------------------------------------------------------*/
+/*                  Watchdog thread interval                         */
+/*-------------------------------------------------------------------*/
+
+#define WATCHDOG_SECS           20      /* watchdog thread interval  */
+#define WAIT_FOR_DEBUGGER_SECS  45      /* wait for debugger attach  */
 
 /*-------------------------------------------------------------------*/
 /*                   Panel thread heartbeat                          */

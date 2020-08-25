@@ -54,7 +54,7 @@ DEF_INST(or_register)
 {
 int     r1, r2;                         /* Values of R fields        */
 
-    RR0(inst, regs, r1, r2);
+    RR(inst, regs, r1, r2);
 
     /* OR second operand with first and set condition code */
     regs->psw.cc = ( regs->GR_L(r1) |= regs->GR_L(r2) ) ? 1 : 0;
@@ -62,7 +62,7 @@ int     r1, r2;                         /* Values of R fields        */
 
 
 /*-------------------------------------------------------------------*/
-/* 56   O     - Or                                              [RX] */
+/* 56   O     - Or                                            [RX-a] */
 /*-------------------------------------------------------------------*/
 DEF_INST(or)
 {
@@ -97,39 +97,48 @@ BYTE   *dest;                         /* Pointer to target byte      */
     /* Get byte mainstor address */
     dest = MADDR (effective_addr1, b1, regs, ACCTYPE_WRITE, regs->psw.pkey );
 
-    /* OR byte with immediate operand, setting condition code */
-    regs->psw.cc = (H_ATOMIC_OP(dest, i2, or, Or, |) != 0);
+    /* MAINLOCK may be required if cmpxchg assists unavailable */
+    OBTAIN_MAINLOCK( regs );
+    {
+        /* OR byte with immediate operand, setting condition code */
+        regs->psw.cc = (H_ATOMIC_OP( dest, i2, or, Or, | ) != 0);
+    }
+    RELEASE_MAINLOCK( regs );
+
     ITIMER_UPDATE(effective_addr1, 0, regs);
 }
 
 
 /*-------------------------------------------------------------------*/
-/* D6   OC    - Or Characters                                   [SS] */
+/* D6   OC    - Or Characters                                 [SS-a] */
 /*-------------------------------------------------------------------*/
-DEF_INST( or_character )
+DEF_INST(or_character)
 {
 int     len, len2, len3;                /* Lengths to copy           */
 int     b1, b2;                         /* Base register numbers     */
-VADR    addr1, addr2;                   /* Virtual addresses         */
+VADR    effective_addr1;                /* Virtual address           */
+VADR    effective_addr2;                /* Virtual address           */
 BYTE   *dest1, *dest2;                  /* Destination addresses     */
 BYTE   *source1, *source2;              /* Source addresses          */
 BYTE   *sk1, *sk2;                      /* Storage key addresses     */
 int     i;                              /* Loop counter              */
 int     cc = 0;                         /* Condition code            */
 
-    SS_L( inst, regs, len, b1, addr1, b2, addr2 );
+    SS_L( inst, regs, len, b1, effective_addr1, b2, effective_addr2 );
 
-    ITIMER_SYNC( addr1, len, regs );
-    ITIMER_SYNC( addr2, len, regs );
+    CONTRAN_INSTR_CHECK( regs );
+
+    ITIMER_SYNC( effective_addr1, len, regs );
+    ITIMER_SYNC( effective_addr2, len, regs );
 
     /* Quick out for 1 byte (no boundary crossed) */
     if (unlikely( !len ))
     {
-        source1 = MADDR( addr2, b2, regs, ACCTYPE_READ,  regs->psw.pkey );
-        dest1   = MADDR( addr1, b1, regs, ACCTYPE_WRITE, regs->psw.pkey );
+        source1 = MADDR( effective_addr2,  b2, regs, ACCTYPE_READ,  regs->psw.pkey );
+        dest1   = MADDR( effective_addr1,  b1, regs, ACCTYPE_WRITE, regs->psw.pkey );
         *dest1 |= *source1;
         regs->psw.cc = (*dest1 != 0);
-        ITIMER_UPDATE( addr1, len, regs );
+        ITIMER_UPDATE( effective_addr1, len, regs );
         return;
     }
 
@@ -144,13 +153,13 @@ int     cc = 0;                         /* Condition code            */
      */
 
     /* Translate addresses of leftmost operand bytes */
-    dest1 = MADDRL( addr1, len+1, b1, regs, ACCTYPE_WRITE_SKP, regs->psw.pkey );
+    dest1 = MADDRL( effective_addr1, len+1, b1, regs, ACCTYPE_WRITE_SKP, regs->psw.pkey );
     sk1 = regs->dat.storkey;
-    source1 = MADDR( addr2, b2, regs, ACCTYPE_READ, regs->psw.pkey );
+    source1 = MADDRL( effective_addr2, len+1, b2, regs, ACCTYPE_READ, regs->psw.pkey );
 
-    if (NOCROSSPAGE( addr1, len ))
+    if (NOCROSSPAGE( effective_addr1, len ))
     {
-        if (NOCROSSPAGE( addr2, len ))
+        if (NOCROSSPAGE( effective_addr2, len ))
         {
             /* (1) - No boundaries are crossed */
             for (i=0; i <= len; i++)
@@ -160,10 +169,9 @@ int     cc = 0;                         /* Condition code            */
         else
         {
              /* (2) - Second operand crosses a boundary */
-             len2 = PAGEFRAME_PAGESIZE - (addr2 & PAGEFRAME_BYTEMASK);
-             source2 = MADDR( (addr2 + len2) & ADDRESS_MAXWRAP( regs ),
-                               b2, regs, ACCTYPE_READ, regs->psw.pkey );
-
+             len2 = PAGEFRAME_PAGESIZE - (effective_addr2 & PAGEFRAME_BYTEMASK);
+             source2 = MADDRL((effective_addr2 + len2) & ADDRESS_MAXWRAP( regs ),
+              len + 1 - len2,  b2, regs, ACCTYPE_READ, regs->psw.pkey );
              for (i=0; i < len2; i++)
                  if ( (*dest1++ |= *source1++) )
                      cc = 1;
@@ -179,12 +187,12 @@ int     cc = 0;                         /* Condition code            */
     else
     {
         /* First operand crosses a boundary */
-        len2 = PAGEFRAME_PAGESIZE - (addr1 & PAGEFRAME_BYTEMASK);
-        dest2 = MADDR( (addr1 + len2) & ADDRESS_MAXWRAP( regs ),
-                        b1, regs, ACCTYPE_WRITE_SKP, regs->psw.pkey );
+        len2 = PAGEFRAME_PAGESIZE - (effective_addr1 & PAGEFRAME_BYTEMASK);
+        dest2 = MADDRL((effective_addr1 + len2) & ADDRESS_MAXWRAP( regs ),
+         len + 1 - len2,b1, regs, ACCTYPE_WRITE_SKP, regs->psw.pkey );
         sk2 = regs->dat.storkey;
 
-        if (NOCROSSPAGE( addr2, len ))
+        if (NOCROSSPAGE( effective_addr2, len ))
         {
              /* (3) - First operand crosses a boundary */
              for (i=0; i < len2; i++)
@@ -200,9 +208,9 @@ int     cc = 0;                         /* Condition code            */
         else
         {
             /* (4) - Both operands cross a boundary */
-            len3 = PAGEFRAME_PAGESIZE - (addr2 & PAGEFRAME_BYTEMASK);
-            source2 = MADDR( (addr2 + len3) & ADDRESS_MAXWRAP( regs ),
-                              b2, regs, ACCTYPE_READ, regs->psw.pkey );
+            len3 = PAGEFRAME_PAGESIZE - (effective_addr2 & PAGEFRAME_BYTEMASK);
+            source2 = MADDRL((effective_addr2 + len3) & ADDRESS_MAXWRAP( regs ),
+             len + 1 - len3,  b2, regs, ACCTYPE_READ, regs->psw.pkey );
             if (len2 == len3)
             {
                 /* (4a) - Both operands cross at the same time */
@@ -261,12 +269,12 @@ int     cc = 0;                         /* Condition code            */
 
     regs->psw.cc = cc;
 
-    ITIMER_UPDATE( addr1, len, regs );
+    ITIMER_UPDATE( effective_addr1, len, regs );
 }
 
 
 /*-------------------------------------------------------------------*/
-/* F2   PACK  - Pack                                            [SS] */
+/* F2   PACK  - Pack                                          [SS-b] */
 /*-------------------------------------------------------------------*/
 DEF_INST(pack)
 {
@@ -280,6 +288,7 @@ BYTE    dbyte;                          /* Destination operand byte  */
 
     SS(inst, regs, l1, l2, b1, effective_addr1,
                                      b2, effective_addr2);
+    CONTRAN_INSTR_CHECK( regs );
 
     /* If operand 1 crosses a page, make sure both pages are accessible */
     if((effective_addr1 & PAGEFRAME_PAGEMASK) !=
@@ -333,7 +342,7 @@ BYTE    dbyte;                          /* Destination operand byte  */
 
 #if defined( FEATURE_PERFORM_LOCKED_OPERATION )
 /*-------------------------------------------------------------------*/
-/* EE   PLO   - Perform Locked Operation                        [SS] */
+/* EE   PLO   - Perform Locked Operation                      [SS-e] */
 /*-------------------------------------------------------------------*/
 DEF_INST(perform_locked_operation)
 {
@@ -344,6 +353,7 @@ VADR    effective_addr2,
 
     SS(inst, regs, r1, r3, b2, effective_addr2,
                                      b4, effective_addr4);
+    TRAN_INSTR_CHECK( regs );
 
     if(regs->GR_L(0) & PLO_GPR0_RESV)
         regs->program_interrupt(regs, PGM_SPECIFICATION_EXCEPTION);
@@ -395,124 +405,120 @@ VADR    effective_addr2,
            in the configuration.  We simply use 1 lock which is the
            main storage access lock which is also used by CS, CDS
            and TS.                                               *JJ */
-        OBTAIN_MAINLOCK(regs);
-
-        switch(regs->GR_L(0) & PLO_GPR0_FC)
+        OBTAIN_MAINLOCK_UNCONDITIONAL( regs );
         {
-            case PLO_CL:
-                regs->psw.cc = ARCH_DEP(plo_cl) (r1, r3,
-                        effective_addr2, b2, effective_addr4, b4, regs);
-                break;
-            case PLO_CLG:
-                regs->psw.cc = ARCH_DEP(plo_clg) (r1, r3,
-                        effective_addr2, b2, effective_addr4, b4, regs);
-                break;
-            case PLO_CS:
-                regs->psw.cc = ARCH_DEP(plo_cs) (r1, r3,
-                        effective_addr2, b2, effective_addr4, b4, regs);
-                break;
-            case PLO_CSG:
-                regs->psw.cc = ARCH_DEP(plo_csg) (r1, r3,
-                        effective_addr2, b2, effective_addr4, b4, regs);
-                break;
-            case PLO_DCS:
-                regs->psw.cc = ARCH_DEP(plo_dcs) (r1, r3,
-                        effective_addr2, b2, effective_addr4, b4, regs);
-                break;
-            case PLO_DCSG:
-                regs->psw.cc = ARCH_DEP(plo_dcsg) (r1, r3,
-                        effective_addr2, b2, effective_addr4, b4, regs);
-                break;
-            case PLO_CSST:
-                regs->psw.cc = ARCH_DEP(plo_csst) (r1, r3,
-                        effective_addr2, b2, effective_addr4, b4, regs);
-                break;
-            case PLO_CSSTG:
-                regs->psw.cc = ARCH_DEP(plo_csstg) (r1, r3,
-                        effective_addr2, b2, effective_addr4, b4, regs);
-                break;
-            case PLO_CSDST:
-                regs->psw.cc = ARCH_DEP(plo_csdst) (r1, r3,
-                        effective_addr2, b2, effective_addr4, b4, regs);
-                break;
-            case PLO_CSDSTG:
-                regs->psw.cc = ARCH_DEP(plo_csdstg) (r1, r3,
-                        effective_addr2, b2, effective_addr4, b4, regs);
-                break;
-            case PLO_CSTST:
-                regs->psw.cc = ARCH_DEP(plo_cstst) (r1, r3,
-                        effective_addr2, b2, effective_addr4, b4, regs);
-                break;
-            case PLO_CSTSTG:
-                regs->psw.cc = ARCH_DEP(plo_cststg) (r1, r3,
-                        effective_addr2, b2, effective_addr4, b4, regs);
-                break;
+            switch(regs->GR_L(0) & PLO_GPR0_FC)
+            {
+                case PLO_CL:
+                    regs->psw.cc = ARCH_DEP(plo_cl) (r1, r3,
+                            effective_addr2, b2, effective_addr4, b4, regs);
+                    break;
+                case PLO_CLG:
+                    regs->psw.cc = ARCH_DEP(plo_clg) (r1, r3,
+                            effective_addr2, b2, effective_addr4, b4, regs);
+                    break;
+                case PLO_CS:
+                    regs->psw.cc = ARCH_DEP(plo_cs) (r1, r3,
+                            effective_addr2, b2, effective_addr4, b4, regs);
+                    break;
+                case PLO_CSG:
+                    regs->psw.cc = ARCH_DEP(plo_csg) (r1, r3,
+                            effective_addr2, b2, effective_addr4, b4, regs);
+                    break;
+                case PLO_DCS:
+                    regs->psw.cc = ARCH_DEP(plo_dcs) (r1, r3,
+                            effective_addr2, b2, effective_addr4, b4, regs);
+                    break;
+                case PLO_DCSG:
+                    regs->psw.cc = ARCH_DEP(plo_dcsg) (r1, r3,
+                            effective_addr2, b2, effective_addr4, b4, regs);
+                    break;
+                case PLO_CSST:
+                    regs->psw.cc = ARCH_DEP(plo_csst) (r1, r3,
+                            effective_addr2, b2, effective_addr4, b4, regs);
+                    break;
+                case PLO_CSSTG:
+                    regs->psw.cc = ARCH_DEP(plo_csstg) (r1, r3,
+                            effective_addr2, b2, effective_addr4, b4, regs);
+                    break;
+                case PLO_CSDST:
+                    regs->psw.cc = ARCH_DEP(plo_csdst) (r1, r3,
+                            effective_addr2, b2, effective_addr4, b4, regs);
+                    break;
+                case PLO_CSDSTG:
+                    regs->psw.cc = ARCH_DEP(plo_csdstg) (r1, r3,
+                            effective_addr2, b2, effective_addr4, b4, regs);
+                    break;
+                case PLO_CSTST:
+                    regs->psw.cc = ARCH_DEP(plo_cstst) (r1, r3,
+                            effective_addr2, b2, effective_addr4, b4, regs);
+                    break;
+                case PLO_CSTSTG:
+                    regs->psw.cc = ARCH_DEP(plo_cststg) (r1, r3,
+                            effective_addr2, b2, effective_addr4, b4, regs);
+                    break;
 #if defined( FEATURE_001_ZARCH_INSTALLED_FACILITY )
-            case PLO_CLGR:
-                regs->psw.cc = ARCH_DEP(plo_clgr) (r1, r3,
-                        effective_addr2, b2, effective_addr4, b4, regs);
-                break;
-            case PLO_CLX:
-                regs->psw.cc = ARCH_DEP(plo_clx) (r1, r3,
-                        effective_addr2, b2, effective_addr4, b4, regs);
-                break;
-            case PLO_CSGR:
-                regs->psw.cc = ARCH_DEP(plo_csgr) (r1, r3,
-                        effective_addr2, b2, effective_addr4, b4, regs);
-                break;
-            case PLO_CSX:
-                regs->psw.cc = ARCH_DEP(plo_csx) (r1, r3,
-                        effective_addr2, b2, effective_addr4, b4, regs);
-                break;
-            case PLO_DCSGR:
-                regs->psw.cc = ARCH_DEP(plo_dcsgr) (r1, r3,
-                        effective_addr2, b2, effective_addr4, b4, regs);
-                break;
-            case PLO_DCSX:
-                regs->psw.cc = ARCH_DEP(plo_dcsx) (r1, r3,
-                        effective_addr2, b2, effective_addr4, b4, regs);
-                break;
-            case PLO_CSSTGR:
-                regs->psw.cc = ARCH_DEP(plo_csstgr) (r1, r3,
-                        effective_addr2, b2, effective_addr4, b4, regs);
-                break;
-            case PLO_CSSTX:
-                regs->psw.cc = ARCH_DEP(plo_csstx) (r1, r3,
-                        effective_addr2, b2, effective_addr4, b4, regs);
-                break;
-            case PLO_CSDSTGR:
-                regs->psw.cc = ARCH_DEP(plo_csdstgr) (r1, r3,
-                        effective_addr2, b2, effective_addr4, b4, regs);
-                break;
-            case PLO_CSDSTX:
-                regs->psw.cc = ARCH_DEP(plo_csdstx) (r1, r3,
-                        effective_addr2, b2, effective_addr4, b4, regs);
-                break;
-            case PLO_CSTSTGR:
-                regs->psw.cc = ARCH_DEP(plo_cststgr) (r1, r3,
-                        effective_addr2, b2, effective_addr4, b4, regs);
-                break;
-            case PLO_CSTSTX:
-                regs->psw.cc = ARCH_DEP(plo_cststx) (r1, r3,
-                        effective_addr2, b2, effective_addr4, b4, regs);
-                break;
-#endif /* defined( FEATURE_001_ZARCH_INSTALLED_FACILITY ) */
+                case PLO_CLGR:
+                    regs->psw.cc = ARCH_DEP(plo_clgr) (r1, r3,
+                            effective_addr2, b2, effective_addr4, b4, regs);
+                    break;
+                case PLO_CLX:
+                    regs->psw.cc = ARCH_DEP(plo_clx) (r1, r3,
+                            effective_addr2, b2, effective_addr4, b4, regs);
+                    break;
+                case PLO_CSGR:
+                    regs->psw.cc = ARCH_DEP(plo_csgr) (r1, r3,
+                            effective_addr2, b2, effective_addr4, b4, regs);
+                    break;
+                case PLO_CSX:
+                    regs->psw.cc = ARCH_DEP(plo_csx) (r1, r3,
+                            effective_addr2, b2, effective_addr4, b4, regs);
+                    break;
+                case PLO_DCSGR:
+                    regs->psw.cc = ARCH_DEP(plo_dcsgr) (r1, r3,
+                            effective_addr2, b2, effective_addr4, b4, regs);
+                    break;
+                case PLO_DCSX:
+                    regs->psw.cc = ARCH_DEP(plo_dcsx) (r1, r3,
+                            effective_addr2, b2, effective_addr4, b4, regs);
+                    break;
+                case PLO_CSSTGR:
+                    regs->psw.cc = ARCH_DEP(plo_csstgr) (r1, r3,
+                            effective_addr2, b2, effective_addr4, b4, regs);
+                    break;
+                case PLO_CSSTX:
+                    regs->psw.cc = ARCH_DEP(plo_csstx) (r1, r3,
+                            effective_addr2, b2, effective_addr4, b4, regs);
+                    break;
+                case PLO_CSDSTGR:
+                    regs->psw.cc = ARCH_DEP(plo_csdstgr) (r1, r3,
+                            effective_addr2, b2, effective_addr4, b4, regs);
+                    break;
+                case PLO_CSDSTX:
+                    regs->psw.cc = ARCH_DEP(plo_csdstx) (r1, r3,
+                            effective_addr2, b2, effective_addr4, b4, regs);
+                    break;
+                case PLO_CSTSTGR:
+                    regs->psw.cc = ARCH_DEP(plo_cststgr) (r1, r3,
+                            effective_addr2, b2, effective_addr4, b4, regs);
+                    break;
+                case PLO_CSTSTX:
+                    regs->psw.cc = ARCH_DEP(plo_cststx) (r1, r3,
+                            effective_addr2, b2, effective_addr4, b4, regs);
+                    break;
+   #endif /* defined( FEATURE_001_ZARCH_INSTALLED_FACILITY ) */
 
-
-            default:
-                regs->program_interrupt(regs, PGM_SPECIFICATION_EXCEPTION);
-
+                default:
+                    regs->program_interrupt(regs, PGM_SPECIFICATION_EXCEPTION);
+            }
         }
-
-        /* Release main-storage access lock */
-        RELEASE_MAINLOCK(regs);
+        RELEASE_MAINLOCK_UNCONDITIONAL( regs );
 
         if(regs->psw.cc && sysblk.cpus > 1)
         {
             PTT_CSF("*PLO",regs->GR_L(0),regs->GR_L(r1),regs->psw.IA_L);
             sched_yield();
         }
-
     }
 }
 #endif /* defined( FEATURE_PERFORM_LOCKED_OPERATION ) */
@@ -522,7 +528,7 @@ VADR    effective_addr2,
 /*-------------------------------------------------------------------*/
 /* B25E SRST  - Search String                                  [RRE] */
 /*-------------------------------------------------------------------*/
-DEF_INST( search_string )
+DEF_INST(search_string)
 {
 int     r1, r2;                         /* Values of R fields        */
 int     i;                              /* Loop counter              */
@@ -533,6 +539,8 @@ BYTE    *main2;                         /* Operand-2 mainstor addr   */
 BYTE    termchar;                       /* Terminating character     */
 
     RRE( inst, regs, r1, r2 );
+
+    CONTRAN_INSTR_CHECK( regs );
 
     /* Program check if bits 0-23 of register 0 not zero */
     if ((regs->GR_L(0) & 0xFFFFFF00) != 0)
@@ -558,8 +566,17 @@ BYTE    termchar;                       /* Terminating character     */
 
         while (cpu_length)
         {
-            main2 = MADDR( addr2, r2, regs, ACCTYPE_READ, regs->psw.pkey );
-
+            /* We need to check the boundary condition
+               BEFORE attempting to access storage,
+               because if the boundary condition is met,
+               there is no further need to access storage.
+            */
+            if (addr2 == addr1)
+            {
+                regs->psw.cc = 2;
+                return;
+            }
+            main2 = MADDRL(addr2, cpu_length, r2, regs, ACCTYPE_READ, regs->psw.pkey );
             for (i=0; i < dist; i++)
             {
                 /* If operand end address has been reached, return
@@ -601,8 +618,19 @@ BYTE    termchar;                       /* Terminating character     */
     /* We don't cross a page boundary with the minimum length, so
        extend the CPU determined length out to the end of the page */
     cpu_length = PAGEFRAME_PAGESIZE - (addr2 & PAGEFRAME_BYTEMASK);
-    main2 = MADDR( addr2, r2, regs, ACCTYPE_READ, regs->psw.pkey );
 
+    /* We need to check the boundary condition
+       BEFORE attempting to access storage,
+       because if the boundary condition is met,
+       there is no further need to access storage.
+    */
+    if (addr2 == addr1)
+    {
+        regs->psw.cc = 2;
+        return;
+    }
+
+    main2 = MADDRL(addr2, cpu_length, r2, regs, ACCTYPE_READ, regs->psw.pkey );
     for (i=0; i < cpu_length; i++)
     {
         /* If operand end address has been reached, return
@@ -648,7 +676,9 @@ DEF_INST(set_access_register)
 {
 int     r1, r2;                         /* Values of R fields        */
 
-    RRE0(inst, regs, r1, r2);
+    RRE(inst, regs, r1, r2);
+
+    TRAN_ACCESS_INSTR_CHECK( regs );
 
     /* Copy R2 general register to R1 access register */
     regs->AR(r1) = regs->GR_L(r2);
@@ -664,7 +694,7 @@ DEF_INST(set_program_mask)
 {
 int     r1, r2;                         /* Values of R fields        */
 
-    RR0(inst, regs, r1, r2);
+    RR(inst, regs, r1, r2);
 
     /* Set condition code from bits 2-3 of R1 register */
     regs->psw.cc = ( regs->GR_L(r1) & 0x30000000 ) >> 28;
@@ -675,7 +705,7 @@ int     r1, r2;                         /* Values of R fields        */
 
 
 /*-------------------------------------------------------------------*/
-/* 8F   SLDA  - Shift Left Double                               [RS] */
+/* 8F   SLDA  - Shift Left Double                             [RS-a] */
 /*-------------------------------------------------------------------*/
 DEF_INST(shift_left_double)
 {
@@ -731,7 +761,7 @@ U32     h, i, j, m;                     /* Integer work areas        */
 
 
 /*-------------------------------------------------------------------*/
-/* 8D   SLDL  - Shift Left Double Logical                       [RS] */
+/* 8D   SLDL  - Shift Left Double Logical                     [RS-a] */
 /*-------------------------------------------------------------------*/
 DEF_INST(shift_left_double_logical)
 {
@@ -758,7 +788,7 @@ U64     dreg;                           /* Double register work area */
 
 
 /*-------------------------------------------------------------------*/
-/* 8B   SLA   - Shift Left Single                               [RS] */
+/* 8B   SLA   - Shift Left Single                             [RS-a] */
 /*-------------------------------------------------------------------*/
 DEF_INST(shift_left_single)
 {
@@ -816,7 +846,7 @@ U32     i, j;                           /* Integer work areas        */
 
 
 /*-------------------------------------------------------------------*/
-/* 89   SLL   - Shift Left Single Logical                       [RS] */
+/* 89   SLL   - Shift Left Single Logical                     [RS-a] */
 /*-------------------------------------------------------------------*/
 DEF_INST(shift_left_single_logical)
 {
@@ -825,7 +855,7 @@ int     b2;                             /* effective address base    */
 VADR    effective_addr2;                /* effective address         */
 U32     n;                              /* Integer work areas        */
 
-    RS0(inst, regs, r1, r3, b2, effective_addr2);
+    RS(inst, regs, r1, r3, b2, effective_addr2);
 
     /* Use rightmost six bits of operand address as shift count */
     n = effective_addr2 & 0x3F;
@@ -836,7 +866,7 @@ U32     n;                              /* Integer work areas        */
 
 
 /*-------------------------------------------------------------------*/
-/* 8E   SRDA  - Shift Right Double                              [RS] */
+/* 8E   SRDA  - Shift Right Double                            [RS-a] */
 /*-------------------------------------------------------------------*/
 DEF_INST(shift_right_double)
 {
@@ -866,7 +896,7 @@ U64     dreg;                           /* Double register work area */
 
 
 /*-------------------------------------------------------------------*/
-/* 8C   SRDL  - Shift Right Double Logical                      [RS] */
+/* 8C   SRDL  - Shift Right Double Logical                    [RS-a] */
 /*-------------------------------------------------------------------*/
 DEF_INST(shift_right_double_logical)
 {
@@ -893,7 +923,7 @@ U64     dreg;                           /* Double register work area */
 
 
 /*-------------------------------------------------------------------*/
-/* 8A   SRA   - Shift Right Single                              [RS] */
+/* 8A   SRA   - Shift Right Single                            [RS-a] */
 /*-------------------------------------------------------------------*/
 DEF_INST(shift_right_single)
 {
@@ -902,7 +932,7 @@ int     b2;                             /* effective address base    */
 VADR    effective_addr2;                /* effective address         */
 U32     n;                              /* Integer work areas        */
 
-    RS0(inst, regs, r1, r3, b2, effective_addr2);
+    RS(inst, regs, r1, r3, b2, effective_addr2);
 
     /* Use rightmost six bits of operand address as shift count */
     n = effective_addr2 & 0x3F;
@@ -919,7 +949,7 @@ U32     n;                              /* Integer work areas        */
 
 
 /*-------------------------------------------------------------------*/
-/* 88   SRL   - Shift Right Single Logical                      [RS] */
+/* 88   SRL   - Shift Right Single Logical                    [RS-a] */
 /*-------------------------------------------------------------------*/
 DEF_INST(shift_right_single_logical)
 {
@@ -928,7 +958,7 @@ int     b2;                             /* effective address base    */
 VADR    effective_addr2;                /* effective address         */
 U32     n;                              /* Integer work areas        */
 
-    RS0(inst, regs, r1, r3, b2, effective_addr2);
+    RS(inst, regs, r1, r3, b2, effective_addr2);
 
     /* Use rightmost six bits of operand address as shift count */
     n = effective_addr2 & 0x3F;
@@ -940,7 +970,7 @@ U32     n;                              /* Integer work areas        */
 
 #if defined( FEATURE_ACCESS_REGISTERS )
 /*-------------------------------------------------------------------*/
-/* 9B   STAM  - Store Access Multiple                           [RS] */
+/* 9B   STAM  - Store Access Multiple                         [RS-a] */
 /*-------------------------------------------------------------------*/
 DEF_INST( store_access_multiple )
 {
@@ -952,6 +982,7 @@ U32    *p1, *p2 = NULL;                 /* Mainstor pointers         */
 
     RS( inst, regs, r1, r3, b2, effective_addr2 );
 
+    TRAN_ACCESS_INSTR_CHECK( regs );
     FW_CHECK( effective_addr2, regs );
 
     /* Calculate number of regs to store */
@@ -961,11 +992,11 @@ U32    *p1, *p2 = NULL;                 /* Mainstor pointers         */
     m = (PAGEFRAME_PAGESIZE - (effective_addr2 & PAGEFRAME_BYTEMASK)) >> 2;
 
     /* Address of operand beginning */
-    p1 = (U32*) MADDRL( effective_addr2, n, b2, regs, ACCTYPE_WRITE, regs->psw.pkey );
 
+    p1 = (U32*) MADDRL( effective_addr2, n << 2, b2, regs, ACCTYPE_WRITE, regs->psw.pkey );
     /* Get address of next page if boundary crossed */
     if (unlikely( m < n ))
-        p2 = (U32*) MADDR( effective_addr2 + (m*4), b2, regs, ACCTYPE_WRITE, regs->psw.pkey );
+        p2 = (U32*) MADDRL(effective_addr2 + (m*4), (n - m) << 2, b2, regs, ACCTYPE_WRITE, regs->psw.pkey );
     else
         m = n;
 
@@ -976,13 +1007,12 @@ U32    *p1, *p2 = NULL;                 /* Mainstor pointers         */
     /* Store to next page */
     for (; i < n; i++)
         store_fw( p2++, regs->AR( (r1 + i) & 0xF ));
-
 }
 #endif /* defined( FEATURE_ACCESS_REGISTERS ) */
 
 
 /*-------------------------------------------------------------------*/
-/* BE   STCM  - Store Characters under Mask                     [RS] */
+/* BE   STCM  - Store Characters under Mask                   [RS-b] */
 /*-------------------------------------------------------------------*/
 DEF_INST(store_characters_under_mask)
 {
@@ -1044,9 +1074,11 @@ ETOD    ETOD;                           /* Extended TOD clock        */
 
     S( inst, regs, b2, effective_addr2 );
 
+    TRAN_INSTR_CHECK( regs );
+
 #if defined( _FEATURE_SIE )
 
-    if (SIE_STATB( regs, IC2, STCK ))
+    if (SIE_STATE_BIT_ON( regs, IC2, STCK ))
         longjmp( regs->progjmp, SIE_INTERCEPT_INST );
 #endif
 
@@ -1101,8 +1133,10 @@ ETOD    ETOD;                           /* Extended clock work area  */
 
     S(inst, regs, b2, effective_addr2);
 
+    TRAN_INSTR_CHECK( regs );
+
 #if defined( _FEATURE_SIE )
-    if(SIE_STATB(regs, IC2, STCK))
+    if(SIE_STATE_BIT_ON(regs, IC2, STCK))
         longjmp(regs->progjmp, SIE_INTERCEPT_INST);
 #endif
 
@@ -1142,7 +1176,7 @@ ETOD    ETOD;                           /* Extended clock work area  */
 
 
 /*-------------------------------------------------------------------*/
-/* 40   STH   - Store Halfword                                  [RX] */
+/* 40   STH   - Store Halfword                                [RX-a] */
 /*-------------------------------------------------------------------*/
 DEF_INST(store_halfword)
 {
@@ -1158,7 +1192,7 @@ VADR    effective_addr2;                /* Effective address         */
 
 
 /*-------------------------------------------------------------------*/
-/* 90   STM   - Store Multiple                                  [RS] */
+/* 90   STM   - Store Multiple                                [RS-a] */
 /*-------------------------------------------------------------------*/
 DEF_INST( store_multiple )
 {
@@ -1202,8 +1236,8 @@ BYTE   *bp1;                            /* Unaligned mainstor ptr    */
         /* boundary crossed, get address of the 2nd page */
         effective_addr2 += m;
         effective_addr2 &= ADDRESS_MAXWRAP( regs );
-        p2 = (U32*) MADDR( effective_addr2, b2, regs, ACCTYPE_WRITE, regs->psw.pkey );
 
+        p2 = (U32*) MADDRL(effective_addr2, n - m, b2, regs, ACCTYPE_WRITE, regs->psw.pkey );
         if (likely( !(m & 0x3) ))
         {
             /* word aligned */
@@ -1264,7 +1298,7 @@ int     r1, r2;                         /* Values of R fields        */
 
 
 /*-------------------------------------------------------------------*/
-/* 5B   S     - Subtract                                        [RX] */
+/* 5B   S     - Subtract                                      [RX-a] */
 /*-------------------------------------------------------------------*/
 DEF_INST(subtract)
 {
@@ -1291,7 +1325,7 @@ U32     n;                              /* 32-bit operand values     */
 
 
 /*-------------------------------------------------------------------*/
-/* 4B   SH    - Subtract Halfword                               [RX] */
+/* 4B   SH    - Subtract Halfword                             [RX-a] */
 /*-------------------------------------------------------------------*/
 DEF_INST(subtract_halfword)
 {
@@ -1316,28 +1350,6 @@ U32     n;                              /* 32-bit operand values     */
         regs->program_interrupt (regs, PGM_FIXED_POINT_OVERFLOW_EXCEPTION);
 }
 
-
-/*-------------------------------------------------------------------*/
-/* 1F   SLR   - Subtract Logical Register                       [RR] */
-/*-------------------------------------------------------------------*/
-DEF_INST(subtract_logical_register)
-{
-int     r1, r2;                         /* Values of R fields        */
-
-    RR0(inst, regs, r1, r2);
-
-    /* Subtract unsigned operands and set condition code */
-    if (likely(r1 == r2))
-    {
-        regs->psw.cc = 2;
-        regs->GR_L(r1) = 0;
-    }
-    else
-        regs->psw.cc =
-            sub_logical (&(regs->GR_L(r1)),
-                           regs->GR_L(r1),
-                           regs->GR_L(r2));
-}
 
 #ifdef OPTION_OPTINST
 /* Optimized case (r1 equal r2) is optimized by compiler */
@@ -1386,7 +1398,30 @@ SLRgenr2(F)
 
 
 /*-------------------------------------------------------------------*/
-/* 5F   SL    - Subtract Logical                                [RX] */
+/* 1F   SLR   - Subtract Logical Register                       [RR] */
+/*-------------------------------------------------------------------*/
+DEF_INST(subtract_logical_register)
+{
+int     r1, r2;                         /* Values of R fields        */
+
+    RR(inst, regs, r1, r2);
+
+    /* Subtract unsigned operands and set condition code */
+    if (likely(r1 == r2))
+    {
+        regs->psw.cc = 2;
+        regs->GR_L(r1) = 0;
+    }
+    else
+        regs->psw.cc =
+            sub_logical (&(regs->GR_L(r1)),
+                           regs->GR_L(r1),
+                           regs->GR_L(r2));
+}
+
+
+/*-------------------------------------------------------------------*/
+/* 5F   SL    - Subtract Logical                              [RX-a] */
 /*-------------------------------------------------------------------*/
 DEF_INST(subtract_logical)
 {
@@ -1409,7 +1444,7 @@ U32     n;                              /* 32-bit operand values     */
 
 
 /*-------------------------------------------------------------------*/
-/* 0A   SVC   - Supervisor Call                                 [RR] */
+/* 0A   SVC   - Supervisor Call                                  [I] */
 /*-------------------------------------------------------------------*/
 DEF_INST(supervisor_call)
 {
@@ -1419,6 +1454,9 @@ RADR    px;                             /* prefix                    */
 int     rc;                             /* Return code               */
 
     RR_SVC(inst, regs, i);
+
+    TRAN_INSTR_CHECK( regs );
+
 #if defined( FEATURE_ECPSVM )
     if(ecpsvm_dosvc(regs,i)==0)
     {
@@ -1478,7 +1516,7 @@ int     rc;                             /* Return code               */
 
 
 /*-------------------------------------------------------------------*/
-/* 93   TS    - Test and Set                                     [S] */
+/* 93   TS    - Test and Set                                    [SI] */
 /*-------------------------------------------------------------------*/
 DEF_INST(test_and_set)
 {
@@ -1489,50 +1527,51 @@ BYTE    old;                            /* Old value                 */
 
     S(inst, regs, b2, effective_addr2);
 
+    CONTRAN_INSTR_CHECK( regs );
+
     ITIMER_SYNC(effective_addr2,0,regs);
-    /* Perform serialization before starting operation */
-    PERFORM_SERIALIZATION (regs);
 
-    /* Get operand absolute address */
-    main2 = MADDR (effective_addr2, b2, regs, ACCTYPE_WRITE, regs->psw.pkey);
+    /* Perform serialization before and after operation */
+    PERFORM_SERIALIZATION( regs );
+    {
+        /* Get operand absolute address */
+        main2 = MADDR (effective_addr2, b2, regs, ACCTYPE_WRITE, regs->psw.pkey);
 
-    /* Obtain main-storage access lock */
-    OBTAIN_MAINLOCK(regs);
+        /* MAINLOCK may be required if cmpxchg assists unavailable */
+        OBTAIN_MAINLOCK( regs );
+        {
+            /* Get old value */
+            old = *main2;
 
-    /* Get old value */
-    old = *main2;
-
-    /* Attempt to exchange the values */
-    /*  The WHILE statement that follows could lead to a        @PJJ */
-    /*  TS-style lock release never being noticed, because      @PJJ */
-    /*  because such release statements are implemented using   @PJJ */
-    /*  regular instructions such as MVI or even ST which set   @PJJ */
-    /*  [the most significant bit of] the mem_lockbyte to zero; @PJJ */
-    /*  these are NOT being protected using _MAINLOCK.  In the  @PJJ */
-    /*  absence of a machine assist for "cmpxchg1" it is then   @PJJ */
-    /*  possible that this reset occurs in between the test     @PJJ */
-    /*  IF (old == mem_lockbyte), and the updating of           @PJJ */
-    /*  mem_lockbyte = 255;  As this update in the case         @PJJ */
-    /*  old == 255 is not needed to start with, we have         @PJJ */
-    /*  inserted the test IF (old != 255) in front of the       @PJJ */
-    /*  original WHILE statement.                               @PJJ */
-    /*  (The above bug WAS experienced running VM on an ARM     @PJJ */
-    /*  Raspberry PI; this correction fixed it.)                @PJJ */
-    /*                              (Peter J. Jansen, May 2015) @PJJ */
-    if (old != 255)
-        while (cmpxchg1(&old, 255, main2));
-    regs->psw.cc = old >> 7;
-
-    /* Release main-storage access lock */
-    RELEASE_MAINLOCK(regs);
-
-    /* Perform serialization after completing operation */
-    PERFORM_SERIALIZATION (regs);
+            /* Attempt to exchange the values */
+            /*  The WHILE statement that follows could lead to a        */
+            /*  TS-style lock release never being noticed, because      */
+            /*  because such release statements are implemented using   */
+            /*  regular instructions such as MVI or even ST which set   */
+            /*  [the most significant bit of] the mem_lockbyte to zero; */
+            /*  these are NOT being protected using _MAINLOCK.  In the  */
+            /*  absence of a machine assist for "cmpxchg1" it is then   */
+            /*  possible that this reset occurs in between the test     */
+            /*  IF (old == mem_lockbyte), and the updating of           */
+            /*  mem_lockbyte = 255;  As this update in the case         */
+            /*  old == 255 is not needed to start with, we have         */
+            /*  inserted the test IF (old != 255) in front of the       */
+            /*  original WHILE statement.                               */
+            /*  (The above bug WAS experienced running VM on an ARM     */
+            /*  Raspberry PI; this correction fixed it.)                */
+            /*                              (Peter J. Jansen, May 2015) */
+            if (old != 255)
+                while (cmpxchg1( &old, 255, main2 ));
+            regs->psw.cc = old >> 7;
+        }
+        RELEASE_MAINLOCK( regs );
+    }
+    PERFORM_SERIALIZATION( regs );
 
     if (regs->psw.cc == 1)
     {
 #if defined( _FEATURE_SIE )
-        if(SIE_STATB(regs, IC0, TS1))
+        if(SIE_STATE_BIT_ON(regs, IC0, TS1))
         {
             if( !OPEN_IC_PER(regs) )
                 longjmp(regs->progjmp, SIE_INTERCEPT_INST);
@@ -1549,6 +1588,30 @@ BYTE    old;                            /* Old value                 */
         ITIMER_UPDATE(effective_addr2,0,regs);
     }
 }
+
+
+#ifdef OPTION_OPTINST
+#define TMgen(i2) \
+  DEF_INST(91 ## i2) \
+  { \
+    int b1; \
+    VADR effective_addr1; \
+    SIIX(inst, regs, b1, effective_addr1); \
+    if(ARCH_DEP(vfetchb)(effective_addr1, b1, regs) & 0x ## i2) \
+      regs->psw.cc = 3; \
+    else \
+      regs->psw.cc = 0; \
+  }
+
+TMgen(80)
+TMgen(40)
+TMgen(20)
+TMgen(10)
+TMgen(08)
+TMgen(04)
+TMgen(02)
+TMgen(01)
+#endif /* OPTION_OPTINST */
 
 
 /*-------------------------------------------------------------------*/
@@ -1576,33 +1639,10 @@ BYTE    tbyte;                          /* Work byte                 */
             1 ;                             /* result mixed      */
 }
 
-#ifdef OPTION_OPTINST
-#define TMgen(i2) \
-  DEF_INST(91 ## i2) \
-  { \
-    int b1; \
-    VADR effective_addr1; \
-    SIIX(inst, regs, b1, effective_addr1); \
-    if(ARCH_DEP(vfetchb)(effective_addr1, b1, regs) & 0x ## i2) \
-      regs->psw.cc = 3; \
-    else \
-      regs->psw.cc = 0; \
-  }
-
-TMgen(80)
-TMgen(40)
-TMgen(20)
-TMgen(10)
-TMgen(08)
-TMgen(04)
-TMgen(02)
-TMgen(01)
-#endif /* OPTION_OPTINST */
-
 
 #if defined( FEATURE_IMMEDIATE_AND_RELATIVE )
 /*-------------------------------------------------------------------*/
-/* A7x0 TMH   - Test under Mask High                            [RI] */
+/* A7x0 TMH   - Test under Mask High                          [RI-a] */
 /*-------------------------------------------------------------------*/
 DEF_INST(test_under_mask_high)
 {
@@ -1612,7 +1652,7 @@ U16     i2;                             /* 16-bit operand values     */
 U16     h1;                             /* 16-bit operand values     */
 U16     h2;                             /* 16-bit operand values     */
 
-    RI0(inst, regs, r1, opcd, i2);
+    RI(inst, regs, r1, opcd, i2);
 
     /* AND register bits 0-15 with immediate operand */
     h1 = i2 & regs->GR_LHH(r1);
@@ -1632,7 +1672,7 @@ U16     h2;                             /* 16-bit operand values     */
 
 #if defined( FEATURE_IMMEDIATE_AND_RELATIVE )
 /*-------------------------------------------------------------------*/
-/* A7x1 TML   - Test under Mask Low                             [RI] */
+/* A7x1 TML   - Test under Mask Low                           [RI-a] */
 /*-------------------------------------------------------------------*/
 DEF_INST(test_under_mask_low)
 {
@@ -1642,7 +1682,7 @@ U16     i2;                             /* 16-bit operand values     */
 U16     h1;                             /* 16-bit operand values     */
 U16     h2;                             /* 16-bit operand values     */
 
-    RI0(inst, regs, r1, opcd, i2);
+    RI(inst, regs, r1, opcd, i2);
 
     /* AND register bits 16-31 with immediate operand */
     h1 = i2 & regs->GR_LHL(r1);
@@ -1662,67 +1702,67 @@ U16     h2;                             /* 16-bit operand values     */
 
 
 /*-------------------------------------------------------------------*/
-/* DC   TR    - Translate                                       [SS] */
+/* DC   TR    - Translate                                     [SS-a] */
 /*-------------------------------------------------------------------*/
 DEF_INST( translate )
 {
 int     len, len2 = -1;                 /* Lengths                   */
 int     b1, b2;                         /* Values of base field      */
 int     i, b, n;                        /* Work variables            */
-VADR    addr1, addr2;                   /* Effective addresses       */
+VADR    effective_addr1;                /* Effective address         */
+VADR    effective_addr2;                /* Effective address         */
 BYTE   *dest, *dest2 = NULL, *tab, *tab2; /* Mainstor pointers       */
 
-    SS_L( inst, regs, len, b1, addr1, b2, addr2 );
+    SS_L( inst, regs, len, b1, effective_addr1, b2, effective_addr2 );
+
+    CONTRAN_INSTR_CHECK( regs );
 
     /* Get destination pointer */
-    dest = MADDRL( addr1, len+1, b1, regs, ACCTYPE_WRITE, regs->psw.pkey );
+    dest = MADDRL( effective_addr1, len+1, b1, regs, ACCTYPE_WRITE, regs->psw.pkey );
 
     /* Get pointer to next page if destination crosses a boundary */
-    if (CROSSPAGE( addr1, len ))
+    if (CROSSPAGE( effective_addr1, len ))
     {
         len2 = len;
-        len = PAGEFRAME_BYTEMASK - (addr1 & PAGEFRAME_BYTEMASK);
+        len = PAGEFRAME_BYTEMASK - (effective_addr1 & PAGEFRAME_BYTEMASK);
         len2 -= (len + 1);
-        dest2 = MADDR( (addr1+len+1) & ADDRESS_MAXWRAP( regs ),
-                        b1, regs, ACCTYPE_WRITE, regs->psw.pkey );
+        dest2 = MADDRL((effective_addr1+len+1) & ADDRESS_MAXWRAP( regs ),
+                  len2, b1, regs, ACCTYPE_WRITE, regs->psw.pkey );
     }
 
     /* Fast path if table does not cross a boundary */
-    if (NOCROSSPAGE( addr2, 255 ))
+    if (NOCROSSPAGE( effective_addr2, 255 ))
     {
-        tab = MADDR( addr2, b2, regs, ACCTYPE_READ, regs->psw.pkey );
-
+        tab = MADDRL(effective_addr2, 256, b2, regs, ACCTYPE_READ, regs->psw.pkey );
         /* Perform translate function */
         for (i=0; i <= len;  i++) dest [i] = tab[dest [i]];
         for (i=0; i <= len2; i++) dest2[i] = tab[dest2[i]];
     }
     else /* Translate table spans a boundary */
     {
-        n = PAGEFRAME_PAGESIZE - (addr2 & PAGEFRAME_BYTEMASK);
+        n = PAGEFRAME_PAGESIZE - (effective_addr2 & PAGEFRAME_BYTEMASK);
         b = dest[0];
 
         /* Referenced part of the table may or may not span boundary */
         if (b < n)
         {
-            tab = MADDR( addr2, b2, regs, ACCTYPE_READ, regs->psw.pkey );
-
+            tab = MADDRL(effective_addr2, n, b2, regs, ACCTYPE_READ, regs->psw.pkey );
             for (i=1; i <= len  && b < n; i++) b = dest [i];
             for (i=0; i <= len2 && b < n; i++) b = dest2[i];
 
             tab2 = b < n ? NULL
-                         : MADDR( (addr2+n) & ADDRESS_MAXWRAP( regs ),
-                                   b2, regs, ACCTYPE_READ, regs->psw.pkey );
+                         : MADDRL((effective_addr2+n) & ADDRESS_MAXWRAP( regs ),
+                            256 - n, b2, regs, ACCTYPE_READ, regs->psw.pkey );
         }
         else
         {
-            tab2 = MADDR( (addr2+n) & ADDRESS_MAXWRAP( regs ),
-                           b2, regs, ACCTYPE_READ, regs->psw.pkey );
-
+            tab2 = MADDRL((effective_addr2+n) & ADDRESS_MAXWRAP( regs ),
+                  256 - n, b2, regs, ACCTYPE_READ, regs->psw.pkey );
             for (i=1; i <= len  && b >= n; i++) b = dest [i];
             for (i=0; i <= len2 && b >= n; i++) b = dest2[i];
 
             tab = b >= n ? NULL
-                         : MADDR( addr2,
+                         : MADDRL(effective_addr2, n,
                                   b2, regs, ACCTYPE_READ, regs->psw.pkey );
         }
 
@@ -1734,12 +1774,13 @@ BYTE   *dest, *dest2 = NULL, *tab, *tab2; /* Mainstor pointers       */
 
 
 /*-------------------------------------------------------------------*/
-/* DD   TRT   - Translate and Test                              [SS] */
+/* DD   TRT   - Translate and Test                            [SS-a] */
 /*-------------------------------------------------------------------*/
-DEF_INST( translate_and_test )
+DEF_INST(translate_and_test)
 {
 CACHE_ALIGN BYTE op1[256], op2[256];    /* Operand work areas        */
-VADR    addr1, addr2;                   /* Effective addresses       */
+VADR    effective_addr1;                /* Effective address         */
+VADR    effective_addr2;                /* Effective address         */
 int     b1, b2;                         /* Base registers            */
 int     len;                            /* Length - 1                */
 int     i;                              /* work variable             */
@@ -1747,15 +1788,17 @@ int     cc = 0;                         /* Condition code            */
 BYTE    dbyte, sbyte = 0;               /* Byte work areas           */
 bool    op1crosses, op2crosses;         /* Operand crosses Page Bdy  */
 
-    SS_L( inst, regs, len, b1, addr1, b2, addr2 );
+    SS_L( inst, regs, len, b1, effective_addr1, b2, effective_addr2 );
+
+    CONTRAN_INSTR_CHECK( regs );
 
     /* Copy operand-1 data to work area if within same page */
-    if (!(op1crosses = CROSSPAGE( addr1, len )))
-        ARCH_DEP( vfetchc )( op1, len, addr1, b1, regs );
+    if (!(op1crosses = CROSSPAGE( effective_addr1, len )))
+        ARCH_DEP( vfetchc )( op1, len, effective_addr1, b1, regs );
 
     /* Copy operand-2 data to work area if within same page */
-    if (!(op2crosses = CROSSPAGE( addr2, 256-1 )))
-        ARCH_DEP( vfetchc )( op2, 256-1, addr2, b2, regs );
+    if (!(op2crosses = CROSSPAGE( effective_addr2, 256-1 )))
+        ARCH_DEP( vfetchc )( op2, 256-1, effective_addr2, b2, regs );
 
     /* Process first operand from left to right */
     if (unlikely( op1crosses ))
@@ -1766,15 +1809,15 @@ bool    op1crosses, op2crosses;         /* Operand crosses Page Bdy  */
             /* WORST case: BOTH operands cross a page boundary */
             for (i=0; i <= len; i++)
             {
-                dbyte = ARCH_DEP( vfetchb )( addr1+i, b1, regs );
-                if ((sbyte = ARCH_DEP( vfetchb )( addr2+dbyte, b2, regs )))
+                dbyte = ARCH_DEP( vfetchb )( effective_addr1+i, b1, regs );
+                if ((sbyte = ARCH_DEP( vfetchb )( effective_addr2+dbyte, b2, regs )))
                     break;
             }
         }
         else /* Only operand-1 crosses a page boundary */
         {
             for (i=0; i <= len; i++)
-                if ((sbyte = op2[ ARCH_DEP( vfetchb )( addr1+i, b1, regs ) ]))
+                if ((sbyte = op2[ ARCH_DEP( vfetchb )( effective_addr1+i, b1, regs ) ]))
                     break;
         }
     }
@@ -1784,7 +1827,7 @@ bool    op1crosses, op2crosses;         /* Operand crosses Page Bdy  */
        {
             /* But operand-2 DOES cross a page boundary */
             for (i=0; i <= len; i++)
-                if ((sbyte = ARCH_DEP( vfetchb )( addr2+op1[i], b2, regs )))
+                if ((sbyte = ARCH_DEP( vfetchb )( effective_addr2+op1[i], b2, regs )))
                     break;
        }
        else /* BEST case: NEITHER operand crosses a page boundary */
@@ -1798,19 +1841,19 @@ bool    op1crosses, op2crosses;         /* Operand crosses Page Bdy  */
     /* Test for non-zero function byte */
     if (sbyte != 0)
     {
-        addr1 += i;
-        addr1 &= ADDRESS_MAXWRAP( regs );
+        effective_addr1 += i;
+        effective_addr1 &= ADDRESS_MAXWRAP( regs );
 
         /* Store address of argument byte in register 1 */
 #if defined( FEATURE_001_ZARCH_INSTALLED_FACILITY )
         if (regs->psw.amode64)
-            regs->GR_G(1) = addr1;
+            regs->GR_G(1) = effective_addr1;
         else
 #endif
         if (regs->psw.amode)
-            regs->GR_L(1) = addr1;
+            regs->GR_L(1) = effective_addr1;
         else
-            regs->GR_LA24(1) = addr1;
+            regs->GR_LA24(1) = effective_addr1;
 
         /* Store function byte in low-order byte of reg.2 */
         regs->GR_LHLCL(2) = sbyte;
@@ -1842,6 +1885,7 @@ BYTE    trtab[256];                     /* Translate table           */
 
     RRE(inst, regs, r1, r2);
 
+    CONTRAN_INSTR_CHECK( regs );
     ODD_CHECK(r1, regs);
 
     /* Load the test byte from bits 24-31 of register 0 */
@@ -1903,7 +1947,7 @@ BYTE    trtab[256];                     /* Translate table           */
 
 
 /*-------------------------------------------------------------------*/
-/* F3   UNPK  - Unpack                                          [SS] */
+/* F3   UNPK  - Unpack                                        [SS-b] */
 /*-------------------------------------------------------------------*/
 DEF_INST(unpack)
 {
@@ -1918,6 +1962,7 @@ BYTE    lbyte;                          /* Left result byte of pair  */
 
     SS(inst, regs, l1, l2, b1, effective_addr1,
                                      b2, effective_addr2);
+    CONTRAN_INSTR_CHECK( regs );
 
     /* If operand 1 crosses a page, make sure both pages are accessible */
     if((effective_addr1 & PAGEFRAME_PAGEMASK) !=
@@ -1987,7 +2032,7 @@ BYTE    a64 = regs->psw.amode64;        /* 64-bit mode flag          */
 
     E(inst, regs);
 
-    UNREFERENCED(inst);
+    CONTRAN_INSTR_CHECK( regs );
 
     /*
     **  GR0, GR1    node values (codeword and other data) of node
@@ -2120,7 +2165,7 @@ BYTE    a64 = regs->psw.amode64;        /* 64-bit mode flag          */
 
 #if defined( FEATURE_022_EXT_TRANSL_FACILITY_3 )
 /*-------------------------------------------------------------------*/
-/* B9B0 CU14  - Convert UTF-8 to UTF-32                        [RRF] */
+/* B9B0 CU14  - Convert UTF-8 to UTF-32                      [RRF-c] */
 /*-------------------------------------------------------------------*/
 DEF_INST(convert_utf8_to_utf32)
 {
@@ -2128,21 +2173,20 @@ DEF_INST(convert_utf8_to_utf32)
   GREG destlen;                    /* Destination length             */
   int r1;
   int r2;
+  int m3;                          /* Mask                           */
   int read;                        /* Bytes read                     */
   VADR srce;                       /* Source address                 */
   GREG srcelen;                    /* Source length                  */
   BYTE utf32[4];                   /* utf32 character(s)             */
   BYTE utf8[4];                    /* utf8 character(s)              */
 #if defined( FEATURE_030_ETF3_ENHANCEMENT_FACILITY )
-  int wfc;                         /* Well-Formedness-Checking (W)   */
+  bool wfc;                        /* Well-Formedness-Checking (W)   */
 #endif
   int xlated;                      /* characters translated          */
 
-// NOTE: it's faster to decode with RRE format
-// and then to handle the 'wfc' flag separately...
+  RRF_M(inst, regs, r1, r2, m3);
 
-//RRF_M(inst, regs, r1, r2, wfc);
-  RRE(inst, regs, r1, r2);
+  TRAN_INSTR_CHECK( regs );
   ODD2_CHECK(r1, r2, regs);
 
   /* Get paramaters */
@@ -2151,10 +2195,10 @@ DEF_INST(convert_utf8_to_utf32)
   srce = regs->GR(r2) & ADDRESS_MAXWRAP(regs);
   srcelen = GR_A(r2 + 1, regs);
 #if defined( FEATURE_030_ETF3_ENHANCEMENT_FACILITY )
-  if(inst[2] & 0x10)
-    wfc = 1;
+  if (m3 & 0x01)
+    wfc = true;
   else
-    wfc = 0;
+    wfc = false;
 #endif
 
   /* Every valid utf-32 starts with 0x00 */
@@ -2363,7 +2407,7 @@ DEF_INST(convert_utf8_to_utf32)
 }
 
 /*-------------------------------------------------------------------*/
-/* B9B1 CU24  - Convert UTF-16 to UTF-32                       [RRF] */
+/* B9B1 CU24  - Convert UTF-16 to UTF-32                     [RRF-c] */
 /*-------------------------------------------------------------------*/
 DEF_INST(convert_utf16_to_utf32)
 {
@@ -2371,6 +2415,7 @@ DEF_INST(convert_utf16_to_utf32)
   GREG destlen;                    /* Destination length             */
   int r1;
   int r2;
+  int m3;                          /* Mask                           */
   int read;                        /* Bytes read                     */
   VADR srce;                       /* Source address                 */
   GREG srcelen;                    /* Source length                  */
@@ -2378,15 +2423,13 @@ DEF_INST(convert_utf16_to_utf32)
   BYTE utf32[4];                   /* utf328 character(s)            */
   BYTE uvwxy;                      /* Work value                     */
 #if defined( FEATURE_030_ETF3_ENHANCEMENT_FACILITY )
-  int wfc;                         /* Well-Formedness-Checking (W)   */
+  bool wfc;                        /* Well-Formedness-Checking (W)   */
 #endif
   int xlated;                      /* characters translated          */
 
-// NOTE: it's faster to decode with RRE format
-// and then to handle the 'wfc' flag separately...
+  RRF_M(inst, regs, r1, r2, m3);
 
-//RRF_M(inst, regs, r1, r2, wfc);
-  RRE(inst, regs, r1, r2);
+  TRAN_INSTR_CHECK( regs );
   ODD2_CHECK(r1, r2, regs);
 
   /* Get paramaters */
@@ -2395,10 +2438,10 @@ DEF_INST(convert_utf16_to_utf32)
   srce = regs->GR(r2) & ADDRESS_MAXWRAP(regs);
   srcelen = GR_A(r2 + 1, regs);
 #if defined( FEATURE_030_ETF3_ENHANCEMENT_FACILITY )
-  if(inst[2] & 0x10)
-    wfc = 1;
+  if(m3 & 0x01)
+    wfc = true;
   else
-    wfc = 0;
+    wfc = false;
 #endif
 
   /* Every valid utf-32 starts with 0x00 */
@@ -2447,7 +2490,7 @@ DEF_INST(convert_utf16_to_utf32)
       /* WellFormednessChecking */
       if(wfc)
       {
-        if(utf16[2] < 0xdc && utf16[2] > 0xdf)
+        if(utf16[2] < 0xdc || utf16[2] > 0xdf)
         {
           regs->psw.cc = 2;
           return;
@@ -2495,6 +2538,8 @@ DEF_INST(convert_utf32_to_utf8)
   int xlated;                      /* characters translated          */
 
   RRE(inst, regs, r1, r2);
+
+  TRAN_INSTR_CHECK( regs );
   ODD2_CHECK(r1, r2, regs);
 
   /* Get paramaters */
@@ -2632,6 +2677,8 @@ DEF_INST(convert_utf32_to_utf16)
   BYTE zabcd;                      /* Work value                     */
 
   RRE(inst, regs, r1, r2);
+
+  TRAN_INSTR_CHECK( regs );
   ODD2_CHECK(r1, r2, regs);
 
   /* Get paramaters */
@@ -2724,6 +2771,8 @@ DEF_INST(search_string_unicode)
 
   RRE(inst, regs, r1, r2);
 
+  CONTRAN_INSTR_CHECK( regs );
+
   /* Program check if bits 0-15 of register 0 not zero */
   if(regs->GR_L(0) & 0xFFFF0000)
     regs->program_interrupt (regs, PGM_SPECIFICATION_EXCEPTION);
@@ -2772,7 +2821,7 @@ DEF_INST(search_string_unicode)
 }
 
 /*-------------------------------------------------------------------*/
-/* D0   TRTR  - Translate and Test Reverse                      [SS] */
+/* D0   TRTR  - Translate and Test Reverse                    [SS-a] */
 /*-------------------------------------------------------------------*/
 DEF_INST(translate_and_test_reverse)
 {
@@ -2782,13 +2831,15 @@ DEF_INST(translate_and_test_reverse)
   VADR effective_addr1;
   VADR effective_addr2;                 /* Effective addresses       */
   int i;                                /* Integer work areas        */
-  int l;                                /* Lenght byte               */
+  int len;                              /* Length byte               */
   BYTE sbyte;                           /* Byte work areas           */
 
-  SS_L(inst, regs, l, b1, effective_addr1, b2, effective_addr2);
+  SS_L(inst, regs, len, b1, effective_addr1, b2, effective_addr2);
+
+  CONTRAN_INSTR_CHECK( regs );
 
   /* Process first operand from right to left*/
-  for(i = 0; i <= l; i++)
+  for(i = 0; i <= len; i++)
   {
     /* Fetch argument byte from first operand */
     dbyte = ARCH_DEP(vfetchb)(effective_addr1, b1, regs);
@@ -2820,7 +2871,7 @@ DEF_INST(translate_and_test_reverse)
 
       /* Set condition code 2 if argument byte was last byte
          of first operand, otherwise set condition code 1 */
-      cc = (i == l) ? 2 : 1;
+      cc = (i == len) ? 2 : 1;
 
       /* Terminate the operation at this point */
       break;
@@ -2840,7 +2891,7 @@ DEF_INST(translate_and_test_reverse)
 
 #ifdef FEATURE_026_PARSING_ENHANCE_FACILITY
 /*-------------------------------------------------------------------*/
-/* B9BF TRTE - Translate and Test Extended                     [RRF] */
+/* B9BF TRTE - Translate and Test Extended                   [RRF-c] */
 /*-------------------------------------------------------------------*/
 DEF_INST(translate_and_test_extended)
 {
@@ -2858,6 +2909,8 @@ DEF_INST(translate_and_test_extended)
   int r2;
 
   RRF_M(inst, regs, r1, r2, m3);
+
+  CONTRAN_INSTR_CHECK( regs );
 
   a_bit = ((m3 & 0x08) ? 1 : 0);
   f_bit = ((m3 & 0x04) ? 1 : 0);
@@ -2934,7 +2987,7 @@ DEF_INST(translate_and_test_extended)
 }
 
 /*-------------------------------------------------------------------*/
-/* B9BD TRTRE - Translate and Test Reverse Extended            [RRF] */
+/* B9BD TRTRE - Translate and Test Reverse Extended          [RRF-c] */
 /*-------------------------------------------------------------------*/
 DEF_INST(translate_and_test_reverse_extended)
 {
@@ -2952,6 +3005,8 @@ DEF_INST(translate_and_test_reverse_extended)
   int r2;
 
   RRF_M(inst, regs, r1, r2, m3);
+
+  CONTRAN_INSTR_CHECK( regs );
 
   a_bit = ((m3 & 0x08) ? 1 : 0);
   f_bit = ((m3 & 0x04) ? 1 : 0);

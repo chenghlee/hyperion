@@ -124,8 +124,8 @@ LOGM_DLL_IMPORT int  panel_command_capture( char* cmd, char** resp );
 /* helper macro for device messages                                  */
 /*-------------------------------------------------------------------*/
 
-#define LCSS_DEVNUM         dev ? SSID_TO_LCSS( dev->ssid ) : 0,   \
-                            dev ? dev->devnum : 0
+#define LCSS_DEVNUM_DEV(_dev)   (_dev)?SSID_TO_LCSS((_dev)->ssid):0,(_dev)?(_dev)->devnum:0
+#define LCSS_DEVNUM             LCSS_DEVNUM_DEV(dev)
 
 /*-------------------------------------------------------------------*/
 /* ckddasd.c/fbadasd.c dasd I/O tracing helper macro                 */
@@ -343,7 +343,7 @@ LOGM_DLL_IMPORT int  panel_command_capture( char* cmd, char** resp );
 #define HHC00203 "%1d:%04X Tape file %s, type %s: invalid tapemark at offset 0x%16.16"PRIX64
 #define HHC00204 "%1d:%04X Tape file %s, type %s: error in function %s, offset 0x%16.16"PRIX64": %s"
 #define HHC00205 "%1d:%04X Tape file %s, type %s: error in function %s: %s"
-#define HHC00206 "%1d:%04X Tape file %s, type %s: not a valid file"
+#define HHC00206 "%1d:%04X Tape file %s, type %s: not a valid @TDF file"
 #define HHC00207 "%1d:%04X Tape file %s, type %s: line %d: %s"
 #define HHC00208 "%1d:%04X Tape file %s, type %s: maximum tape capacity exceeded"
 #define HHC00209 "%1d:%04X Tape file %s, type %s: maximum tape capacity enforced"
@@ -631,7 +631,7 @@ LOGM_DLL_IMPORT int  panel_command_capture( char* cmd, char** resp );
 #define HHC00718 "%1d:%04X Shared: error writing track %d"
 #define HHC00719 "%1d:%04X Shared: remote error writing track %d %2.2X-%2.2X"
 #define HHC00720 "%1d:%04X Shared: error in function %s: %s"
-#define HHC00721 "%1d:%04X Shared: connected to file %s"
+#define HHC00721 "%1d:%04X Shared: connected to v%d.%d server id %d file %s"
 #define HHC00722 "%1d:%04X Shared: error in connect to file %s: %s"
 #define HHC00723 "%1d:%04X Shared: error in send for %2.2X-%2.2X: %s"
 #define HHC00724 "%1d:%04X Shared: not connected to file %s"
@@ -659,7 +659,7 @@ LOGM_DLL_IMPORT int  panel_command_capture( char* cmd, char** resp );
 
 // reserve 008xx for processor related messages
 #define HHC00800 "Processor %s%02X: loaded wait state PSW %s"
-#define HHC00801 "Processor %s%02X: %s%s%s code %4.4X  ilc %d%s"
+#define HHC00801 "Processor %s%02X: %s%s%s code %4.4X ilc %d%s%s"
 #define HHC00802 "Processor %s%02X: PER event: code %4.4X perc %2.2X addr "F_VADR
 #define HHC00803 "Processor %s%02X: program interrupt loop PSW %s"
 #define HHC00804 "Processor %s%02X: I/O interrupt code %1.1X:%4.4X CSW %2.2X%2.2X%2.2X%2.2X %2.2X%2.2X%2.2X%2.2X"
@@ -680,7 +680,7 @@ LOGM_DLL_IMPORT int  panel_command_capture( char* cmd, char** resp );
 #define HHC00819 "Processor %s%02X: online"
 #define HHC00820 "Processor %s%02X: offline"
 #define HHC00821 "Processor %s%02X: vector facility configured %s"
-//efine HHC00822 (available)
+#define HHC00822 "PROCESSOR %s%02X APPEARS TO BE HUNG!"
 //efine HHC00823 (available)
 //efine HHC00824 (available)
 //efine HHC00825 (available)
@@ -1438,7 +1438,7 @@ LOGM_DLL_IMPORT int  panel_command_capture( char* cmd, char** resp );
 #define HHC02326 "%s"     // (instruction tracing: storage line)
 #define HHC02327 "%c:"F_RADR"  Storage address is not valid"
 #define HHC02328 "%c:"F_RADR"  Addressing exception"
-#define HHC02329 "%c:"F_VADR"  Translation exception %4.4hX  %s"
+#define HHC02329 "%c:"F_VADR"  Translation exception %4.4hX (%s)  %s"
 #define HHC02330 "Script %d: test: [re]start failed"
 #define HHC02331 "Script %d: test: aborted"
 #define HHC02332 "Script %d: test: timeout"
@@ -2349,7 +2349,7 @@ LOGM_DLL_IMPORT int  panel_command_capture( char* cmd, char** resp );
 //efine HHC04107 (available)
 //efine HHC04108 (available)
 //efine HHC04109 (available)
-#define HHC04110 "DuplicateHandle() failed: dwLastError=%d (0x%08.8X): %s"
+#define HHC04110 "DuplicateHandle() failed: dwLastError=%d (0x%8.8X): %s"
 //efine HHC04111 (available)
 #define HHC04112 "Cannot provide minimum emulated TOD clock resolution"
 //efine HHC04113 - HHC04199 (available)
@@ -2364,38 +2364,45 @@ LOGM_DLL_IMPORT int  panel_command_capture( char* cmd, char** resp );
 // range 04900 - 04999 available
 
 // reserve 050xx for CTCE related messages
-#define HHC05050 "%1d:%04X CTCE: Error creating socket: %s"
-#define HHC05051 "%1d:%04X CTCE: TCP_NODELAY error for socket (port %d): %s"
-#define HHC05052 "%1d:%04X CTCE: Error binding to socket (port %d): %s"
-#define HHC05053 "%1d:%04X CTCE: Connect error :%d -> %s:%d, retry is possible"
-#define HHC05054 "%1d:%04X CTCE: Started outbound connection :%d -> %s:%d"
-#define HHC05055 "%1d:%04X CTCE: Incorrect number of parameters"
-#define HHC05056 "%1d:%04X CTCE: Invalid port number: %s"
-#define HHC05057 "%1d:%04X CTCE: Local port number not even: %s"
+#define HHC05050 "%1d:%04X CTCE: Error creating %s socket: %s"
+#define HHC05051 "%1d:%04X CTCE: %s error for %s socket (port %d): %s"
+#define HHC05052 "%1d:%04X CTCE: Error binding to %s socket (port %d): %s"
+#define HHC05053 "%1d:%04X CTCE: Error on getsockname for %s socket (port %d): %s"
+#define HHC05054 "%1d:%04X CTCE: %s outbound connection :%5d -> %1d:%04X=%s:%d"
+#define HHC05055 "%1d:%04X CTCE: Missing (at least) remote CTCE IP address parameter"
+#define HHC05056 "%1d:%04X CTCE: Local port number outside range 1024-65534: %s"
+#define HHC05057 "%1d:%04X CTCE: Remote CCUU address outside range 0001-FFFF: %4X"
 #define HHC05058 "%1d:%04X CTCE: Invalid IP address %s"
 #define HHC05059 "%1d:%04X CTCE: Invalid port number: %s"
-#define HHC05060 "%1d:%04X CTCE: Remote port number not even: %s"
+#define HHC05060 "%1d:%04X CTCE: Both remote listening port and remote CCUU are missing; at least one is required."
 #define HHC05061 "%1d:%04X CTCE: Invalid MTU size %s, allowed range is %d to 65536"
 #define HHC05062 "%1d:%04X CTCE: Invalid Small MTU size %s ignored"
-#define HHC05063 "%1d:%04X CTCE: Awaiting inbound connection :%d <- %s:%d"
-#define HHC05064 "%1d:%04X CTCE: Error creating socket: %s"
-#define HHC05065 "%1d:%04X CTCE: Error binding to socket (port=%d): %s"
+#define HHC05063 "%1d:%04X CTCE: Awaiting inbound connection :%5d <- %s"
+#define HHC05064 "%1d:%04X CTCE: Extraneous parameters ignored : %s ..."
+#define HHC05065 "%1d:%04X CTCE: Attempt outbound connection :%5d -> %1d:%04X=%s:%d"
 #define HHC05066 "%1d:%04X CTCE: Error on call to listen (port=%d): %s"
-#define HHC05067 "%1d:%04X CTCE: Inconsistent config=%s+%d, connecting client=%s"
-#define HHC05068 "%1d:%04X CTCE: TCP_NODELAY error for socket (port %d): %s"
-#define HHC05069 "%1d:%04X CTCE: create_thread error: %s"
-#define HHC05070 "%1d:%04X CTCE: Accepted inbound connection :%d <- %s (bufsize=%d,%d)"
-#define HHC05071 "%1d:%04X CTCE: SEND status incorrectly encoded !"
-#define HHC05072 "%1d:%04X CTCE: Not all sockets connected: send=%d, receive=%d"
+#define HHC05067 "%1d:%04X CTCE: Ignoring non matching connection from %1d:%04X=%s:%d"
+#define HHC05068 "%1d:%04X CTCE: TCP_NODELAY error for listening socket %d (port %d): %s"
+#define HHC05069 "%1d:%04X CTCE: create_thread %s error: %s"
+#define HHC05070 "%1d:%04X CTCE: %s inbound connection :%5d <- %1d:%04X=%s:%5d (bufsize=%d,%d)"
+#define HHC05071 "%1d:%04X CTCE: Internal error, SEND status incorrectly encoded !"
+#define HHC05072 "%1d:%04X CTCE: Still attempting connection :%5d -> %1d:%04X=%s:%d%s"
 #define HHC05073 "%1d:%04X CTCE: bufsize parameter %d is too small; increase at least to %d"
 #define HHC05074 "%1d:%04X CTCE: Error writing to %s: %s"
-#define HHC05075 "%1d:%04X CTCE: Halt or Clear Recognized"
-#define HHC05076 "%1d:%04X CTCE: Connection closed; %"PRIu64" MB received in %"PRIu64" packets from %s"
+#define HHC05075 "%1d:%04X CTCE: Initial write_socket :%d -> %1d:%04X=%s:%d ; rc=%d!=%d ; error = %s"
+#define HHC05076 "%1d:%04X CTCE: Connection closed; %"PRIu64" MB received in %"PRIu64" packets from %s; shutdown=%d"
 #define HHC05077 "%1d:%04X CTCE: Error reading from %s: %s"
-#define HHC05078 "%1d:%04X CTCE: -| %s%s%s%s x=%s y=%s cmd=%s"
+#define HHC05078 "%1d:%04X CTCE: Aborted outbound connection :%5d -> %1d:%04X=%s:%d"
 #define HHC05079 "%1d:%04X CTCE: %s %.6s #%04X cmd=%s=%02X xy=%.2s%s%.2s l=%04X k=%08X %s%s%s%s%s%s"
-#define HHC05080 "%1d:%04X CTCE: Socket select() with %d usec timeout error: %s"
-//efine HHC05081 - HHC05099 (available)
+#define HHC05080 "%1d:%04X CTCE: Create listen thread %s error: %s"
+#define HHC05081 "%1d:%04X CTCE: Already awaiting connection :%5d <- %s"
+#define HHC05082 "%1d:%04X CTCE: TCP set_socket_keepalive RC=%d"
+#define HHC05083 "%1d:%04X CTCE: Error on accept() for listening socket %d (port %d): %s"
+//efine HHC05084 (available)
+#define HHC05085 "%1d:%04X CTCE: Invalid ATTNDELAY value %s ignored"
+#define HHC05086 "%1d:%04X CTCE: Recovery is about to issue Hercules command: %s %s"
+
+//efine HHC05087 - HHC05099 (available)
 
 // range 05100 - 05199 available
 // range 05200 - 05299 available
@@ -2488,7 +2495,35 @@ LOGM_DLL_IMPORT int  panel_command_capture( char* cmd, char** resp );
 
 // range 17550 - 17599 available
 // range 17600 - 17699 available
-// range 17700 - 17799 available
+
+// Reserve 17700-17749 for TXF related messages
+#define HHC17700 "TXF: %s%02X: %sSuccessful %s Nested TEND for TND %d => %d"
+#define HHC17701 "TXF: %s%02X: %sSuccessful Outermost %s TEND"
+#define HHC17702 "TXF: %s%02X: %sSuccessful %s TBEGIN%s; TND now %d"
+#define HHC17703 "TXF: %s%02X: %sFailed %s %s Transaction for TND %d: %s = %s, why =%s"
+#define HHC17704 "TXF: %s%02X: %svirt 0x%16.16"PRIX64", abs 0x%16.16"PRIX64", alt 0x%16.16"PRIX64
+#define HHC17705 "TXF: %s%02X: %sThere now:  +"
+#define HHC17706 "TXF: %s%02X: %sWe fetched: +"
+#define HHC17707 "TXF: %s%02X: %sWe stored:  +"
+#define HHC17708 "TXF: %s%02X: %sError in function %s: %s"
+#define HHC17709 "TXF: %s%02X: %s%s dump of TDB:"
+#define HHC17710 "TXF: %s%02X: %s+"
+#define HHC17711 "TXF: %s%02X: %sUnable to obtain clean capture of page"
+#define HHC17712 "TXF: %s%02X: %sUnable to cleanly refresh cache line"
+#define HHC17713 "TXF: %s%02X: %sTranslation exception %4.4hX (%s) for TBEGIN tdba 0x%16.16"PRIx64
+#define HHC17714 "TXF: %s%02X: SIE: Populating Interception TDB at 0x%16.16"PRIx64
+#define HHC17715 "TXF: %s%02X: SIE: Intercepting %s instruction"
+#define HHC17716 "TXF: %s%02X: SIE: Interception TDB address not provided!"
+//  HHC17717 ... HHC17722 = MLVL( VERBOSE ) only
+#define HHC17717 "TXF: %s%02X: %sCONSTRAINED transaction retry #%d..."
+#define HHC17718 "TXF: %s%02X: %sCONSTRAINED transaction succeeded after %d retries"
+#define HHC17719 "TXF: %s%02X: %sCONSTRAINED transaction retry #%d FAILED!"
+#define HHC17720 "TXF: %s%02X: %sAbort set by %s at %s"
+#define HHC17721 "TXF: %s%02X: %s%s"
+#define HHC17722 "TXF: %s%02X: %sabort_transaction called from %s"
+//efine HHC17723 - HHC17749 (available)
+
+// range 17750 - 17799 available
 // range 17800 - 17899 available
 // range 17900 - 17999 available
 
@@ -2520,15 +2555,23 @@ LOGM_DLL_IMPORT int  panel_command_capture( char* cmd, char** resp );
 #define HHC90011 "Pttrace: invalid argument %s"
 #define HHC90012 "Pttrace: %s %s %s %s to=%d %d"
 #define HHC90013 "'%s(%s)' failed: rc=%d: %s; tid="TIDPAT", loc=%s"
-#define HHC90014 "lock %s was obtained by thread "TIDPAT" at %s"
-#define HHC90015 "Thread "TIDPAT" abandoned lock %s obtained on %s at %s"
-#define HHC90016 "Thread "TIDPAT" abandoned at %s lock %s obtained on %s at %s"
-#define HHC90017 "Lock=%s, tid="TIDPAT", tod=%s, loc=%s"
+#define HHC90014 "lock %s was %s by thread "TIDPAT" at %s"
+#define HHC90015 "Thread "TIDPAT" (%s) abandoned lock %s obtained on %s at %s"
+#define HHC90016 "Thread "TIDPAT" (%s) abandoned at %s lock %s obtained on %s at %s"
+#define HHC90017 "Lock "PTR_FMTx" (%s) created by "TIDPAT" (%s) on %s at %s"
 #define HHC90018 "Total locks defined: %d"
 #define HHC90019 "No locks found for thread "TIDPAT"."
 #define HHC90020 "'%s' failed at loc=%s: rc=%d: %s"
-#define HHC90021 "%-18s %s "TIDPAT" %-18s "PTR_FMTx" "PTR_FMTx" %s"
-//efine HHC90022 - HHC90099 (available)
+#define HHC90021 "%s "TIDPAT" %-15.15s %-18.18s %-18.18s"PTR_FMTx" "PTR_FMTx" %s%s"
+#define HHC90022 "Thread %-15.15s tid="TIDPAT" created on %s at %-18.18s"
+#define HHC90023 "Thread %-15.15s tid="TIDPAT" waiting since %s for lock %s = "PTR_FMTx
+#define HHC90024 "DEADLOCK!"
+#define HHC90025 "Thread %s waiting for lock %s held by thread %s"
+#define HHC90026 "No threads found with tid "TIDPAT"."
+#define HHC90027 "Total threads running: %d"
+#define HHC90028 "lock %s was already initialized at %s"
+#define HHC90029 "Lock "PTR_FMTx" (%s) obtained by "TIDPAT" (%s) on %s at %s"
+//efine HHC90030 - HHC90099 (available)
 
 /* from crypto/dyncrypt.c when compiled with debug on */
 #define HHC90100 "%s"

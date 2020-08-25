@@ -42,7 +42,7 @@ DEVBLK *dev;                            /* -> device block           */
     PRIV_CHECK(regs);
 
 #if defined(_FEATURE_SIE)
-    if(SIE_STATNB(regs, EC3, SIGAA))
+    if(SIE_STATE_BIT_OFF(regs, EC3, SIGAA))
         longjmp(regs->progjmp, SIE_INTERCEPT_INST);
 #endif /*defined(_FEATURE_SIE)*/
 
@@ -161,7 +161,7 @@ DEVBLK *dev;                            /* -> device block           */
 
 #if defined(FEATURE_QEBSM)
 /*-------------------------------------------------------------------*/
-/* EB8A SQBS  - Set Queue Buffer State                         [RSY] */
+/* EB8A SQBS  - Set Queue Buffer State                       [RSY-a] */
 /*-------------------------------------------------------------------*/
 DEF_INST(set_queue_buffer_state)
 {
@@ -187,7 +187,7 @@ U64     slsba;                 /* Storage list state block address   */
     PRIV_CHECK(regs);
 
 #if defined(_FEATURE_SIE)
-    if(SIE_STATNB(regs, EC3, SIGAA))
+    if(SIE_STATE_BIT_OFF(regs, EC3, SIGAA))
         longjmp(regs->progjmp, SIE_INTERCEPT_INST);
 #endif /*defined(_FEATURE_SIE)*/
 
@@ -255,7 +255,7 @@ U64     slsba;                 /* Storage list state block address   */
 
 
 /*-------------------------------------------------------------------*/
-/* B99C EQBS  - Extract Queue Buffer State                     [RRF] */
+/* B99C EQBS  - Extract Queue Buffer State                   [RRF-a] */
 /*-------------------------------------------------------------------*/
 DEF_INST(extract_queue_buffer_state)
 {
@@ -280,7 +280,7 @@ U64     slsba;                /* Storage list state block address    */
     PRIV_CHECK(regs);
 
 #if defined(_FEATURE_SIE)
-    if(SIE_STATNB(regs, EC3, SIGAA))
+    if(SIE_STATE_BIT_OFF(regs, EC3, SIGAA))
         longjmp(regs->progjmp, SIE_INTERCEPT_INST);
 #endif /*defined(_FEATURE_SIE)*/
 
@@ -367,9 +367,9 @@ U64     slsba;                /* Storage list state block address    */
 /*-------------------------------------------------------------------*/
 DEF_INST(set_vector_summary)
 {
-int     r1, unused;            /* Register numbers                   */
+int     r1, r2;                /* Register numbers                   */
 
-    RRE0(inst, regs, r1, unused);
+    RRE(inst, regs, r1, r2);
     PRIV_CHECK(regs);
     SIE_INTERCEPT(regs);
     ODD_CHECK(r1, regs);

@@ -249,7 +249,7 @@ static inline void synchronize_cpus( REGS* regs, const char* location )
     CPU_BITMAP mask = sysblk.started_mask;
 
     /* Deselect current processor and waiting processors from mask */
-    mask &= ~(sysblk.waiting_mask | (regs)->hostregs->cpubit);
+    mask &= ~(sysblk.waiting_mask | HOSTREGS->cpubit);
 
     /* Deselect processors at a syncpoint and count active processors
      */
@@ -273,7 +273,7 @@ static inline void synchronize_cpus( REGS* regs, const char* location )
                 ON_IC_INTERRUPT( i_regs );
 
                 if (SIE_MODE( i_regs ))
-                    ON_IC_INTERRUPT( i_regs->guestregs );
+                    ON_IC_INTERRUPT( GUEST( i_regs ));
             }
         }
     }
@@ -285,13 +285,13 @@ static inline void synchronize_cpus( REGS* regs, const char* location )
     if (n && mask)
     {
         sysblk.sync_mask = mask;
-        sysblk.syncing   = 1;
+        sysblk.syncing   = true;
         sysblk.intowner  = LOCK_OWNER_NONE;
 
         hthread_wait_condition( &sysblk.sync_cond, &sysblk.intlock, location );
 
-        sysblk.intowner  = (regs)->hostregs->cpuad;
-        sysblk.syncing   = 0;
+        sysblk.intowner  = HOSTREGS->cpuad;
+        sysblk.syncing   = false;
 
         hthread_broadcast_condition( &sysblk.sync_bc_cond, location );
     }
@@ -391,7 +391,7 @@ static inline void Interrupt_Lock_Obtained( REGS* regs, const char* location )
     {
         while (sysblk.syncing)
         {
-            sysblk.sync_mask &= ~regs->hostregs->cpubit;
+            sysblk.sync_mask &= ~HOSTREGS->cpubit;
 
             if (!sysblk.sync_mask)
                 hthread_signal_condition( &sysblk.sync_cond, location );
@@ -399,8 +399,8 @@ static inline void Interrupt_Lock_Obtained( REGS* regs, const char* location )
             hthread_wait_condition( &sysblk.sync_bc_cond, &sysblk.intlock, location );
         }
 
-        regs->hostregs->intwait = 0;
-        sysblk.intowner = regs->hostregs->cpuad;
+        HOSTREGS->intwait = false;
+        sysblk.intowner = HOSTREGS->cpuad;
     }
     else
         sysblk.intowner = LOCK_OWNER_OTHER;
@@ -411,7 +411,7 @@ static inline void Interrupt_Lock_Obtained( REGS* regs, const char* location )
 static inline void Obtain_Interrupt_Lock( REGS* regs, const char* location )
 {
     if (regs)
-        regs->hostregs->intwait = 1;
+        HOSTREGS->intwait = true;
     hthread_obtain_lock( &sysblk.intlock, location );
     Interrupt_Lock_Obtained( regs, location );
 }
@@ -422,9 +422,11 @@ static inline int Try_Obtain_Interrupt_Lock( REGS* regs, const char* location )
 {
     int rc;
     if (regs)
-        regs->hostregs->intwait = 1;
+        HOSTREGS->intwait = true;
     if ((rc = hthread_try_obtain_lock( &sysblk.intlock, location )) == 0)
         Interrupt_Lock_Obtained( regs, location );
+    else if (regs)
+        HOSTREGS->intwait = false;
     return rc;
 }
 
@@ -438,25 +440,54 @@ static inline void Release_Interrupt_Lock( REGS* regs, const char* location )
 }
 
 /*-------------------------------------------------------------------*/
-/*              Update SYSBLK Instruction Count                      */
+/*           Atomically update 32-bit/64-bit value                   */
 /*-------------------------------------------------------------------*/
-
-#define UPDATE_SYSBLK_INSTCOUNT( _count ) \
-    Update_SYSBLK_instcount(     _count )
-
-static inline void Update_SYSBLK_instcount( int count )
+static inline void atomic_update32( volatile S32* p, S32 count )
 {
-    /* Update system-wide sysblk.instcount instruction counter */
 #if defined( _MSVC_ )
-    InterlockedExchangeAdd64( &sysblk.instcount, count );
+    InterlockedExchangeAdd( p, count );
 #else // GCC (and CLANG?)
   #if defined( HAVE_SYNC_BUILTINS )
-    __sync_fetch_and_add( &sysblk.instcount, count );
+    __sync_fetch_and_add( p, count );
   #else
-    sysblk.instcount += count;  /* (N.B. non-atomic!) */
+    *p += count;  /* (N.B. non-atomic!) */
   #endif
 #endif
 }
+static inline void atomic_update64( volatile S64* p, S64 count )
+{
+#if defined( _MSVC_ )
+    InterlockedExchangeAdd64( p, count );
+#else // GCC (and CLANG?)
+  #if defined( HAVE_SYNC_BUILTINS )
+    __sync_fetch_and_add( p, count );
+  #else
+    *p += count;  /* (N.B. non-atomic!) */
+  #endif
+#endif
+}
+
+/*-------------------------------------------------------------------*/
+/*           Atomically update SYSBLK Instruction Counter            */
+/*-------------------------------------------------------------------*/
+
+#define UPDATE_SYSBLK_INSTCOUNT( _count ) \
+        atomic_update64( &sysblk.instcount, (_count) )
+
+/*-------------------------------------------------------------------*/
+/*  Atomically update SYSBLK count of CPUs executing a transaction   */
+/*-------------------------------------------------------------------*/
+
+#if defined( _FEATURE_073_TRANSACT_EXEC_FACILITY )
+#define UPDATE_SYSBLK_TRANSCPUS( _count )                           \
+  do                                                                \
+  {                                                                 \
+    atomic_update32( &sysblk.txf_transcpus, (_count) );             \
+    if (sysblk.txf_transcpus < 0)                                   \
+      CRASH();                                                      \
+  }                                                                 \
+  while (0)
+#endif
 
 /*-------------------------------------------------------------------*/
 /* Stop ALL CPUs                                      (INTLOCK held) */

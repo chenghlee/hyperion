@@ -542,7 +542,7 @@ static const char *build_info[] = {
 #endif
     ,
 
-    "Max CPU Engines: " QSTR(MAX_CPU_ENGINES),
+    "Max CPU Engines: " QSTR( MAX_CPU_ENGS ),
 
 /*-------------------------------------------------------------------*/
 /*                            Using:                                 */
@@ -634,6 +634,12 @@ static const char *build_info[] = {
     "Without Signal handling",
 #endif
 
+#if defined( OPTION_WATCHDOG )
+    "With    Watchdog monitoring",
+#else
+    "Without Watchdog monitoring",
+#endif
+
 #if defined( CCKD_BZIP2 )
     "With    CCKD BZIP2 support",
 #else
@@ -677,6 +683,37 @@ static const char *build_info[] = {
 
     "Without National Language Support",
     "With    CCKD64 Support",
+
+#if defined( _FEATURE_073_TRANSACT_EXEC_FACILITY )
+    "With    Transactional-Execution Facility support",
+#else
+    "Without Transactional-Execution Facility support",
+#endif
+
+
+
+
+//---------------------------------------------------------------------
+// Fishtest...
+
+#if defined( FISHTEST_TXF_STATS )               // gather/track TXF metrics
+    "With    FISHTEST_TXF_STATS",
+#else
+    "Without FISHTEST_TXF_STATS",
+#endif
+
+#if defined( OPTION_TXF_SINGLE_THREAD )         // one transaction at a time
+    "With    OPTION_TXF_SINGLE_THREAD",
+#else
+    "Without OPTION_TXF_SINGLE_THREAD",
+#endif
+
+//---------------------------------------------------------------------
+
+
+
+
+
 
 /*-------------------------------------------------------------------*/
 /*                 Machine dependent assists:                        */

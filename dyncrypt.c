@@ -4003,6 +4003,8 @@ DEF_INST(dyn_compute_intermediate_message_digest)
 
   RRE(inst, regs, r1, r2);
 
+  TRAN_INSTR_CHECK( regs );
+
 #ifdef OPTION_KIMD_DEBUG
   WRMSG(HHC90100, "D", "KIMD: compute intermediate message digest");
   WRMSG(HHC90101, "D", 1, r1);
@@ -4106,6 +4108,8 @@ DEF_INST(dyn_compute_last_message_digest)
 
   RRE(inst, regs, r1, r2);
 
+  TRAN_INSTR_CHECK( regs );
+
 #ifdef OPTION_KLMD_DEBUG
   WRMSG(HHC90100, "D", "KLMD: compute last message digest");
   WRMSG(HHC90101, "D", 1, r1);
@@ -4196,6 +4200,8 @@ DEF_INST(dyn_cipher_message)
     ARCH_DEP(program_interrupt)(regs, PGM_OPERATION_EXCEPTION);
 
   RRE(inst, regs, r1, r2);
+
+  TRAN_INSTR_CHECK( regs );
 
 #ifdef OPTION_KM_DEBUG
   WRMSG(HHC90100, "D", "KM: cipher message");
@@ -4332,6 +4338,8 @@ DEF_INST(dyn_compute_message_authentication_code)
 
   RRE(inst, regs, r1, r2);
 
+  TRAN_INSTR_CHECK( regs );
+
 #ifdef OPTION_KMAC_DEBUG
   WRMSG(HHC90100, "D", "KMAC: compute message authentication code");
   WRMSG(HHC90101, "D", 2, r2);
@@ -4430,6 +4438,8 @@ DEF_INST(dyn_cipher_message_with_chaining)
     ARCH_DEP(program_interrupt)(regs, PGM_OPERATION_EXCEPTION);
 
   RRE(inst, regs, r1, r2);
+
+  TRAN_INSTR_CHECK( regs );
 
 #ifdef OPTION_KMC_DEBUG
   WRMSG(HHC90100, "D", "KMC: cipher message with chaining");
@@ -4541,7 +4551,7 @@ DEF_INST(dyn_cipher_message_with_chaining)
 
 #if defined( FEATURE_077_MSA_EXTENSION_FACILITY_4 )
 /*----------------------------------------------------------------------------*/
-/* B92D KMCTR - Cipher message with counter                             [RRF] */
+/* B92D KMCTR - Cipher message with counter                           [RRF-b] */
 /*----------------------------------------------------------------------------*/
 DEF_INST(dyn_cipher_message_with_counter)
 {
@@ -4564,6 +4574,8 @@ DEF_INST(dyn_cipher_message_with_counter)
     ARCH_DEP(program_interrupt)(regs, PGM_OPERATION_EXCEPTION);
 
   RRF_M(inst, regs, r1, r2, r3);
+
+  TRAN_INSTR_CHECK( regs );
 
 #ifdef OPTION_KMCTR_DEBUG
   WRMSG(HHC90100, "D", "KMCTR: cipher message with counter");
@@ -4655,6 +4667,8 @@ DEF_INST(dyn_cipher_message_with_cipher_feedback)
     ARCH_DEP(program_interrupt)(regs, PGM_OPERATION_EXCEPTION);
 
   RRE(inst, regs, r1, r2);
+
+  TRAN_INSTR_CHECK( regs );
 
 #ifdef OPTION_KMF_DEBUG
   WRMSG(HHC90100, "D", "KMF: cipher message with cipher feedback");
@@ -4748,6 +4762,8 @@ DEF_INST(dyn_cipher_message_with_output_feedback)
 
   RRE(inst, regs, r1, r2);
 
+  TRAN_INSTR_CHECK( regs );
+
 #ifdef OPTION_KMO_DEBUG
   WRMSG(HHC90100, "D", "KMO: cipher message with output feedback");
   WRMSG(HHC90101, "D", 1, r1);
@@ -4823,6 +4839,8 @@ DEF_INST(dyn_perform_cryptographic_computation)
   {
     { 0xf0, 0x70, 0x38, 0x38, 0x00, 0x00, 0x28, 0x28, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 }
   };
+
+  TRAN_INSTR_CHECK( regs );
 
   UNREFERENCED(inst);              /* This operation has no operands */
 

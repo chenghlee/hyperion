@@ -28,8 +28,8 @@
 /*          Jan Jaeger, after a suggestion by Willem Konynenberg     */
 /*      Instruction decode rework - Jan Jaeger                       */
 /*      Modifications for Interpretive Execution (SIE) by Jan Jaeger */
-/*      Basic FP extensions support - Peter Kuschnerus           v209*/
-/*      ASN-and-LX-reuse facility - Roger Bowler, June 2004      @ALR*/
+/*      Basic FP extensions support - Peter Kuschnerus               */
+/*      ASN-and-LX-reuse facility - Roger Bowler, June 2004          */
 /*-------------------------------------------------------------------*/
 
 #include "hstdinc.h"
@@ -303,7 +303,7 @@ int ARCH_DEP(load_psw) (REGS *regs, BYTE *addr)
 
 #if defined( FEATURE_MULTIPLE_CONTROLLED_DATA_SPACE )
     /* Bits 5 and 16 must be zero in XC mode */
-    if( SIE_STATB(regs, MX, XC)
+    if( SIE_STATE_BIT_ON(regs, MX, XC)
       && ( (regs->psw.sysmask & PSW_DATMODE) || SPACE_BIT(&regs->psw)) )
         return PGM_SPECIFICATION_EXCEPTION;
 #endif
@@ -311,10 +311,15 @@ int ARCH_DEP(load_psw) (REGS *regs, BYTE *addr)
     regs->psw.zeroilc = 0;
 
     /* Check for wait state PSW */
-    if (WAITSTATE(&regs->psw) && CPU_STEPPING_OR_TRACING_ALL)
+    if (1
+        && WAITSTATE( &regs->psw )
+        && CPU_STEPPING_OR_TRACING_ALL
+        && !TXF_INSTR_TRACING()
+    )
     {
         char buf[40];
-        WRMSG(HHC00800, "I", PTYPSTR(regs->cpuad), regs->cpuad, STR_PSW( regs, buf ));
+        // "Processor %s%02X: loaded wait state PSW %s"
+        WRMSG( HHC00800, "I", PTYPSTR( regs->cpuad ), regs->cpuad, STR_PSW( regs, buf ));
     }
 
     TEST_SET_AEA_MODE(regs);
@@ -323,319 +328,62 @@ int ARCH_DEP(load_psw) (REGS *regs, BYTE *addr)
 } /* end function ARCH_DEP(load_psw) */
 
 /*-------------------------------------------------------------------*/
-/* Load program interrupt new PSW                                    */
+/*                    trace_program_interrupt_ip                     */
 /*-------------------------------------------------------------------*/
-void (ATTR_REGPARM(2) ARCH_DEP(program_interrupt)) (REGS *regs, int pcode)
+DLL_EXPORT void ARCH_DEP( trace_program_interrupt_ip )( REGS* regs, BYTE* ip, int pcode, int ilc )
 {
-PSA    *psa;                            /* -> Prefixed storage area  */
-REGS   *realregs;                       /* True regs structure       */
-RADR    px;                             /* host real address of pfx  */
-int     code;                           /* pcode without PER ind.    */
-int     ilc;                            /* instruction length        */
-#if defined( FEATURE_001_ZARCH_INSTALLED_FACILITY )
-/** FIXME : SEE ISW20090110-1 */
-void   *zmoncode=NULL;                  /* special reloc for z/Arch  */
-                 /* FIXME : zmoncode not being initialized here raises
-                    a potentially non-initialized warning in GCC..
-                    can't find why. ISW 2009/02/04 */
-                                        /* mon call SIE intercept    */
-#endif
-#if defined(FEATURE_INTERPRETIVE_EXECUTION)
-int     sie_ilc=0;                      /* SIE instruction length    */
-#endif
-#if defined(_FEATURE_SIE)
-int     nointercept;                    /* True for virtual pgmint   */
-#endif /*defined(_FEATURE_SIE)*/
-#if defined(OPTION_FOOTPRINT_BUFFER)
-U32     n;
-#endif /*defined(OPTION_FOOTPRINT_BUFFER)*/
-char    dxcstr[8]={0};                  /* " DXC=xx" if data excptn  */
+    int code = (pcode & 0xFF);
 
-static char *pgmintname[] = {
-        /* 01 */        "Operation exception",
-        /* 02 */        "Privileged-operation exception",
-        /* 03 */        "Execute exception",
-        /* 04 */        "Protection exception",
-        /* 05 */        "Addressing exception",
-        /* 06 */        "Specification exception",
-        /* 07 */        "Data exception",
-        /* 08 */        "Fixed-point-overflow exception",
-        /* 09 */        "Fixed-point-divide exception",
-        /* 0A */        "Decimal-overflow exception",
-        /* 0B */        "Decimal-divide exception",
-        /* 0C */        "HFP-exponent-overflow exception",
-        /* 0D */        "HFP-exponent-underflow exception",
-        /* 0E */        "HFP-significance exception",
-        /* 0F */        "HFP-floating-point-divide exception",
-        /* 10 */        "Segment-translation exception",
-        /* 11 */        "Page-translation exception",
-        /* 12 */        "Translation-specification exception",
-        /* 13 */        "Special-operation exception",
-        /* 14 */        "Pseudo-page-fault exception",
-        /* 15 */        "Operand exception",
-        /* 16 */        "Trace-table exception",
-        /* 17 */        "ASN-translation exception",
-        /* 18 */        "Page access exception",
-        /* 19 */        "Vector/Crypto operation exception",
-        /* 1A */        "Page state exception",
-        /* 1B */        "Page transition exception",
-        /* 1C */        "Space-switch event",
-        /* 1D */        "Square-root exception",
-        /* 1E */        "Unnormalized-operand exception",
-        /* 1F */        "PC-translation specification exception",
-        /* 20 */        "AFX-translation exception",
-        /* 21 */        "ASX-translation exception",
-        /* 22 */        "LX-translation exception",
-        /* 23 */        "EX-translation exception",
-        /* 24 */        "Primary-authority exception",
-        /* 25 */        "Secondary-authority exception",
-        /* 26 */        "LFX-translation exception",            /*@ALR*/
-        /* 27 */        "LSX-translation exception",            /*@ALR*/
-        /* 28 */        "ALET-specification exception",
-        /* 29 */        "ALEN-translation exception",
-        /* 2A */        "ALE-sequence exception",
-        /* 2B */        "ASTE-validity exception",
-        /* 2C */        "ASTE-sequence exception",
-        /* 2D */        "Extended-authority exception",
-        /* 2E */        "LSTE-sequence exception",              /*@ALR*/
-        /* 2F */        "ASTE-instance exception",              /*@ALR*/
-        /* 30 */        "Stack-full exception",
-        /* 31 */        "Stack-empty exception",
-        /* 32 */        "Stack-specification exception",
-        /* 33 */        "Stack-type exception",
-        /* 34 */        "Stack-operation exception",
-        /* 35 */        "Unassigned exception",
-        /* 36 */        "Unassigned exception",
-        /* 37 */        "Unassigned exception",
-        /* 38 */        "ASCE-type exception",
-        /* 39 */        "Region-first-translation exception",
-        /* 3A */        "Region-second-translation exception",
-        /* 3B */        "Region-third-translation exception",
-        /* 3C */        "Unassigned exception",
-        /* 3D */        "Unassigned exception",
-        /* 3E */        "Unassigned exception",
-        /* 3F */        "Unassigned exception",
-        /* 40 */        "Monitor event" };
-
-        /* 26 */ /* was "Page-fault-assist exception", */
-        /* 27 */ /* was "Control-switch exception", */
-
-    /* If called with ghost registers (ie from hercules command
-       then ignore all interrupt handling and report the error
-       to the caller */
-    if(regs->ghostregs)
-        longjmp(regs->progjmp, pcode);
-
-    PTT_PGM("*PROG",pcode,(U32)(regs->TEA & 0xffffffff),regs->psw.IA_L);
-
-    /* program_interrupt() may be called with a shadow copy of the
-       regs structure, realregs is the pointer to the real structure
-       which must be used when loading/storing the psw, or backing up
-       the instruction address in case of nullification */
-#if defined(_FEATURE_SIE)
-        realregs = SIE_MODE(regs)
-                 ? sysblk.regs[regs->cpuad]->guestregs
-                 : sysblk.regs[regs->cpuad];
-#else /*!defined(_FEATURE_SIE)*/
-    realregs = sysblk.regs[regs->cpuad];
-#endif /*!defined(_FEATURE_SIE)*/
-
-    /* Prevent machine check when in (almost) interrupt loop */
-    realregs->instcount++;
-    UPDATE_SYSBLK_INSTCOUNT( 1 );
-
-    /* Release any locks */
-    if (sysblk.intowner == realregs->cpuad)
-        RELEASE_INTLOCK(realregs);
-    if (sysblk.mainowner == realregs->cpuad)
-        RELEASE_MAINLOCK(realregs);
-
-    /* Ensure psw.IA is set and aia invalidated */
-    INVALIDATE_AIA(realregs);
-#if defined(FEATURE_INTERPRETIVE_EXECUTION)
-    if(realregs->sie_active)
-        INVALIDATE_AIA(realregs->guestregs);
-#endif /*defined(FEATURE_INTERPRETIVE_EXECUTION)*/
-
-    /* Set instruction length (ilc) */
-    ilc = realregs->psw.zeroilc ? 0 : REAL_ILC(realregs);
-    if (realregs->psw.ilc == 0 && !realregs->psw.zeroilc)
+    /* Trace program checks other than PER event */
+    if (1
+        && code
+        && (0
+            || CPU_STEPPING_OR_TRACING( regs, ilc )
+            || sysblk.pgminttr & ((U64) 1 << ((code - 1) & 0x3F))
+           )
+    )
     {
-        /* This can happen if BALR, BASR, BASSM or BSM
-           program checks during trace */
-        ilc = likely(!realregs->execflag) ? 2 : realregs->exrl ? 6 : 4;
-        realregs->ip += ilc;
-        realregs->psw.IA += ilc;
-        realregs->psw.ilc = ilc;
-    }
-#if defined(FEATURE_INTERPRETIVE_EXECUTION)
-    if(realregs->sie_active)
-    {
-        sie_ilc = realregs->guestregs->psw.zeroilc ? 0 :
-                REAL_ILC(realregs->guestregs);
-        if (realregs->guestregs->psw.ilc == 0
-         && !realregs->guestregs->psw.zeroilc)
+        /* Work variables... */
+        char sie_mode_str    [ 10]  = {0};  // maybe "SIE: "
+        char sie_debug_arch  [ 32]  = {0};  // "370", "390" or "900" if defined( SIE_DEBUG )
+        char txf_why         [256]  = {0};  // TXF "why" string if txf pgmint
+        char dxcstr          [  8]  = {0};  // data exception code if PGM_DATA_EXCEPTION
+
+#if defined( OPTION_FOOTPRINT_BUFFER )
+        if (!(sysblk.insttrace || sysblk.inststep))
         {
-            sie_ilc = likely(!realregs->guestregs->execflag) ? 2 :
-                    realregs->guestregs->exrl ? 6 : 4;
-            realregs->guestregs->psw.IA += sie_ilc; /* IanWorthington regression restored from 20081205 */
-            realregs->guestregs->psw.ilc = sie_ilc;
+            U32  n;
+            for (n = sysblk.footprptr[ regs->cpuad ] + 1;
+                n != sysblk.footprptr[ regs->cpuad ];
+                n++, n &= OPTION_FOOTPRINT_BUFFER - 1
+            )
+            {
+                ARCH_DEP( display_inst )(
+                    &sysblk.footprregs[ regs->cpuad ][n],
+                     sysblk.footprregs[ regs->cpuad ][n].inst );
+            }
         }
-    }
-#endif /*defined(FEATURE_INTERPRETIVE_EXECUTION)*/
-
-    /* Set `execflag' to 0 in case EXecuted instruction program-checked */
-    realregs->execflag = 0;
-#if defined(FEATURE_INTERPRETIVE_EXECUTION)
-    if(realregs->sie_active)
-        realregs->guestregs->execflag = 0;
-#endif /*defined(FEATURE_INTERPRETIVE_EXECUTION)*/
-
-    /* Unlock the main storage lock if held */
-    if (realregs->cpuad == sysblk.mainowner)
-        RELEASE_MAINLOCK(realregs);
-
-    /* Remove PER indication from program interrupt code
-       such that interrupt code specific tests may be done.
-       The PER indication will be stored in the PER handling
-       code */
-    code = pcode & ~PGM_PER_EVENT;
-
-    /* If this is a concurrent PER event then we must add the PER
-       bit to the interrupts code */
-    if( OPEN_IC_PER(realregs) )
-        pcode |= PGM_PER_EVENT;
-
-    /* Perform serialization and checkpoint synchronization */
-    PERFORM_SERIALIZATION (realregs);
-    PERFORM_CHKPT_SYNC (realregs);
-
-#if defined(FEATURE_INTERPRETIVE_EXECUTION)
-    /* Host protection and addressing exceptions must be
-       reflected to the guest */
-    if(realregs->sie_active &&
-        (code == PGM_PROTECTION_EXCEPTION
-      || code == PGM_ADDRESSING_EXCEPTION
-#if defined(_FEATURE_MULTIPLE_CONTROLLED_DATA_SPACE)
-      || code == PGM_ALET_SPECIFICATION_EXCEPTION
-      || code == PGM_ALEN_TRANSLATION_EXCEPTION
-      || code == PGM_ALE_SEQUENCE_EXCEPTION
-      || code == PGM_EXTENDED_AUTHORITY_EXCEPTION
-#endif /*defined(_FEATURE_MULTIPLE_CONTROLLED_DATA_SPACE)*/
-        ) )
-    {
-#if defined( SIE_DEBUG )
-        LOGMSG( "program_int() passing to guest code=%4.4X\n", pcode );
 #endif
-        realregs->guestregs->TEA = realregs->TEA;
-        realregs->guestregs->excarid = realregs->excarid;
-        realregs->guestregs->opndrid = realregs->opndrid;
-#if defined(_FEATURE_PROTECTION_INTERCEPTION_CONTROL)
-        realregs->guestregs->hostint = 1;
-#endif /*defined(_FEATURE_PROTECTION_INTERCEPTION_CONTROL)*/
-        (realregs->guestregs->program_interrupt) (realregs->guestregs, pcode);
-    }
-#endif /*defined(FEATURE_INTERPRETIVE_EXECUTION)*/
 
-    /* Back up the PSW for exceptions which cause nullification,
-       unless the exception occurred during instruction fetch */
-    if ((code == PGM_PAGE_TRANSLATION_EXCEPTION
-      || code == PGM_SEGMENT_TRANSLATION_EXCEPTION
-#if defined( FEATURE_001_ZARCH_INSTALLED_FACILITY )
-      || code == PGM_ASCE_TYPE_EXCEPTION
-      || code == PGM_REGION_FIRST_TRANSLATION_EXCEPTION
-      || code == PGM_REGION_SECOND_TRANSLATION_EXCEPTION
-      || code == PGM_REGION_THIRD_TRANSLATION_EXCEPTION
+#if defined( _FEATURE_SIE )
+        if (SIE_MODE( regs ))
+          STRLCPY( sie_mode_str, "SIE: " );
 #endif
-      || code == PGM_TRACE_TABLE_EXCEPTION
-      || code == PGM_AFX_TRANSLATION_EXCEPTION
-      || code == PGM_ASX_TRANSLATION_EXCEPTION
-      || code == PGM_LX_TRANSLATION_EXCEPTION
-      || code == PGM_LFX_TRANSLATION_EXCEPTION                 /*@ALR*/
-      || code == PGM_LSX_TRANSLATION_EXCEPTION                 /*@ALR*/
-      || code == PGM_LSTE_SEQUENCE_EXCEPTION                   /*@ALR*/
-      || code == PGM_EX_TRANSLATION_EXCEPTION
-      || code == PGM_PRIMARY_AUTHORITY_EXCEPTION
-      || code == PGM_SECONDARY_AUTHORITY_EXCEPTION
-      || code == PGM_ALEN_TRANSLATION_EXCEPTION
-      || code == PGM_ALE_SEQUENCE_EXCEPTION
-      || code == PGM_ASTE_VALIDITY_EXCEPTION
-      || code == PGM_ASTE_SEQUENCE_EXCEPTION
-      || code == PGM_ASTE_INSTANCE_EXCEPTION                   /*@ALR*/
-      || code == PGM_EXTENDED_AUTHORITY_EXCEPTION
-      || code == PGM_STACK_FULL_EXCEPTION
-      || code == PGM_STACK_EMPTY_EXCEPTION
-      || code == PGM_STACK_SPECIFICATION_EXCEPTION
-      || code == PGM_STACK_TYPE_EXCEPTION
-      || code == PGM_STACK_OPERATION_EXCEPTION
-      || code == PGM_VECTOR_OPERATION_EXCEPTION)
-      && !realregs->instinvalid)
-    {
-        realregs->psw.IA -= ilc;
-        realregs->psw.IA &= ADDRESS_MAXWRAP(realregs);
-#if defined(FEATURE_INTERPRETIVE_EXECUTION)
-        /* When in SIE mode the guest instruction causing this
-           host exception must also be nullified */
-        if(realregs->sie_active && !realregs->guestregs->instinvalid)
-        {
-            realregs->guestregs->psw.IA -= sie_ilc;
-            realregs->guestregs->psw.IA &= ADDRESS_MAXWRAP(realregs->guestregs);
-        }
-#endif /*defined(FEATURE_INTERPRETIVE_EXECUTION)*/
-    }
-
-    /* The OLD PSW must be incremented on the following
-       exceptions during instfetch */
-    if(realregs->instinvalid &&
-      (  code == PGM_PROTECTION_EXCEPTION
-      || code == PGM_ADDRESSING_EXCEPTION
-      || code == PGM_SPECIFICATION_EXCEPTION
-      || code == PGM_TRANSLATION_SPECIFICATION_EXCEPTION ))
-    {
-        realregs->psw.IA += ilc;
-        realregs->psw.IA &= ADDRESS_MAXWRAP(realregs);
-    }
-
-    /* Store the interrupt code in the PSW */
-    realregs->psw.intcode = pcode;
-
-    /* Call debugger if active */
-    HDC2(debug_program_interrupt, regs, pcode);
-
-    /* Trace program checks other then PER event */
-    if(code && (CPU_STEPPING_OR_TRACING(realregs, ilc)
-        || sysblk.pgminttr & ((U64)1 << ((code - 1) & 0x3F))))
-    {
-    BYTE *ip;
-    char buf1[10] = "";
-    char buf2[32] = "";
-#if defined(OPTION_FOOTPRINT_BUFFER)
-        if(!(sysblk.insttrace || sysblk.inststep))
-            for(n = sysblk.footprptr[realregs->cpuad] + 1 ;
-                n != sysblk.footprptr[realregs->cpuad];
-                n++, n &= OPTION_FOOTPRINT_BUFFER - 1)
-                ARCH_DEP(display_inst)
-                        (&sysblk.footprregs[realregs->cpuad][n],
-                        sysblk.footprregs[realregs->cpuad][n].inst);
-#endif /*defined(OPTION_FOOTPRINT_BUFFER)*/
-
-#if defined(_FEATURE_SIE)
-        if (SIE_MODE(realregs))
-          STRLCPY( buf1, "SIE: " );
-#endif /*defined(_FEATURE_SIE)*/
 
 #if defined( SIE_DEBUG )
-        STRLCPY( buf2, QSTR( _GEN_ARCH ));
-        STRLCAT( buf2, " " );
+        STRLCPY( sie_debug_arch, QSTR( _GEN_ARCH ));
+        STRLCAT( sie_debug_arch, " " );
+#endif
+
+#if defined( FEATURE_073_TRANSACT_EXEC_FACILITY )
+        if (1
+            && pcode & PGM_TXF_EVENT
+            && regs->txf_why
+        )
+            txf_why_str( txf_why, sizeof( txf_why ), regs->txf_why );
 #endif
         if (code == PGM_DATA_EXCEPTION)
-           snprintf(dxcstr, sizeof(dxcstr), " DXC=%2.2X", regs->dxc);
-        dxcstr[sizeof(dxcstr)-1] = '\0';
-
-        /* Calculate instruction pointer */
-        ip = realregs->instinvalid ? NULL
-           : (realregs->ip - ilc < realregs->aip)
-             ? realregs->inst : realregs->ip - ilc;
+           MSGBUF( dxcstr, " DXC=%2.2X", regs->dxc );
 
         /* Trace pgm interrupt if not being specially suppressed */
         if (0
@@ -645,108 +393,488 @@ static char *pgmintname[] = {
             || !sysblk.nolrasoe /* suppression not requested */
         )
         {
-            // "Processor %s%02X: %s%s %s code %4.4X  ilc %d%s"
-            WRMSG(HHC00801, "I",
-            PTYPSTR(realregs->cpuad), realregs->cpuad, buf1, buf2,
-                    pgmintname[ (code - 1) & 0x3F], pcode, ilc, dxcstr);
-
-            ARCH_DEP(display_inst) (realregs, ip);
+            // "Processor %s%02X: %s%s %s code %4.4X ilc %d%s%s"
+            WRMSG( HHC00801, "I",
+                PTYPSTR( regs->cpuad ), regs->cpuad,
+                sie_mode_str, sie_debug_arch,
+                PIC2Name( code ), pcode,
+                ilc, dxcstr, txf_why );
+            ARCH_DEP( display_pgmint_inst )( regs, ip );
         }
+    }
+
+} /* end function ARCH_DEP( trace_program_interrupt_ip ) */
+
+/*-------------------------------------------------------------------*/
+/*                    trace_program_interrupt                        */
+/*-------------------------------------------------------------------*/
+DLL_EXPORT void (ATTR_REGPARM(2) ARCH_DEP( trace_program_interrupt ))( REGS* regs, int pcode, int ilc )
+{
+    /* Calculate instruction pointer */
+    BYTE* ip = regs->instinvalid ? NULL
+        : (regs->ip - ilc < regs->aip) ? regs->inst
+        : (regs->ip - ilc);
+
+    ARCH_DEP( trace_program_interrupt_ip )( regs, ip, pcode, ilc );
+}
+
+/*-------------------------------------------------------------------*/
+/*                  fix_program_interrupt_PSW                        */
+/*-------------------------------------------------------------------*/
+DLL_EXPORT int ARCH_DEP( fix_program_interrupt_PSW )( REGS* regs )
+{
+    /* Get instruction length (ilc) */
+    int ilc = regs->psw.zeroilc ? 0 : REAL_ILC( regs );
+
+    if (regs->psw.ilc == 0 && !regs->psw.zeroilc)
+    {
+        /* This can happen if BALR, BASR, BASSM or BSM
+           program checks during trace
+        */
+        ilc = likely( !regs->execflag ) ? 2 : regs->exrl ? 6 : 4;
+
+        regs->ip      += ilc;
+        regs->psw.IA  += ilc;
+        regs->psw.ilc  = ilc;
+    }
+
+    return ilc;
+}
+
+/*-------------------------------------------------------------------*/
+/*                       program_interrupt                           */
+/*-------------------------------------------------------------------*/
+/* The purpose of this function is to store the current PSW into the */
+/* Program interrupt old PSW field in low core followed by loading   */
+/* the Program interrupt new PSW and then jumping via regs->progjmp  */
+/* back to the run_cpu instruction execution loop to begin executing */
+/* instructions at the Progran new PSW location.                     */
+/*-------------------------------------------------------------------*/
+void (ATTR_REGPARM(2) ARCH_DEP( program_interrupt ))( REGS* regs, int pcode )
+{
+PSA    *psa;                            /* -> Prefixed storage area  */
+REGS   *realregs;                       /* True regs structure       */
+RADR    px;                             /* host real address of pfx  */
+int     code;                           /* pcode without PER ind.    */
+int     ilc;                            /* instruction length        */
+
+#if defined( FEATURE_001_ZARCH_INSTALLED_FACILITY )
+                                        /* FIXME : SEE ISW20090110-1 */
+void   *zmoncode = NULL;                /* mon call SIE intercept;
+                                           special reloc for z/Arch  */
+                                        /* FIXME : zmoncode not being
+                                           initialized here raises a
+                                           potentially non-initialized
+                                           warning in GCC.. can't find
+                                           why. ISW 2009/02/04       */
+#endif
+#if defined( FEATURE_INTERPRETIVE_EXECUTION )
+int     sie_ilc=0;                      /* SIE instruction length    */
+#endif
+#if defined( _FEATURE_SIE )
+bool    intercept;                      /* False for virtual pgmint  */
+                                        /* (True for host interrupt?)*/
+#endif
+#if defined( FEATURE_073_TRANSACT_EXEC_FACILITY )
+bool    txf_traced_pgmint = false;      /* true = TXF already traced */
+#endif
+
+    /* If called with ghost registers (ie from hercules command
+       then ignore all interrupt handling and report the error
+       to the caller */
+    if (regs->ghostregs)
+        longjmp( regs->progjmp, pcode );
+
+    PTT_PGM("PGM", pcode, regs->TEA, regs->psw.IA );
+
+    /* program_interrupt() may be called with a shadow copy of the
+       regs structure, realregs is the pointer to the real structure
+       which must be used when loading/storing the psw, or backing up
+       the instruction address in case of nullification
+    */
+#if defined( _FEATURE_SIE )
+        realregs = SIE_MODE( regs )
+                 ? GUEST( sysblk.regs[ regs->cpuad ])
+                 : HOST(  sysblk.regs[ regs->cpuad ]);
+#else
+    realregs = HOST( sysblk.regs[ regs->cpuad ]);
+#endif
+
+    PTT_PGM( "PGM (r)h,g,a", realregs->host, realregs->guest, realregs->sie_active );
+
+    /* Prevent machine check when in (almost) interrupt loop */
+    realregs->instcount++;
+    UPDATE_SYSBLK_INSTCOUNT( 1 );
+
+    /* Release any locks */
+    if (sysblk.intowner == realregs->cpuad)
+        RELEASE_INTLOCK( realregs );
+
+    if (sysblk.mainowner == realregs->cpuad)
+        RELEASE_MAINLOCK_UNCONDITIONAL( realregs );
+
+    /* Ensure psw.IA is set and aia invalidated */
+    INVALIDATE_AIA(realregs);
+
+#if defined( FEATURE_INTERPRETIVE_EXECUTION )
+    if (realregs->sie_active)
+        INVALIDATE_AIA( GUEST( realregs ));
+#endif
+
+    /* Fix PSW and get instruction length (ilc) */
+    ilc = ARCH_DEP( fix_program_interrupt_PSW )( realregs );
+
+#if defined( FEATURE_INTERPRETIVE_EXECUTION )
+    if (realregs->sie_active)
+    {
+        sie_ilc = GUEST( realregs )->psw.zeroilc ? 0 : REAL_ILC( GUEST(realregs ));
+        if (GUEST( realregs )->psw.ilc == 0 && !GUEST( realregs )->psw.zeroilc)
+        {
+            sie_ilc = likely( !GUEST( realregs )->execflag) ? 2 : GUEST( realregs )->exrl ? 6 : 4;
+            GUEST( realregs )->psw.IA  += sie_ilc; /* IanWorthington regression restored from 20081205 */
+            GUEST( realregs )->psw.ilc  = sie_ilc;
+        }
+    }
+#endif
+
+    /* Set `execflag' to 0 in case EXecuted instruction program-checked */
+    realregs->execflag = 0;
+
+#if defined(FEATURE_INTERPRETIVE_EXECUTION)
+    if (realregs->sie_active)
+        GUEST( realregs )->execflag = 0;
+#endif
+
+    /* Unlock the main storage lock if held */
+    if (realregs->cpuad == sysblk.mainowner)
+        RELEASE_MAINLOCK_UNCONDITIONAL(realregs);
+
+    /* Remove PER indication from program interrupt code
+       such that interrupt code specific tests may be done.
+       The PER indication will be stored in the PER handling
+       code */
+    code = pcode & ~PGM_PER_EVENT;
+
+#if defined( FEATURE_073_TRANSACT_EXEC_FACILITY )
+
+    /* If transaction is active, check if interrupt can be filtered */
+    if (realregs->txf_tnd)
+    {
+        /* Indicate TXF related program interrupt */
+        pcode |= PGM_TXF_EVENT;
+
+        /* Always reset the NTSTG indicator on any program interrupt */
+        regs->txf_NTSTG = false;
+
+        /* Save the program interrupt and data exception codes */
+        realregs->txf_piid   = pcode;
+        realregs->txf_piid  |= (ilc << 16);
+
+        realregs->txf_dxc_vxc =
+        (0
+            || pcode == PGM_DATA_EXCEPTION
+            || pcode == PGM_VECTOR_PROCESSING_EXCEPTION
+        )
+        ?  realregs->dxc : 0;
+
+        PTT_TXF( "TXF PIID", realregs->txf_piid, realregs->txf_dxc_vxc, 0 );
+
+        /* 'txf_do_pi_filtering' does not return for filterable
+            program interrupts. It returns only if the program
+            interrupt is unfilterable, and when it returns, the
+            active transaction has already been aborted.
+        */
+        PTT_TXF( "TXF PROG?", (code & 0xFF), realregs->txf_contran, realregs->txf_tnd );
+        ARCH_DEP( txf_do_pi_filtering )( realregs, pcode );
+
+        if (realregs->txf_tnd ) // (sanity check)
+            CRASH();            // (sanity check)
+
+        PTT_TXF( "*TXF UPROG!", (code & 0xFF), 0, 0 );
+
+        /* Program interrupt already traced by txf_do_pi_filtering */
+        txf_traced_pgmint = true;
+
+        /* Set flag for sie_exit */
+        realregs->txf_UPGM_abort = true;
+    }
+    else /* (no transaction is CURRENTLY active) */
+    {
+        /* While no transaction is CURRENTLY active, it's possible
+           that a previously active transaction was aborted BEFORE
+           we were called, so we need to check for that.
+        */
+        if ((code & 0xFF) == PGM_TRANSACTION_CONSTRAINT_EXCEPTION)
+        {
+            /* Indicate TXF related program interrupt */
+            pcode |= PGM_TXF_EVENT;
+
+            PTT_TXF( "*TXF 218!", pcode, 0, 0 );
+
+            /* Program interrupt already traced by abort_transaction */
+            txf_traced_pgmint = true;
+
+            /* Set flag for sie_exit */
+            realregs->txf_UPGM_abort = true;
+        }
+    }
+#endif /* defined( FEATURE_073_TRANSACT_EXEC_FACILITY ) */
+
+    /* If this is a concurrent PER event
+       then we must add the PER bit to the interrupts code */
+    if (OPEN_IC_PER (realregs ))
+        pcode |= PGM_PER_EVENT;
+
+    /* Perform serialization and checkpoint synchronization */
+    PERFORM_SERIALIZATION( realregs );
+    PERFORM_CHKPT_SYNC( realregs );
+
+#if defined( FEATURE_INTERPRETIVE_EXECUTION )
+    /* Host protection and addressing exceptions
+       must be reflected to the guest */
+    if (1
+        && realregs->sie_active
+        && (0
+            || code == PGM_PROTECTION_EXCEPTION
+            || code == PGM_ADDRESSING_EXCEPTION
+
+#if defined( _FEATURE_MULTIPLE_CONTROLLED_DATA_SPACE )
+            || code == PGM_ALET_SPECIFICATION_EXCEPTION
+            || code == PGM_ALEN_TRANSLATION_EXCEPTION
+            || code == PGM_ALE_SEQUENCE_EXCEPTION
+            || code == PGM_EXTENDED_AUTHORITY_EXCEPTION
+#endif
+           )
+    )
+    {
+        /* Pass this interrupt to the guest */
+#if defined( SIE_DEBUG )
+        LOGMSG( "program_int() passing to guest code=%4.4X\n", pcode );
+#endif
+        GUEST( realregs )->TEA = realregs->TEA;
+        GUEST( realregs )->excarid = realregs->excarid;
+        GUEST( realregs )->opndrid = realregs->opndrid;
+
+#if defined(_FEATURE_PROTECTION_INTERCEPTION_CONTROL)
+        GUEST( realregs )->hostint = 1;
+#endif
+        GUEST( realregs )->program_interrupt( GUEST( realregs ), pcode );
+    }
+#endif /*defined(FEATURE_INTERPRETIVE_EXECUTION)*/
+
+    /* Back up the PSW for exceptions which cause nullification,
+       unless the exception occurred during instruction fetch
+    */
+    if (1
+        && !realregs->instinvalid
+        && (0
+            || code == PGM_PAGE_TRANSLATION_EXCEPTION
+            || code == PGM_SEGMENT_TRANSLATION_EXCEPTION
+
+#if defined( FEATURE_001_ZARCH_INSTALLED_FACILITY )
+            || code == PGM_ASCE_TYPE_EXCEPTION
+            || code == PGM_REGION_FIRST_TRANSLATION_EXCEPTION
+            || code == PGM_REGION_SECOND_TRANSLATION_EXCEPTION
+            || code == PGM_REGION_THIRD_TRANSLATION_EXCEPTION
+#endif
+            || code == PGM_TRACE_TABLE_EXCEPTION
+            || code == PGM_AFX_TRANSLATION_EXCEPTION
+            || code == PGM_ASX_TRANSLATION_EXCEPTION
+            || code == PGM_LX_TRANSLATION_EXCEPTION
+            || code == PGM_LFX_TRANSLATION_EXCEPTION
+            || code == PGM_LSX_TRANSLATION_EXCEPTION
+            || code == PGM_LSTE_SEQUENCE_EXCEPTION
+            || code == PGM_EX_TRANSLATION_EXCEPTION
+            || code == PGM_PRIMARY_AUTHORITY_EXCEPTION
+            || code == PGM_SECONDARY_AUTHORITY_EXCEPTION
+            || code == PGM_ALEN_TRANSLATION_EXCEPTION
+            || code == PGM_ALE_SEQUENCE_EXCEPTION
+            || code == PGM_ASTE_VALIDITY_EXCEPTION
+            || code == PGM_ASTE_SEQUENCE_EXCEPTION
+            || code == PGM_ASTE_INSTANCE_EXCEPTION
+            || code == PGM_EXTENDED_AUTHORITY_EXCEPTION
+            || code == PGM_STACK_FULL_EXCEPTION
+            || code == PGM_STACK_EMPTY_EXCEPTION
+            || code == PGM_STACK_SPECIFICATION_EXCEPTION
+            || code == PGM_STACK_TYPE_EXCEPTION
+            || code == PGM_STACK_OPERATION_EXCEPTION
+            || code == PGM_VECTOR_OPERATION_EXCEPTION
+           )
+    )
+    {
+        realregs->psw.IA -= ilc;
+        realregs->psw.IA &= ADDRESS_MAXWRAP(realregs);
+
+#if defined( FEATURE_INTERPRETIVE_EXECUTION )
+        /* When in SIE mode the guest instruction
+           causing this host exception must also be nullified
+        */
+        if (realregs->sie_active && !GUEST( realregs )->instinvalid)
+        {
+            GUEST( realregs )->psw.IA -= sie_ilc;
+            GUEST( realregs )->psw.IA &= ADDRESS_MAXWRAP( GUEST( realregs ));
+        }
+#endif
+    }
+
+    /* The OLD PSW must be incremented
+       on the following exceptions during instfetch
+    */
+    if (1
+        && realregs->instinvalid
+        && (0
+            || code == PGM_PROTECTION_EXCEPTION
+            || code == PGM_ADDRESSING_EXCEPTION
+            || code == PGM_SPECIFICATION_EXCEPTION
+            || code == PGM_TRANSLATION_SPECIFICATION_EXCEPTION
+           )
+    )
+    {
+        realregs->psw.IA += ilc;
+        realregs->psw.IA &= ADDRESS_MAXWRAP( realregs );
+    }
+
+    /* Store the interrupt code in the PSW */
+    realregs->psw.intcode = pcode;
+
+    /* Call debugger if active */
+    HDC2( debug_program_interrupt, regs, pcode );
+
+#if defined( FEATURE_073_TRANSACT_EXEC_FACILITY )
+    /* Don't trace program interrupt again if already traced */
+    if (!txf_traced_pgmint)
+#endif
+    {
+        /* Trace program checks other than PER event */
+        regs->psw.IA -= ilc;
+        {
+            ARCH_DEP( trace_program_interrupt )( regs, pcode, ilc );
+        }
+        regs->psw.IA += ilc;
     }
 
     realregs->instinvalid = 0;
 
-#if defined(FEATURE_INTERPRETIVE_EXECUTION)
+#if defined( FEATURE_INTERPRETIVE_EXECUTION )
+
+    /*---------------------------------------------------------*/
     /* If this is a host exception in SIE state then leave SIE */
-    if(realregs->sie_active)
-        ARCH_DEP(sie_exit) (realregs, SIE_HOST_PGMINT);
-#endif /*defined(FEATURE_INTERPRETIVE_EXECUTION)*/
+    /*---------------------------------------------------------*/
+    if (realregs->sie_active)
+    {
+        PTT_PGM( "PGM >sie_exit", SIE_HOST_PGM_INT, 0, 0 );
+        ARCH_DEP( sie_exit )( realregs, SIE_HOST_PGM_INT );
+    }
+#endif
 
     /* Absolute address of prefix page */
     px = realregs->PX;
 
     /* If under SIE use translated to host absolute prefix */
-#if defined(_FEATURE_SIE)
-    if(SIE_MODE(regs))
+#if defined( _FEATURE_SIE )
+    if (SIE_MODE( regs ))
         px = regs->sie_px;
 #endif
 
-#if defined(_FEATURE_SIE)
-    if(!SIE_MODE(regs) ||
-      /* Interception is mandatory for the following exceptions */
-      (
-#if defined(_FEATURE_PROTECTION_INTERCEPTION_CONTROL)
-         !(code == PGM_PROTECTION_EXCEPTION
-           && (!SIE_FEATB(regs, EC2, PROTEX)
-             || realregs->hostint))
-#else /*!defined(_FEATURE_PROTECTION_INTERCEPTION_CONTROL)*/
-         code != PGM_PROTECTION_EXCEPTION
-#endif /*!defined(_FEATURE_PROTECTION_INTERCEPTION_CONTROL)*/
-#if defined (_FEATURE_PER2)
-      && !((pcode & PGM_PER_EVENT) && SIE_FEATB(regs, M, GPE))
-#endif /* defined (_FEATURE_PER2) */
-      && code != PGM_ADDRESSING_EXCEPTION
-      && code != PGM_SPECIFICATION_EXCEPTION
-      && code != PGM_SPECIAL_OPERATION_EXCEPTION
-#ifdef FEATURE_S370_S390_VECTOR_FACILITY
-      && code != PGM_VECTOR_OPERATION_EXCEPTION
+#if defined( _FEATURE_SIE )
+    /*---------------------------------------------------------------*/
+    /*   If we're in SIE mode, then we need to determine whether     */
+    /*   we must, or must not, intercept this program interrupt,     */
+    /*   and by intercept, we mean pass it on to the SIE host so     */
+    /*   that it (not the guest!) can decide what action to take.    */
+    /*---------------------------------------------------------------*/
+    if (0
+
+        /* If not in SIE mode, then we (duh!) must not intercept it  */
+        || !SIE_MODE( regs )
+
+        /* Interception is mandatory for the following exceptions,
+           so if ANY of the below conditions are false, then we MUST
+           intercept this program interrupt.
+
+           The below tests/checks are for "not this condition" where
+           the "condition" is the condition which we MUST intercept.
+           Thus if any of them fail, then we MUST intercept.
+
+           Only if ALL of them are true (only if no condition exists
+           that REQUIRES an intercept) should we then NOT intercept.
+        */
+        || (1
+
+            && code != PGM_ADDRESSING_EXCEPTION
+            && code != PGM_SPECIFICATION_EXCEPTION
+            && code != PGM_SPECIAL_OPERATION_EXCEPTION
+
+#if defined( FEATURE_S370_S390_VECTOR_FACILITY )
+            && code != PGM_VECTOR_OPERATION_EXCEPTION
 #endif
-#if defined(FEATURE_MULTIPLE_CONTROLLED_DATA_SPACE)
-      && !(code == PGM_ALEN_TRANSLATION_EXCEPTION
-        && SIE_FEATB(regs, MX, XC))
-      && !(code == PGM_ALE_SEQUENCE_EXCEPTION
-        && SIE_FEATB(regs, MX, XC))
-      && !(code == PGM_EXTENDED_AUTHORITY_EXCEPTION
-        && SIE_FEATB(regs, MX, XC))
-#endif /*defined(FEATURE_MULTIPLE_CONTROLLED_DATA_SPACE)*/
-      /* And conditional for the following exceptions */
-      && !(code == PGM_OPERATION_EXCEPTION
-        && SIE_FEATB(regs, IC0, OPEREX))
-      && !(code == PGM_PRIVILEGED_OPERATION_EXCEPTION
-        && SIE_FEATB(regs, IC0, PRIVOP))
 #ifdef FEATURE_BASIC_FP_EXTENSIONS
-      && !(code == PGM_DATA_EXCEPTION
-        && (regs->dxc == 1 || regs->dxc == 2)
-        && (regs->CR(0) & CR0_AFP)
-        && !(regs->hostregs->CR(0) & CR0_AFP))
-#endif /*FEATURE_BASIC_FP_EXTENSIONS*/
-      /* Or all exceptions if requested as such */
-      && !SIE_FEATB(regs, IC0, PGMALL) )
+            && !(code == PGM_DATA_EXCEPTION && (regs->dxc == 1 || regs->dxc == 2) && (regs->CR(0) & CR0_AFP) && !(HOSTREGS->CR(0) & CR0_AFP))
+#endif
+            && !SIE_FEAT_BIT_ON( regs, IC0, PGMALL )
+
+#if !defined( _FEATURE_PROTECTION_INTERCEPTION_CONTROL )
+            && code != PGM_PROTECTION_EXCEPTION
+#else
+            && !(code == PGM_PROTECTION_EXCEPTION           && (!SIE_FEAT_BIT_ON( regs, EC2, PROTEX ) || realregs->hostint ))
+#endif
+#if defined( _FEATURE_PER2 )
+            && !((pcode & PGM_PER_EVENT)                    && SIE_FEAT_BIT_ON( regs, M, GPE ))
+#endif
+#if defined( FEATURE_MULTIPLE_CONTROLLED_DATA_SPACE )
+            && !(code == PGM_ALEN_TRANSLATION_EXCEPTION     && SIE_FEAT_BIT_ON( regs, MX, XC ))
+            && !(code == PGM_ALE_SEQUENCE_EXCEPTION         && SIE_FEAT_BIT_ON( regs, MX, XC ))
+            && !(code == PGM_EXTENDED_AUTHORITY_EXCEPTION   && SIE_FEAT_BIT_ON( regs, MX, XC ))
+#endif
+            && !(code == PGM_OPERATION_EXCEPTION            && SIE_FEAT_BIT_ON( regs, IC0, OPEREX ))
+            && !(code == PGM_PRIVILEGED_OPERATION_EXCEPTION && SIE_FEAT_BIT_ON( regs, IC0, PRIVOP ))
+           )
     )
     {
 #endif /*defined(_FEATURE_SIE)*/
+
+        intercept = false;
+        PTT_PGM( "PGM !icept", intercept, 0, 0 );
+
         /* Set the main storage reference and change bits */
-        STORAGE_KEY(px, regs) |= (STORKEY_REF | STORKEY_CHANGE);
+        STORAGE_KEY( px, regs ) |= (STORKEY_REF | STORKEY_CHANGE);
 
         /* Point to PSA in main storage */
         psa = (void*)(regs->mainstor + px);
+
 #if defined( _FEATURE_SIE )
+
 #if defined( FEATURE_001_ZARCH_INSTALLED_FACILITY )
-/** FIXME : SEE ISW20090110-1 */
-        if(code == PGM_MONITOR_EVENT)
+        /** FIXME : SEE ISW20090110-1 */
+        if (code == PGM_MONITOR_EVENT)
         {
-            zmoncode=psa->moncode;
+            zmoncode = psa->moncode;
         }
 #endif
-        nointercept = 1;
     }
-    else
+    else /* The SIE host must deal with this program interrupt */
     {
+        intercept = true;
+        PTT_PGM( "PGM icept", intercept, 0, 0 );
+
         /* This is a guest interruption interception so point to
            the interruption parm area in the state descriptor
-           rather then the PSA, except for the operation exception */
-        if(code != PGM_OPERATION_EXCEPTION)
+           rather then the PSA (except for Operation Exception)
+        */
+        if (code != PGM_OPERATION_EXCEPTION)
         {
-            psa = (void*)(regs->hostregs->mainstor + SIE_STATE(regs) + SIE_IP_PSA_OFFSET);
+            psa = (void*)(HOSTREGS->mainstor + SIE_STATE(regs) + SIE_IP_PSA_OFFSET);
+
             /* Set the main storage reference and change bits */
-            STORAGE_KEY(SIE_STATE(regs), regs->hostregs) |= (STORKEY_REF | STORKEY_CHANGE);
+            STORAGE_KEY( SIE_STATE( regs ), HOSTREGS) |= (STORKEY_REF | STORKEY_CHANGE);
+
 #if defined( FEATURE_001_ZARCH_INSTALLED_FACILITY )
-/** FIXME : SEE ISW20090110-1 */
-            if(code == PGM_MONITOR_EVENT)
+            /** FIXME : SEE ISW20090110-1 */
+            if (code == PGM_MONITOR_EVENT)
             {
-                PSA *_psa;
-                _psa=(void *)(regs->hostregs->mainstor + SIE_STATE(regs) + SIE_II_PSA_OFFSET);
-                zmoncode=_psa->ioid;
+                PSA* _psa;
+                _psa = (void *)(HOSTREGS->mainstor + SIE_STATE( regs ) + SIE_II_PSA_OFFSET);
+                zmoncode = _psa->ioid;
             }
 #endif
         }
@@ -756,10 +884,8 @@ static char *pgmintname[] = {
             psa = (void*)(regs->mainstor + px);
 
             /* Set the main storage reference and change bits */
-            STORAGE_KEY(px, regs) |= (STORKEY_REF | STORKEY_CHANGE);
+            STORAGE_KEY( px, regs ) |= (STORKEY_REF | STORKEY_CHANGE);
         }
-
-        nointercept = 0;
     }
 #endif /*defined(_FEATURE_SIE)*/
 
@@ -767,143 +893,178 @@ static char *pgmintname[] = {
     /* Handle PER or concurrent PER event */
 
     /* Throw out Stor Alter PER if merged with nullified/suppressed rupt */
-    if ( IS_IC_PER_SA(realregs) && !IS_IC_PER_STURA(realregs) &&
-                                   (realregs->ip[0] != 0x0E) &&
-         !(code == 0x00 || code == 0x06 || code == 0x08 || code == 0x0A ||
-           code == 0x0C || code == 0x0D || code == 0x0E || code == 0x1C ||
-           code == 0x40) )
-              OFF_IC_PER_SA(realregs);
-
-    if( OPEN_IC_PER(realregs) )
+    if (1
+        &&  IS_IC_PER_SA(    realregs )
+        && !IS_IC_PER_STURA( realregs )
+        && (realregs->ip[0] != 0x0E)
+        && !(0
+             || code == 0x00
+             || code == PGM_SPECIFICATION_EXCEPTION
+             || code == PGM_FIXED_POINT_OVERFLOW_EXCEPTION
+             || code == PGM_DECIMAL_OVERFLOW_EXCEPTION
+             || code == PGM_EXPONENT_OVERFLOW_EXCEPTION
+             || code == PGM_EXPONENT_UNDERFLOW_EXCEPTION
+             || code == PGM_SIGNIFICANCE_EXCEPTION
+             || code == PGM_SPACE_SWITCH_EVENT
+             || code == PGM_MONITOR_EVENT
+           )
+    )
     {
-        if( CPU_STEPPING_OR_TRACING(realregs, ilc) )
-            WRMSG(HHC00802, "I", PTYPSTR(regs->cpuad), regs->cpuad,
-              pcode, IS_IC_PER(realregs) >> 16,
-              (realregs->psw.IA - ilc) & ADDRESS_MAXWRAP(realregs) );
+        OFF_IC_PER_SA( realregs );
+    }
 
-        realregs->perc |= OPEN_IC_PER(realregs) >> ((32 - IC_CR9_SHIFT) - 16);
+    if (OPEN_IC_PER( realregs ))
+    {
+        if (CPU_STEPPING_OR_TRACING( realregs, ilc ))
+        {
+            // "Processor %s%02X: PER event: code %4.4X perc %2.2X addr "F_VADR
+            WRMSG( HHC00802, "I", PTYPSTR( regs->cpuad ), regs->cpuad,
+                pcode, IS_IC_PER( realregs ) >> 16,
+                (realregs->psw.IA - ilc) & ADDRESS_MAXWRAP( realregs ));
+        }
 
-        /* Positions 14 and 15 contain zeros if a storage alteration
-           event was not indicated */
-//FIXME: is this right??
-        if( !(OPEN_IC_PER_SA(realregs))
-          || (OPEN_IC_PER_STURA(realregs)) )
+        realregs->perc |= OPEN_IC_PER( realregs ) >> ((32 - IC_CR9_SHIFT) - 16);
+
+        /* Positions 14 and 15 contain zeros
+           if a storage alteration event was not indicated
+        */
+
+        // FIXME: is this right??
+        if (0
+            || !OPEN_IC_PER_SA(    realregs )
+            ||  OPEN_IC_PER_STURA( realregs )
+        )
             realregs->perc &= 0xFFFC;
 
-        STORE_HW(psa->perint, realregs->perc);
+        STORE_HW( psa->perint, realregs->perc   );
+        STORE_W(  psa->peradr, realregs->peradr );
 
-        STORE_W(psa->peradr, realregs->peradr);
-
-        if( IS_IC_PER_SA(realregs) && ACCESS_REGISTER_MODE(&realregs->psw) )
+        if (IS_IC_PER_SA( realregs ) && ACCESS_REGISTER_MODE( &realregs->psw ))
             psa->perarid = realregs->peraid;
 
 #if defined( _FEATURE_SIE )
         /* Reset PER pending indication */
-        if(nointercept)
-            OFF_IC_PER(realregs);
+        if (!intercept)
+            OFF_IC_PER( realregs );
 #endif
     }
     else
     {
-        pcode &= 0xFF7F;
+        pcode &= ~(PGM_PER_EVENT);
     }
 #endif /* defined( _FEATURE_PER ) */
 
-
-#if defined(FEATURE_BCMODE)
+#if defined( FEATURE_BCMODE )
     /* For ECMODE, store extended interrupt information in PSA */
-    if ( ECMODE(&realregs->psw) )
-#endif /*defined(FEATURE_BCMODE)*/
+    if (ECMODE( &realregs->psw ))
+#endif
     {
+        PTT_PGM( "PGM ec", 0, 0, 0 );
+
         /* Store the program interrupt code at PSA+X'8C' */
         psa->pgmint[0] = 0;
         psa->pgmint[1] = ilc;
-        STORE_HW(psa->pgmint + 2, pcode);
+
+        STORE_HW( psa->pgmint + 2, pcode );
 
         /* Store the exception access identification at PSA+160 */
-        if ( code == PGM_PAGE_TRANSLATION_EXCEPTION
-          || code == PGM_SEGMENT_TRANSLATION_EXCEPTION
+        if (0
+            || code == PGM_PAGE_TRANSLATION_EXCEPTION
+            || code == PGM_SEGMENT_TRANSLATION_EXCEPTION
+
 #if defined( FEATURE_001_ZARCH_INSTALLED_FACILITY )
-          || code == PGM_ASCE_TYPE_EXCEPTION
-          || code == PGM_REGION_FIRST_TRANSLATION_EXCEPTION
-          || code == PGM_REGION_SECOND_TRANSLATION_EXCEPTION
-          || code == PGM_REGION_THIRD_TRANSLATION_EXCEPTION
+            || code == PGM_ASCE_TYPE_EXCEPTION
+            || code == PGM_REGION_FIRST_TRANSLATION_EXCEPTION
+            || code == PGM_REGION_SECOND_TRANSLATION_EXCEPTION
+            || code == PGM_REGION_THIRD_TRANSLATION_EXCEPTION
 #endif
-          || code == PGM_ALEN_TRANSLATION_EXCEPTION
-          || code == PGM_ALE_SEQUENCE_EXCEPTION
-          || code == PGM_ASTE_VALIDITY_EXCEPTION
-          || code == PGM_ASTE_SEQUENCE_EXCEPTION
-          || code == PGM_ASTE_INSTANCE_EXCEPTION               /*@ALR*/
-          || code == PGM_EXTENDED_AUTHORITY_EXCEPTION
-#ifdef FEATURE_SUPPRESSION_ON_PROTECTION
-          || code == PGM_PROTECTION_EXCEPTION
+            || code == PGM_ALEN_TRANSLATION_EXCEPTION
+            || code == PGM_ALE_SEQUENCE_EXCEPTION
+            || code == PGM_ASTE_VALIDITY_EXCEPTION
+            || code == PGM_ASTE_SEQUENCE_EXCEPTION
+            || code == PGM_ASTE_INSTANCE_EXCEPTION
+            || code == PGM_EXTENDED_AUTHORITY_EXCEPTION
+
+#if defined( FEATURE_SUPPRESSION_ON_PROTECTION )
+            || code == PGM_PROTECTION_EXCEPTION
 #endif
-           )
+        )
         {
             psa->excarid = regs->excarid;
-            if(regs->TEA | TEA_MVPG)
+            // FIXME: this conditional will ALWAYS be true!!
+            if (regs->TEA | TEA_MVPG)
                 psa->opndrid = regs->opndrid;
             realregs->opndrid = 0;
         }
 
 #if defined( FEATURE_001_ZARCH_INSTALLED_FACILITY )
         /* Store the translation exception address at PSA+168 */
-        if ( code == PGM_PAGE_TRANSLATION_EXCEPTION
-          || code == PGM_SEGMENT_TRANSLATION_EXCEPTION
-          || code == PGM_ASCE_TYPE_EXCEPTION
-          || code == PGM_REGION_FIRST_TRANSLATION_EXCEPTION
-          || code == PGM_REGION_SECOND_TRANSLATION_EXCEPTION
-          || code == PGM_REGION_THIRD_TRANSLATION_EXCEPTION
-#ifdef FEATURE_SUPPRESSION_ON_PROTECTION
-          || code == PGM_PROTECTION_EXCEPTION
+        if (0
+            || code == PGM_PAGE_TRANSLATION_EXCEPTION
+            || code == PGM_SEGMENT_TRANSLATION_EXCEPTION
+            || code == PGM_ASCE_TYPE_EXCEPTION
+            || code == PGM_REGION_FIRST_TRANSLATION_EXCEPTION
+            || code == PGM_REGION_SECOND_TRANSLATION_EXCEPTION
+            || code == PGM_REGION_THIRD_TRANSLATION_EXCEPTION
+
+#if defined( FEATURE_SUPPRESSION_ON_PROTECTION )
+            || code == PGM_PROTECTION_EXCEPTION
 #endif
-           )
+        )
         {
-            STORE_DW(psa->TEA_G, regs->TEA);
+            STORE_DW( psa->TEA_G, regs->TEA );
         }
 
-        /* Store the translation exception address at PSA+172 */
-        if ( code == PGM_AFX_TRANSLATION_EXCEPTION
-          || code == PGM_ASX_TRANSLATION_EXCEPTION
-          || code == PGM_PRIMARY_AUTHORITY_EXCEPTION
-          || code == PGM_SECONDARY_AUTHORITY_EXCEPTION
-          || code == PGM_SPACE_SWITCH_EVENT
-          || code == PGM_LX_TRANSLATION_EXCEPTION
-          || code == PGM_LFX_TRANSLATION_EXCEPTION             /*@ALR*/
-          || code == PGM_LSX_TRANSLATION_EXCEPTION             /*@ALR*/
-          || code == PGM_LSTE_SEQUENCE_EXCEPTION               /*@ALR*/
-          || code == PGM_EX_TRANSLATION_EXCEPTION)
+        /* For z, store translation exception address at PSA+172 */
+        if (0
+            || code == PGM_AFX_TRANSLATION_EXCEPTION
+            || code == PGM_ASX_TRANSLATION_EXCEPTION
+            || code == PGM_PRIMARY_AUTHORITY_EXCEPTION
+            || code == PGM_SECONDARY_AUTHORITY_EXCEPTION
+            || code == PGM_SPACE_SWITCH_EVENT
+            || code == PGM_LX_TRANSLATION_EXCEPTION
+            || code == PGM_LFX_TRANSLATION_EXCEPTION
+            || code == PGM_LSX_TRANSLATION_EXCEPTION
+            || code == PGM_LSTE_SEQUENCE_EXCEPTION
+            || code == PGM_EX_TRANSLATION_EXCEPTION
+        )
         {
-            STORE_FW(psa->TEA_L, regs->TEA);
+            STORE_FW( psa->TEA_L, regs->TEA );
         }
+
 #else /* !defined( FEATURE_001_ZARCH_INSTALLED_FACILITY ) */
-        /* Store the translation exception address at PSA+144 */
-        if ( code == PGM_PAGE_TRANSLATION_EXCEPTION
-          || code == PGM_SEGMENT_TRANSLATION_EXCEPTION
-          || code == PGM_AFX_TRANSLATION_EXCEPTION
-          || code == PGM_ASX_TRANSLATION_EXCEPTION
-          || code == PGM_PRIMARY_AUTHORITY_EXCEPTION
-          || code == PGM_SECONDARY_AUTHORITY_EXCEPTION
-          || code == PGM_SPACE_SWITCH_EVENT
-          || code == PGM_LX_TRANSLATION_EXCEPTION
-          || code == PGM_EX_TRANSLATION_EXCEPTION
-#ifdef FEATURE_SUPPRESSION_ON_PROTECTION
-          || code == PGM_PROTECTION_EXCEPTION
+
+        /* For 370/390, store translation exception address at PSA+144 */
+        if (0
+            || code == PGM_PAGE_TRANSLATION_EXCEPTION
+            || code == PGM_SEGMENT_TRANSLATION_EXCEPTION
+            || code == PGM_AFX_TRANSLATION_EXCEPTION
+            || code == PGM_ASX_TRANSLATION_EXCEPTION
+            || code == PGM_PRIMARY_AUTHORITY_EXCEPTION
+            || code == PGM_SECONDARY_AUTHORITY_EXCEPTION
+            || code == PGM_SPACE_SWITCH_EVENT
+            || code == PGM_LX_TRANSLATION_EXCEPTION
+            || code == PGM_EX_TRANSLATION_EXCEPTION
+
+#if defined( FEATURE_SUPPRESSION_ON_PROTECTION )
+            || code == PGM_PROTECTION_EXCEPTION
 #endif
-           )
+        )
         {
-            STORE_FW(psa->tea, regs->TEA);
+            STORE_FW( psa->tea, regs->TEA );
         }
 #endif /* !defined( FEATURE_001_ZARCH_INSTALLED_FACILITY ) */
+
         realregs->TEA = 0;
 
         /* Store Data exception code in PSA */
         if (code == PGM_DATA_EXCEPTION)
         {
-            STORE_FW(psa->DXC, regs->dxc);
-#ifdef FEATURE_BASIC_FP_EXTENSIONS
+            STORE_FW( psa->DXC, regs->dxc );
+
+#if defined( FEATURE_BASIC_FP_EXTENSIONS )
             /* Load data exception code into FPC register byte 2 */
-            if(regs->CR(0) & CR0_AFP)
+            if (regs->CR(0) & CR0_AFP)
             {
                 regs->fpc &= ~(FPC_DXC);
                 regs->fpc |= ((regs->dxc << 8)) & FPC_DXC;
@@ -914,7 +1075,7 @@ static char *pgmintname[] = {
         /* Store the monitor class and event code */
         if (code == PGM_MONITOR_EVENT)
         {
-            STORE_HW(psa->monclass, regs->monclass);
+            STORE_HW( psa->monclass, regs->monclass );
 
             /* Store the monitor code word at PSA+156 */
             /* or doubleword at PSA+176               */
@@ -933,35 +1094,37 @@ static char *pgmintname[] = {
             /*      and should be put somewhere in    */
             /*      esa390.h                          */
             /*  **** FIXME **** FIXME  *** FIXME ***  */
+
 #if defined( FEATURE_001_ZARCH_INSTALLED_FACILITY )
-            STORE_DW(zmoncode, regs->MONCODE);
+            STORE_DW( zmoncode, regs->MONCODE );
 #else
-            STORE_W(psa->moncode, regs->MONCODE);
+            STORE_W( psa->moncode, regs->MONCODE );
 #endif
         }
 
-#if defined(FEATURE_PER3)
+#if defined( FEATURE_PER3 )
         /* Store the breaking event address register in the PSA */
-        SET_BEAR_REG(regs, regs->bear_ip);
-        STORE_W(psa->bea, regs->bear);
-#endif /*defined(FEATURE_PER3)*/
+        SET_BEAR_REG( regs, regs->bear_ip );
+        STORE_W( psa->bea, regs->bear );
+#endif
 
     } /* end if(ECMODE) */
 
-#if defined(_FEATURE_PROTECTION_INTERCEPTION_CONTROL)
+#if defined( _FEATURE_PROTECTION_INTERCEPTION_CONTROL )
     realregs->hostint = 0;
-#endif /*defined(_FEATURE_PROTECTION_INTERCEPTION_CONTROL)*/
+#endif
 
-#if defined(_FEATURE_SIE)
-    if(nointercept)
-#endif /*defined(_FEATURE_SIE)*/
+    /* Normal (non-intercepted) program interrupt? */
+#if defined( _FEATURE_SIE )
+    if (!intercept)
+#endif
     {
         PSW pgmold, pgmnew;
         int pgmintloop = 0;
         int detect_pgmintloop = FACILITY_ENABLED( HERC_DETECT_PGMINTLOOP, realregs );
 
         /* Store current PSW at PSA+X'28' or PSA+X'150' for ESAME */
-        ARCH_DEP(store_psw) (realregs, psa->pgmold);
+        ARCH_DEP( store_psw )( realregs, psa->pgmold );
 
         /* Save program old psw */
         if (detect_pgmintloop)
@@ -974,17 +1137,22 @@ static char *pgmintname[] = {
         }
 
         /* Load new PSW from PSA+X'68' or PSA+X'1D0' for ESAME */
-        if ( (code = ARCH_DEP(load_psw) (realregs, psa->pgmnew)) )
+        if ((code = ARCH_DEP( load_psw )( realregs, psa->pgmnew )))
         {
-#if defined(_FEATURE_SIE)
-            if(SIE_MODE(realregs))
+            /* The load psw failed */
+#if defined( _FEATURE_SIE )
+            if (SIE_MODE( realregs ))
             {
-                longjmp(realregs->progjmp, pcode);
+                PTT_PGM( "*PGM *lpsw", code, 0, 0 );
+                PTT_PGM( "PGM progjmp", pcode, 0, 0 );
+                longjmp( realregs->progjmp, pcode );
             }
             else
-#endif /*defined(_FEATURE_SIE)*/
-            /* Invalid pgmnew ==> program interrupt loop */
-            pgmintloop = detect_pgmintloop;
+#endif
+            {
+                /* Invalid pgmnew: ==> program interrupt loop */
+                pgmintloop = detect_pgmintloop;
+            }
         }
         else if (detect_pgmintloop)
         {
@@ -1007,22 +1175,43 @@ static char *pgmintname[] = {
         {
             char buf[64];
             // "Processor %s%02X: program interrupt loop PSW %s"
-            WRMSG(HHC00803, "I", PTYPSTR(realregs->cpuad), realregs->cpuad,
+            WRMSG( HHC00803, "I", PTYPSTR( realregs->cpuad ), realregs->cpuad,
                      STR_PSW( realregs, buf ));
-            OBTAIN_INTLOCK(realregs);
-            realregs->cpustate = CPUSTATE_STOPPING;
-            ON_IC_INTERRUPT(realregs);
-            RELEASE_INTLOCK(realregs);
+
+            OBTAIN_INTLOCK( realregs );
+            {
+                realregs->cpustate = CPUSTATE_STOPPING;
+                ON_IC_INTERRUPT( realregs );
+            }
+            RELEASE_INTLOCK( realregs );
         }
 
-        longjmp(realregs->progjmp, SIE_NO_INTERCEPT);
+        /*-----------------------------------------------------------*/
+        /*  Normal non-intercepted program interrupt: return to      */
+        /*  either the run_cpu or run_sie loop and start executing   */
+        /*  instructions again, but at Program New PSW instead.      */
+        /*-----------------------------------------------------------*/
+
+        PTT_PGM( "PGM !icept", intercept, 0, 0 );
+        PTT_PGM( "PGM progjmp", SIE_NO_INTERCEPT, 0, 0 );
+        longjmp( realregs->progjmp, SIE_NO_INTERCEPT );
     }
 
-#if defined(_FEATURE_SIE)
-    longjmp (realregs->progjmp, pcode);
-#endif /*defined(_FEATURE_SIE)*/
+#if defined( _FEATURE_SIE )
+    /*---------------------------------------------------------------*/
+    /*  We're in SIE mode and SIE host MUST intercept this program   */
+    /*  interrupt. Jump back to the run_sie loop with the interrupt  */
+    /*  code so it can break out of its instruction execution loop   */
+    /*  and exit from run_sie back to sie_exit so the interrupt can  */
+    /*  be passed on to the SIE host for handling.                   */
+    /*---------------------------------------------------------------*/
 
-} /* end function ARCH_DEP(program_interrupt) */
+    PTT_PGM( "PGM icept", intercept, 0, 0 );
+    PTT_PGM( "PGM progjmp", pcode, 0, 0 );
+    longjmp( realregs->progjmp, pcode );
+#endif
+
+} /* end function ARCH_DEP( program_interrupt ) */
 
 /*-------------------------------------------------------------------*/
 /* Load restart new PSW                                              */
@@ -1043,6 +1232,16 @@ PSA    *psa;                            /* -> Prefixed storage area  */
     /* Point to PSA in main storage */
     psa = (PSA*)(regs->mainstor + regs->PX);
 
+#if defined( FEATURE_073_TRANSACT_EXEC_FACILITY )
+    /* Abort any active transaction and then return back to here
+       to continue with restart interrupt processing */
+    if (regs->txf_tnd)
+    {
+        PTT_TXF( "*TXF MISC", 0, regs->txf_contran, regs->txf_tnd );
+        regs->txf_why |= TXF_WHY_RESTART_INT;
+        ABORT_TRANS( regs, ABORT_RETRY_RETURN, TAC_MISC );
+    }
+#endif
     /* Store current PSW at PSA+X'8' or PSA+X'120' for ESAME  */
     ARCH_DEP(store_psw) (regs, psa->RSTOLD);
 
@@ -1077,9 +1276,10 @@ U32     ioid;                           /* I/O interruption address  */
 U32     iointid;                        /* I/O interruption ident    */
 RADR    pfx;                            /* Prefix                    */
 DBLWRD  csw;                            /* CSW for S/370 channels    */
+DEVBLK *dev;                            /* dev presenting interrupt  */
 
     /* Test and clear pending I/O interrupt */
-    icode = ARCH_DEP(present_io_interrupt) (regs, &ioid, &ioparm, &iointid, csw);
+    icode = ARCH_DEP( present_io_interrupt )( regs, &ioid, &ioparm, &iointid, csw, &dev );
 
     /* Exit if no interrupt was presented */
     if (icode == 0) return;
@@ -1090,8 +1290,8 @@ DBLWRD  csw;                            /* CSW for S/370 channels    */
     if(SIE_MODE(regs) && icode != SIE_NO_INTERCEPT)
     {
         /* Point to SIE copy of PSA in state descriptor */
-        psa = (void*)(regs->hostregs->mainstor + SIE_STATE(regs) + SIE_II_PSA_OFFSET);
-        STORAGE_KEY(SIE_STATE(regs), regs->hostregs) |= (STORKEY_REF | STORKEY_CHANGE);
+        psa = (void*)(HOSTREGS->mainstor + SIE_STATE(regs) + SIE_II_PSA_OFFSET);
+        STORAGE_KEY(SIE_STATE(regs), HOSTREGS) |= (STORKEY_REF | STORKEY_CHANGE);
     }
     else
 #endif
@@ -1125,10 +1325,11 @@ DBLWRD  csw;                            /* CSW for S/370 channels    */
     }
 
     /* Trace the I/O interrupt */
-    if (CPU_STEPPING_OR_TRACING(regs, 0))
+    if (CPU_STEPPING_OR_TRACING( regs, 0 ) || dev->ccwtrace || dev->ccwstep)
     {
         BYTE*   csw = psa->csw;
 
+        // "Processor %s%02X: I/O interrupt code %1.1X:%4.4X CSW %2.2X...
         WRMSG (HHC00804, "I", PTYPSTR(regs->cpuad), regs->cpuad,
                 SSID_TO_LCSS(ioid >> 16) & 0x07, ioid,
                 csw[0], csw[1], csw[2], csw[3],
@@ -1149,18 +1350,30 @@ DBLWRD  csw;                            /* CSW for S/370 channels    */
 #endif
 
     /* Trace the I/O interrupt */
-    if (CPU_STEPPING_OR_TRACING(regs, 0))
+    if (CPU_STEPPING_OR_TRACING( regs, 0 ) || dev->ccwtrace || dev->ccwstep)
 #if !defined( FEATURE_001_ZARCH_INSTALLED_FACILITY ) && !defined( _FEATURE_IO_ASSIST )
+        // "Processor %s%02X: I/O interrupt code %8.8X parm %8.8X"
         WRMSG (HHC00805, "I", PTYPSTR(regs->cpuad), regs->cpuad, ioid, ioparm);
 #else
+        // "Processor %s%02X: I/O interrupt code %8.8X parm %8.8X id %8.8X"
         WRMSG (HHC00806, "I", PTYPSTR(regs->cpuad), regs->cpuad, ioid, ioparm, iointid);
 #endif
 #endif /* FEATURE_CHANNEL_SUBSYSTEM */
 
 #if defined( _FEATURE_IO_ASSIST )
-    if(icode == SIE_NO_INTERCEPT)
+    if (icode == SIE_NO_INTERCEPT)
 #endif
     {
+#if defined( FEATURE_073_TRANSACT_EXEC_FACILITY )
+        /* Abort any active transaction and then return back to here
+           to continue with I/O interrupt processing */
+        if (regs->txf_tnd)
+        {
+            PTT_TXF( "*TXF IO", 0, regs->txf_contran, regs->txf_tnd );
+            regs->txf_why |= TXF_WHY_IO_INT;
+            ABORT_TRANS( regs, ABORT_RETRY_RETURN, TAC_IO );
+        }
+#endif
         /* Store current PSW at PSA+X'38' or PSA+X'170' for ESAME */
         ARCH_DEP(store_psw) ( regs, psa->iopold );
 
@@ -1230,6 +1443,16 @@ RADR    fsta;                           /* Failing storage address   */
     STORE_FW(psa->mcstorad, fsta);
 #endif
 
+#if defined( FEATURE_073_TRANSACT_EXEC_FACILITY )
+    /* Abort any active transaction and then return back to here
+       to continue with machine check interrupt processing */
+    if (regs->txf_tnd)
+    {
+        PTT_TXF( "*TXF MCK", 0, regs->txf_contran, regs->txf_tnd );
+        regs->txf_why |= TXF_WHY_MCK_INT;
+        ABORT_TRANS( regs, ABORT_RETRY_RETURN, TAC_MCK );
+    }
+#endif
     /* Store current PSW at PSA+X'30' */
     ARCH_DEP(store_psw) ( regs, psa->mckold );
 
@@ -1390,15 +1613,23 @@ cpustate_stopping:
         regs->waittod = host_tod();
 
         /* Test for disabled wait PSW and issue message */
-        if( IS_IC_DISABLED_WAIT_PSW(regs) )
+        if (IS_IC_DISABLED_WAIT_PSW( regs ))
         {
-            char buf[40];
-            // "Processor %s%02X: disabled wait state %s"
-            WRMSG (HHC00809, "I", PTYPSTR(regs->cpuad), regs->cpuad, STR_PSW( regs, buf ));
+            /* Don't log the disabled wait when OSTAILOR VM is active
+               unless it is the very last CPU in the configuration. */
+            if (0
+                || ((sysblk.pgminttr & OS_VM) != OS_VM)   // not VM
+                || !(sysblk.started_mask ^ regs->cpubit)  // is last
+            )
+            {
+                char buf[40];
+                // "Processor %s%02X: disabled wait state %s"
+                WRMSG( HHC00809, "I", PTYPSTR( regs->cpuad ),
+                    regs->cpuad, STR_PSW( regs, buf ));
+            }
             regs->cpustate = CPUSTATE_STOPPING;
-            RELEASE_INTLOCK(regs);
-
-            longjmp(regs->progjmp, SIE_NO_INTERCEPT);
+            RELEASE_INTLOCK( regs );
+            longjmp( regs->progjmp, SIE_NO_INTERCEPT );
         }
 
         /* Indicate waiting and invoke CPU wait */
@@ -1447,18 +1678,19 @@ int     aswitch;
     /* Assign new regs if not already assigned */
     regs = sysblk.regs[cpu] ?
            sysblk.regs[cpu] :
-           malloc_aligned(((sizeof(REGS)+4095)&~((size_t)0x0FFF)), 4096);
+           malloc_aligned( ROUND_UP( sizeof( REGS ), _4K ), _4K );
 
     if (oldregs)
     {
         if (oldregs != regs)
         {
+            FREE_TXFMAP( oldregs );
             memcpy (regs, oldregs, sizeof(REGS));
             free_aligned(oldregs);
             regs->blkloc = CSWAP64((U64)((uintptr_t)regs));
-            regs->hostregs = regs;
-            if (regs->guestregs)
-                regs->guestregs->hostregs = regs;
+            HOSTREGS = regs;
+            if (GUESTREGS)
+                HOST(GUESTREGS) = regs;
             sysblk.regs[cpu] = regs;
             release_lock(&sysblk.cpulock[cpu]);
             // "Processor %s%02X: architecture mode %s"
@@ -1475,7 +1707,7 @@ int     aswitch;
         // "Processor %s%02X: architecture mode %s"
         WRMSG (HHC00811, "I", PTYPSTR(cpu), cpu, get_arch_name(regs));
 
-#ifdef FEATURE_S370_S390_VECTOR_FACILITY
+#if defined( FEATURE_S370_S390_VECTOR_FACILITY )
         if (regs->vf->online)
             WRMSG (HHC00812, "I", PTYPSTR(cpu), cpu);
 #endif
@@ -1522,6 +1754,9 @@ int     aswitch;
     /* Initialize Facilities List */
     init_cpu_facilities( regs );
 
+    /* Initialize Transactional-Execution Facility */
+    ALLOC_TXFMAP( regs );
+
     /* Get pointer to primary opcode table */
     current_opcode_table = regs->ARCH_DEP( runtime_opcode_xxxx );
 
@@ -1541,8 +1776,8 @@ int     aswitch;
            to here, thereby causing the instruction counter to not be
            properly updated. Thus, we need to update it here instead.
        */
-        regs->instcount   +=     128;      /* (just an estimate) */
-        UPDATE_SYSBLK_INSTCOUNT( 128 );    /* (just an estimate) */
+        regs->instcount   +=     MAX_CPU_LOOPS/2;   /* approximate */
+        UPDATE_SYSBLK_INSTCOUNT( MAX_CPU_LOOPS/2 ); /* approximate */
 
         /* Perform automatic instruction tracing if it's enabled */
         do_automatic_tracing();
@@ -1551,34 +1786,123 @@ int     aswitch;
     /* Set `execflag' to 0 in case EXecuted instruction did a longjmp() */
     regs->execflag = 0;
 
-    do {
-        if (INTERRUPT_PENDING( regs ))
-            ARCH_DEP( process_interrupt )( regs );
+    //--------------------------------------------------------------
+    //                    PROGRAMMING NOTE
+    //--------------------------------------------------------------
+    // The first 'fastest_no_txf_loop' loop below is used when the
+    // TXF facility is not enabled, and since facilities cannot be
+    // enabled or disabled once the guest system has been IPLed and
+    // started, it utilizes our original instruction execution loop
+    // which uses the 'EXECUTE_INSTRUCTION' and 'UNROLLED_EXECUTE'
+    // macros which do not have any TXF related code in them.
+    //
+    // The second and third loops below (the 'txf_facility_loop' and
+    // 'txf_slower_loop') are used when the TXF facility is enabled,
+    // requiring us to check whether or not a transaction is active
+    // or not after each instruction is executed.
+    //
+    // If no transaction is active, the normal 'EXECUTE_INSTRUCTION'
+    // and 'UNROLLED_EXECUTE' macros can be used, but a check for an
+    // active transaction still needs to be performed after each and
+    // every instruction (so we can know which loop we need to use).
+    //
+    // When a transaction is active, we use the third (slowest) loop
+    // called 'txf_slower_loop', using the 'TXF_EXECUTE_INSTRUCTION'
+    // and 'TXF_UNROLLED_EXECUTE' macros, which contain code that
+    // enforces certain Transaction-Exceution Facility constraints.
+    //--------------------------------------------------------------
 
-        ip = INSTRUCTION_FETCH( regs, 0 );
+#if defined( FEATURE_073_TRANSACT_EXEC_FACILITY )
+    if (FACILITY_ENABLED( 073_TRANSACT_EXEC, regs ))
+        goto txf_facility_loop;
+#endif
 
-        EXECUTE_INSTRUCTION( current_opcode_table, ip, regs );
+fastest_no_txf_loop:
 
-        /* BHe: I have tried several settings. But 2 unrolled
-           executes gives (core i7 at my place) the best results.
+    if (INTERRUPT_PENDING( regs ))
+        ARCH_DEP( process_interrupt )( regs );
 
-           Even a 'do { } while(0);' with several unrolled executes
-           and without the 'i' was slower.
+    ip = INSTRUCTION_FETCH( regs, 0 );
+    EXECUTE_INSTRUCTION( current_opcode_table, ip, regs );
 
-           That surprised me.
-        */
-        for (i=0; i < 128; i++)
-        {
-            UNROLLED_EXECUTE( current_opcode_table, regs );
-            UNROLLED_EXECUTE( current_opcode_table, regs );
-        }
-        regs->instcount   +=     1 + (i * 2);
-        UPDATE_SYSBLK_INSTCOUNT( 1 + (i * 2) );
-
-        /* Perform automatic instruction tracing if it's enabled */
-        do_automatic_tracing();
+    for (i=0; i < MAX_CPU_LOOPS/2; i++)
+    {
+        UNROLLED_EXECUTE( current_opcode_table, regs );
+        UNROLLED_EXECUTE( current_opcode_table, regs );
     }
-    while (1);
+    regs->instcount   +=     1 + (i * 2);
+    UPDATE_SYSBLK_INSTCOUNT( 1 + (i * 2) );
+
+    /* Perform automatic instruction tracing if it's enabled */
+    do_automatic_tracing();
+    goto fastest_no_txf_loop;
+
+#if defined( FEATURE_073_TRANSACT_EXEC_FACILITY )
+
+txf_facility_loop:
+
+    if (INTERRUPT_PENDING( regs ))
+        ARCH_DEP( process_interrupt )( regs );
+
+    if (regs->txf_tnd)
+        goto enter_txf_slower_loop;
+
+enter_txf_faster_loop:
+
+    ip = INSTRUCTION_FETCH( regs, 0 );
+    EXECUTE_INSTRUCTION( current_opcode_table, ip, regs );
+
+    for (i=0; i < MAX_CPU_LOOPS/2; i++)
+    {
+        if (regs->txf_tnd)
+            break;
+
+        UNROLLED_EXECUTE( current_opcode_table, regs );
+
+        if (regs->txf_tnd)
+            break;
+
+        UNROLLED_EXECUTE( current_opcode_table, regs );
+    }
+    regs->instcount   +=     1 + (i * 2);
+    UPDATE_SYSBLK_INSTCOUNT( 1 + (i * 2) );
+
+    /* Perform automatic instruction tracing if it's enabled */
+    do_automatic_tracing();
+
+//txf_slower_loop:
+
+    if (INTERRUPT_PENDING( regs ))
+        ARCH_DEP( process_interrupt )( regs );
+
+    if (!regs->txf_tnd)
+        goto enter_txf_faster_loop;
+
+enter_txf_slower_loop:
+
+    ip = INSTRUCTION_FETCH( regs, 0 );
+    TXF_EXECUTE_INSTRUCTION( current_opcode_table, ip, regs );
+
+    for (i=0; i < MAX_CPU_LOOPS/2; i++)
+    {
+        if (!regs->txf_tnd)
+            break;
+
+        TXF_UNROLLED_EXECUTE( current_opcode_table, regs );
+
+        if (!regs->txf_tnd)
+            break;
+
+        TXF_UNROLLED_EXECUTE( current_opcode_table, regs );
+    }
+    regs->instcount   +=     1 + (i * 2);
+    UPDATE_SYSBLK_INSTCOUNT( 1 + (i * 2) );
+
+    /* Perform automatic instruction tracing if it's enabled */
+    do_automatic_tracing();
+    goto txf_facility_loop;
+
+#endif /* defined( FEATURE_073_TRANSACT_EXEC_FACILITY ) */
 
     UNREACHABLE_CODE( return NULL );
 
@@ -1611,38 +1935,40 @@ void ARCH_DEP(process_trace)(REGS *regs)
     /* Stop the CPU */
     if (shouldstep)
     {
-        REGS *hostregs = regs->hostregs;
-        S64 saved_timer[2];
+        REGS* hostregs = HOSTREGS;
+        S64 saved_timer[2] = {0};
 
-        OBTAIN_INTLOCK(hostregs);
-
-        hostregs->waittod = host_tod();
-
-        /* The CPU timer is not decremented for a CPU that is in
-           the manual state (e.g. stopped in single step mode) */
-        saved_timer[0] = cpu_timer(regs);
-        saved_timer[1] = cpu_timer(hostregs);
-        hostregs->cpustate = CPUSTATE_STOPPED;
-        sysblk.started_mask &= ~hostregs->cpubit;
-        hostregs->stepwait = 1;
-        sysblk.intowner = LOCK_OWNER_NONE;
-
-        while (hostregs->cpustate == CPUSTATE_STOPPED)
+        OBTAIN_INTLOCK( hostregs );
         {
-            wait_condition (&hostregs->intcond, &sysblk.intlock);
+            hostregs->waittod = host_tod();
+
+            /* The CPU timer is not decremented for a CPU that is in
+               the manual state (e.g. stopped in single step mode) */
+
+            saved_timer[0] = cpu_timer( regs     );
+            saved_timer[1] = cpu_timer( hostregs );
+
+            hostregs->cpustate = CPUSTATE_STOPPED;
+            sysblk.started_mask &= ~hostregs->cpubit;
+            hostregs->stepwait = 1;
+            sysblk.intowner = LOCK_OWNER_NONE;
+
+            while (hostregs->cpustate == CPUSTATE_STOPPED)
+            {
+                wait_condition( &hostregs->intcond, &sysblk.intlock );
+            }
+
+            sysblk.intowner = hostregs->cpuad;
+            hostregs->stepwait = 0;
+            sysblk.started_mask |= hostregs->cpubit;
+
+            set_cpu_timer( regs,     saved_timer[0] );
+            set_cpu_timer( hostregs, saved_timer[1] );
+
+            hostregs->waittime += host_tod() - hostregs->waittod;
+            hostregs->waittod = 0;
         }
-
-        sysblk.intowner = hostregs->cpuad;
-        hostregs->stepwait = 0;
-        sysblk.started_mask |= hostregs->cpubit;
-
-        set_cpu_timer(regs,saved_timer[0]);
-        set_cpu_timer(hostregs,saved_timer[1]);
-
-        hostregs->waittime += host_tod() - hostregs->waittod;
-        hostregs->waittod = 0;
-
-        RELEASE_INTLOCK(hostregs);
+        RELEASE_INTLOCK( hostregs );
     }
 } /* process_trace */
 
@@ -1849,21 +2175,47 @@ int i;
 #endif
     initial_cpu_reset(regs);
 
-    if (hostregs == NULL)
+    /*****************************************************************/
+    /*       Refer to the PROGRAMMING NOTE in hstructs.h             */
+    /*****************************************************************/
+    /*                                                               */
+    /* If 'hostregs' passed as NULL, then 'regs' points to host regs.*/
+    /* Otherwise, 'regs' points to guest regs and 'hostregs' points  */
+    /* to host regs.                                                 */
+    /*                                                               */
+    /* The flag 'guest' is only 1 in guest regs and 'host' is only 1 */
+    /* in host regs. 'hostregs' always points to host regs in both,  */
+    /* and 'guestregs' always points to guest regs in both.          */
+    /*                                                               */
+    /* HOWEVER, guest regs only exists when SIE is active/running.   */
+    /* If SIE is NOT active/running, then 'guestregs' is NULL.       */
+    /*                                                               */
+    /* 'sie_active' is only 1 in host regs,  never in guest regs.    */
+    /* 'sie_mode'   is only 1 in guest regs, never in host regs.     */
+    /*                                                               */
+    /*****************************************************************/
+    /*       Refer to the PROGRAMMING NOTE in hstructs.h             */
+    /*****************************************************************/
+
+    if (!hostregs)
     {
+        /* regs points to host regs */
         regs->cpustate = CPUSTATE_STOPPING;
         ON_IC_INTERRUPT(regs);
-        regs->hostregs = regs;
+        HOSTREGS = regs;
         regs->host = 1;
         sysblk.regs[cpu] = regs;
         sysblk.config_mask |= regs->cpubit;
         sysblk.started_mask |= regs->cpubit;
     }
-    else
+    else // SIE mode
     {
-        hostregs->guestregs = regs;
-        regs->hostregs = hostregs;
-        regs->guestregs = regs;
+        /* regs     points to guest regs.
+           hostregs points to host  regs.
+        */
+        GUEST(hostregs) = regs;
+        HOSTREGS = hostregs;
+        GUESTREGS = regs;
         regs->guest = 1;
         regs->sie_mode = 1;
         regs->opinterv = 0;
@@ -1899,7 +2251,7 @@ int i;
     regs->AEA_AR( USE_HOME_SPACE      ) = 13;
 
     /* Initialize opcode table pointers */
-    init_opcode_pointers (regs);
+    init_regs_runtime_opcode_pointers( regs );
 
     regs->configured = 1;
 
@@ -1924,16 +2276,16 @@ static void *cpu_uninit (int cpu, REGS *regs)
          * structure ONLY if it is not ourself, and set the guest REGS
          * pointer to NULL;
          */
-        if (regs->guestregs)
-            regs->guestregs = regs == regs->guestregs ? NULL :
-                              cpu_uninit (cpu, regs->guestregs);
+        if (GUESTREGS)
+            GUESTREGS = (regs == GUESTREGS) ?
+                NULL : cpu_uninit( cpu, GUESTREGS );
     }
 
     destroy_condition(&regs->intcond);
 
     if (processHostRegs)
     {
-#ifdef FEATURE_S370_S390_VECTOR_FACILITY
+#if defined( _FEATURE_S370_S390_VECTOR_FACILITY )
         /* Mark Vector Facility offline */
         regs->vf->online = 0;
 #endif
@@ -1948,7 +2300,8 @@ static void *cpu_uninit (int cpu, REGS *regs)
     }
 
     /* Free the REGS structure */
-    free_aligned(regs);
+    FREE_TXFMAP( regs );
+    free_aligned( regs );
 
     return NULL;
 }
@@ -1967,7 +2320,7 @@ static void CPU_Wait( REGS* regs )
     /* Wait while SYNCHRONIZE_CPUS is in progress */
     while (sysblk.syncing)
     {
-        sysblk.sync_mask &= ~regs->hostregs->cpubit;
+        sysblk.sync_mask &= ~HOSTREGS->cpubit;
         if (!sysblk.sync_mask)
             signal_condition(&sysblk.sync_cond);
         wait_condition (&sysblk.sync_bc_cond, &sysblk.intlock);

@@ -626,22 +626,27 @@ static void DelSubchanFastLookup(U16 ssid, U16 subchan)
 
 static DEVBLK *get_devblk(U16 lcss, U16 devnum)
 {
-DEVBLK *dev;
-DEVBLK**dvpp;
+DEVBLK*   dev;
+DEVBLK**  dvpp;
+char      buf[32];
 
-    if(lcss >= FEATURE_LCSS_MAX)
+    if (lcss >= FEATURE_LCSS_MAX)
         lcss = 0;
 
     for (dev = sysblk.firstdev; dev != NULL; dev = dev->nextdev)
-        if (!(dev->allocated) && dev->ssid == LCSS_TO_SSID(lcss)) break;
+        if (!(dev->allocated) && dev->ssid == LCSS_TO_SSID( lcss ))
+            break;
 
-    if(!dev)
+    if (!dev)
     {
-        if (!(dev = (DEVBLK*)calloc_aligned((sizeof(DEVBLK)+(_4K-1)) & ~(_4K-1),_4K)))
+        size_t  amt  = sizeof( DEVBLK );
+                amt  = ROUND_UP( amt, _4K );
+
+        if (!(dev = (DEVBLK*) calloc_aligned( amt, _4K )))
         {
-            char buf[64];
-            MSGBUF(buf, "calloc(%d)", (int)sizeof(DEVBLK));
-            WRMSG (HHC01460, "E", lcss, devnum, buf, strerror(errno));
+            MSGBUF( buf, "calloc(%d)", (int) amt );
+            // "%1d:%04X error in function %s: %s"
+            WRMSG( HHC01460, "E", lcss, devnum, buf, strerror( errno ));
             return NULL;
         }
 
@@ -668,8 +673,8 @@ DEVBLK**dvpp;
         /* Add the new device block to the end of the chain */
         *dvpp = dev;
 
-        dev->ssid = LCSS_TO_SSID(lcss);
-        dev->subchan = sysblk.highsubchan[lcss]++;
+        dev->ssid = LCSS_TO_SSID( lcss );
+        dev->subchan = sysblk.highsubchan[ lcss ]++;
     }
 
     /* Obtain the device lock. Caller will release it. */
@@ -684,6 +689,10 @@ DEVBLK**dvpp;
     dev->devprio = sysblk.devprio;
     dev->hnd = NULL;
     dev->devnum = devnum;
+
+    MSGBUF( buf,  "&dev->lock %1d:%04X", LCSS_DEVNUM );
+    set_lock_name( &dev->lock, buf );
+
     dev->chanset = lcss;
     dev->chptype[0] = CHP_TYPE_EIO; /* Interim - default to emulated */
     dev->fd = -1;
@@ -1076,14 +1085,14 @@ int configure_cpu( int target_cpu )
         arecpu = are_cpu_thread( &ourcpu );
 
         if (arecpu)
-            sysblk.regs[ ourcpu ]->intwait = 1;
+            sysblk.regs[ ourcpu ]->intwait = true;
 
         /* Wait for CPU thread to initialize */
         while (!IS_CPU_ONLINE( target_cpu ))
            wait_condition( &sysblk.cpucond, &sysblk.intlock );
 
         if (arecpu)
-            sysblk.regs[ ourcpu ]->intwait = 0;
+            sysblk.regs[ ourcpu ]->intwait = false;
 
 #if defined( FEATURE_011_CONFIG_TOPOLOGY_FACILITY )
         /* Set topology-change-report-pending condition */
@@ -1119,7 +1128,7 @@ int deconfigure_cpu( int target_cpu )
 
             /* (if we're a cpu thread) */
             if (arecpu)
-                sysblk.regs[ ourcpu ]->intwait = 1;
+                sysblk.regs[ ourcpu ]->intwait = true;
 
             /* Wait for CPU thread to terminate */
             while (IS_CPU_ONLINE( target_cpu ))
@@ -1127,7 +1136,7 @@ int deconfigure_cpu( int target_cpu )
 
             /* (if we're a cpu thread) */
             if (arecpu)
-                sysblk.regs[ ourcpu ]->intwait = 0;
+                sysblk.regs[ ourcpu ]->intwait = false;
 
             join_thread( sysblk.cputid[ target_cpu ], NULL );
             detach_thread( sysblk.cputid[ target_cpu ]);
@@ -1224,7 +1233,7 @@ int configure_maxcpu( int maxcpu )
     OBTAIN_INTLOCK( NULL );
     {
         /* Requested maxumim must be <= absolute maximum possible */
-        if (maxcpu > MAX_CPU_ENGINES)
+        if (maxcpu > MAX_CPU_ENGS)
         {
             RELEASE_INTLOCK( NULL );
             return HERRCPUOFF;  /* CPU offline; number > maximum */

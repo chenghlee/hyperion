@@ -52,7 +52,7 @@
 /*                                                                   */
 /*-------------------------------------------------------------------*/
 static inline  BYTE* ARCH_DEP( maddr_l )
-    ( VADR addr, size_t len, int arn, REGS* regs, int acctype, BYTE akey )
+    ( VADR addr, size_t len, const int arn, REGS* regs, const int acctype, const BYTE akey )
 {
     /* Note: ALL of the below conditions must be true for a TLB hit
        to occur.  If ANY of them are false, then it's a TLB miss,
@@ -68,6 +68,7 @@ static inline  BYTE* ARCH_DEP( maddr_l )
 
     int  aea_arn  = regs->AEA_AR( arn );
     U16  tlbix    = TLBIX( addr );
+    BYTE *maddr = NULL;
 
     /* Non-zero AEA Access Register number? */
     if (aea_arn)
@@ -104,7 +105,7 @@ static inline  BYTE* ARCH_DEP( maddr_l )
                         if (acctype & ACC_CHECK)
                             regs->dat.storkey = regs->tlb.storkey[ tlbix ];
 
-                        return MAINADDR( regs->tlb.main[ tlbix ], addr );
+                        maddr = MAINADDR(regs->tlb.main[tlbix], addr);
                     }
                 }
             }
@@ -114,15 +115,47 @@ static inline  BYTE* ARCH_DEP( maddr_l )
     /*---------------------------------------*/
     /* TLB miss: do full address translation */
     /*---------------------------------------*/
+    if (!maddr)
+        maddr = ARCH_DEP( logical_to_main_l )( addr, arn, regs, acctype, akey, len );
 
-    return ARCH_DEP( logical_to_main_l )( addr, arn, regs, acctype, akey, len );
+#if defined( FEATURE_073_TRANSACT_EXEC_FACILITY )
+    if (FACILITY_ENABLED( 073_TRANSACT_EXEC, regs ))
+    {
+        /* SA22-7832-12 Principles of Operation, page 5-99:
+
+             "Storage accesses for instruction and DAT- and ART-
+              table fetches follow the non-transactional rules."
+        */
+        if (0
+            || arn == USE_INST_SPACE    /* Instruction fetching */
+            || arn == USE_REAL_ADDR     /* Address translation  */
+        )
+            return maddr;               /* return ACTUAL address */
+
+        /* Quick exit if no CPUs executing any transactions */
+        if (!sysblk.txf_transcpus)
+            return maddr;
+
+        /* Quick exit if NTSTG call */
+        if (regs && regs->txf_NTSTG)
+        {
+            regs->txf_NTSTG = false;
+            return maddr;
+        }
+
+        /* Translate to alternate TXF address if appropriate */
+        maddr = TXF_MADDRL( addr, len, arn, regs, acctype, maddr );
+    }
+#endif
+
+    return maddr;
 }
 
 #if defined( FEATURE_DUAL_ADDRESS_SPACE )
-U16 ARCH_DEP(translate_asn) (U16 asn, REGS *regs,
-        U32 *asteo, U32 aste[]);
-int ARCH_DEP(authorize_asn) (U16 ax, U32 aste[],
-        int atemask, REGS *regs);
+
+U16  ARCH_DEP( translate_asn )( U16 asn, REGS* regs, U32* asteo, U32 aste[] );
+int  ARCH_DEP( authorize_asn )( U16 ax, U32 aste[], int atemask, REGS* regs );
+
 #endif
 
 /* end of DAT.H */

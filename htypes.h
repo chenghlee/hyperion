@@ -48,7 +48,9 @@
 
 #endif
 
+#ifndef int32_t
 #define int32_t                 int32_t         /* (used by extpkgs) */
+#endif
 
 #ifndef HAVE_U_INT8_T
   typedef uint8_t               u_int8_t;
@@ -117,6 +119,16 @@ typedef  uint8_t    QWORD[16];  // unsigned quadword   (16 bytes)
 
 #ifndef  BOOL
 #define  BOOL       int         // (same as Windows)
+#endif
+
+#if defined( _MSVC_ )           // (some code needs the following)
+  #if defined( _WIN64 )
+    typedef unsigned __int64  U_LONG_PTR;   // name unique to Hercules
+  #else // 32-bit x86
+    typedef unsigned __int32  U_LONG_PTR;   // name unique to Hercules
+  #endif
+#else // Linux, etc
+  typedef unsigned long       U_LONG_PTR;   // name unique to Hercules
 #endif
 
 /*-------------------------------------------------------------------*/
@@ -191,6 +203,7 @@ typedef struct GUISTAT   GUISTAT;   // EXTERNALGUI Device Status Ctl
 
 typedef struct COMMADPT         COMMADPT;         // Comm Adapter
 typedef struct bind_struct      bind_struct;      // Socket Device Ctl
+typedef struct TCPNJE           TCPNJE;           // TCPNJE communications
 
 typedef struct TAPEMEDIA_HANDLER  TAPEMEDIA_HANDLER;  // (see tapedev.h)
 typedef struct TAPEAUTOLOADENTRY  TAPEAUTOLOADENTRY;  // (see tapedev.h)
@@ -208,7 +221,7 @@ typedef void  DEVXF  (DEVBLK *dev, BYTE code, BYTE flags,
                                    BYTE prevcode, int ccwseq,
                                    BYTE *iobuf, BYTE *more,
                                    BYTE *unitstat, U32 *residual);
-typedef BYTE  DEVHF  (DEVBLK *dev);
+typedef void  DEVHF  (DEVBLK *dev);
 typedef int   DEVCF  (DEVBLK *dev);
 typedef void  DEVSF  (DEVBLK *dev);
 typedef int   DEVRF  (DEVBLK *dev, int ix, BYTE *unitstat);

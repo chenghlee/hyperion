@@ -8,6 +8,12 @@
 /* Interpretive Execution - (C) Copyright Jan Jaeger, 1999-2012      */
 /* z/Architecture support - (C) Copyright Jan Jaeger, 1999-2012      */
 
+/* Format-1 State Descriptor Block (SIE1BK) documented in:           */
+/*  SA22-7095-00 System-370 XA Interpretive Execution                */
+
+/* Format-2 State Descriptor Block (SIE2BK) documented at:           */
+/*  http://www.vm.ibm.com/pubs/cp710/SIEBK.HTML                      */
+
 #ifndef _ESA390_H
 #define _ESA390_H
 
@@ -258,6 +264,14 @@ typedef struct DAT  DAT;
 
 #define CR0_MCX_AUTH    0x0001000000000000ULL   /* Measurement Counter
                                                    Extraction Authority       */
+
+#define CR0_TXC         0x0080000000000000ULL   /* Tranactional-Execution
+                                                   Control                    */
+
+#define CR0_PIFO        0x0040000000000000ULL   /* Tranactional-Execution
+                                                   Program-Interruption-
+                                                   Filtering Overide          */
+
 #define CR0_TRACE_TOD           0x80000000      /* TRACE TOD-clock control    */
 #define CR0_BMPX                0x80000000      /* Block multiplex ctl  S/370 */
 #define CR0_SSM_SUPP            0x40000000      /* SSM suppression control    */
@@ -307,6 +321,14 @@ typedef struct DAT  DAT;
 
 /*-------------------------------------------------------------------*/
 /* Bit definitions for control register 2 */
+
+#define CR2_TDS         0x0000000000000004ULL /* Tranaction Diagnostic Scope   */
+#define CR2_TDC         0x0000000000000003ULL /* Tranaction Diagnostic Control */
+
+#define TDC_NORMAL          0     /* Normal operation                */
+#define TDC_ALWAYS_RANDOM   1     /* Abort all transactions randomly */
+#define TDC_MAYBE_RANDOM    2     /* Randomly abort transactions     */
+#define TDC_RESERVED        3     /* (reserved)                      */
 
 #define CR2_DUCTO       0x7FFFFFC0      /* DUCT origin               */
 /* For S/370, CR2 contains channel masks for channels 0-31 */
@@ -360,7 +382,7 @@ typedef struct DAT  DAT;
 #define CR9_SA          0x20000000      /* Storage Alteration        */
 #define CR9_GRA         0x10000000      /* General Register Alt.     */
 #define CR9_STURA       0x08000000      /* Store using real addr     */
-#define CR9_IFNUL       0x01000000      /* IF nullification     @PER3*/
+#define CR9_IFNUL       0x01000000      /* IF nullification          */
 #define CR9_GRMASK      0x0000FFFF      /* GR mask bits              */
 #define CR9_BAC         0x00800000      /* Br addr control PER2 only */
 #define CR9_SAC         0x00200000      /* Stor. alter. c. PER2 only */
@@ -782,7 +804,8 @@ typedef struct LSED LSED;
 #define SIGP_SENSE_RUNNING_STATE 0x15   /* Sense Running State       */
 
 #define MAX_SIGPORDER            0x15   /* Maximum SIGP order value  */
-#define LOG_SIGPORDER            0x03   /* Log any SIGP > this value */
+#define LOG_SIGPORDER    SIGP_RESTART   /* Log any SIGP > this value
+                                          except Sense Running State */
 
 /*-------------------------------------------------------------------*/
 /* SIGP status codes */
@@ -1081,7 +1104,9 @@ typedef struct PSA_900  PSA_900;
 #define PGM_OPERAND_EXCEPTION                           0x0015
 #define PGM_TRACE_TABLE_EXCEPTION                       0x0016
 #define PGM_ASN_TRANSLATION_SPECIFICATION_EXCEPTION     0x0017
+#define PGM_TRANSACTION_CONSTRAINT_EXCEPTION            0x0018
 #define PGM_VECTOR_OPERATION_EXCEPTION                  0x0019
+#define PGM_VECTOR_PROCESSING_EXCEPTION                 0x001B
 #define PGM_SPACE_SWITCH_EVENT                          0x001C
 #define PGM_SQUARE_ROOT_EXCEPTION                       0x001D
 #define PGM_UNNORMALIZED_OPERAND_EXCEPTION              0x001E
@@ -1114,6 +1139,7 @@ typedef struct PSA_900  PSA_900;
 #define PGM_MONITOR_EVENT                               0x0040
 #define PGM_PER_EVENT                                   0x0080
 #define PGM_CRYPTO_OPERATION_EXCEPTION                  0x0119
+#define PGM_TXF_EVENT                                   0x0200
 
 /*-------------------------------------------------------------------*/
 /* External interrupt codes */
@@ -1814,6 +1840,8 @@ struct SIE1BK
 };
 typedef struct SIE1BK   SIE1BK;
 
+CASSERT( sizeof( SIE1BK ) == 256, esa390_h );
+
 /*-------------------------------------------------------------------*/
 /*     SIE Format 2 State Descriptor Block (SIE2BK) structure        */
 /*-------------------------------------------------------------------*/
@@ -1967,6 +1995,7 @@ struct SIE2BK
 
 #define SIE_F           f
 #define SIE_F_IN        0x80            /* Intercept format 2        */
+#define SIE_F_EXL       0x60            /* ILC of EX/EXRL instr      */
 #define SIE_F_IF        0x02            /* Instruction fetch PER     */
 #define SIE_F_EX        0x01            /* Icept for target of EX    */
 
@@ -1988,6 +2017,14 @@ struct SIE2BK
 #define SIE_RCPO0_SKAIP 0x40            /* SKA in progress           */
 #define SIE_RCPO2       rcpo[2]
 #define SIE_RCPO2_RCPBY 0x10            /* RCP Bypass                */
+
+#define SIE_ECB0        rcpo[1]         /* Execution Controls Byte 0 */
+#define SIE_QEBSM       0x80            /* QEBSM Interpretation Act. */
+#define SIE_ECGSF       0x40            /* Guard.Stor.Facil.     133 */
+#define SIE_ECTX        0x10            /* Trans.Exec.Facil.     073 */
+
+#define SIE_ECB1        rcpo[2]         /* Execution Controls Byte 1 */
+#define SIE_ECIEP       0x40            /* Inst.Exe.Prot.Facil.  130 */
 
 /*064*/ FWORD  scao;                    /* SCA area origin           */
 /*068*/ FWORD  resv068f;
@@ -2022,8 +2059,6 @@ struct SIE2BK
 #define SIE_II_PSA_OFFSET       0x30    /* Offset of the IP field
                                            relative to the I/O fields
                                            in the PSA for ESAME guest*/
-
-/*0CE   HWORD  iprcc;                                                */
 /*0F4*/ BYTE   resv0f4b[6];
 /*0FA*/ HWORD  ief;                     /* Migration Emulation cnlt  */
 /*0FC*/ FWORD  resv0fcf;
@@ -2031,9 +2066,13 @@ struct SIE2BK
 /*180*/ DBLWRD gbea;
 /*188*/ BYTE   resv188b[24];
 /*1A0*/ FWORD  fld;                     /* Facility List Designation */
-/*1A4*/ BYTE   resv1a4b[92];
+/*1A4*/ BYTE   resv1a4b[68];
+/*1E8*/ DBLWRD itdba;                   /* Interception TDB address  */
+/*1F0*/ BYTE   resv1f0b[16];
 };
 typedef struct SIE2BK   SIE2BK;
+
+CASSERT( sizeof( SIE2BK ) == 512, esa390_h );
 
 /*-------------------------------------------------------------------*/
 /*                            WHO                                    */
@@ -2296,18 +2335,18 @@ struct SYSIB122                         /* Basic Machine CPUs        */
     HWORD   confcpu;                    /* Configured CPU count      */
     HWORD   sbcpu;                      /* Standby CPU count         */
     HWORD   resvcpu;                    /* Reserved CPU count        */
-    HWORD   mpfact[MAX_CPU_ENGINES-1];  /* MP factors                */
+    HWORD   mpfact[ MAX_CPU_ENGS - 1];  /* MP factors                */
 
 
-#if ((MAX_CPU_ENGINES-1) % 2)           /* if prev is odd #of HWORDs */
+#if ((MAX_CPU_ENGS - 1) % 2)            /* if prev is odd #of HWORDs */
     HWORD   resv3;                      /* then need some alignment  */
 #endif
 
     FWORD   accap;                      /* Alternate CPU Capability  */
-    HWORD   ampfact[MAX_CPU_ENGINES-1]; /* Alternate MP factors      */
+    HWORD   ampfact[ MAX_CPU_ENGS - 1]; /* Alternate MP factors      */
 
 
-#if ((MAX_CPU_ENGINES-1) % 2)           /* if prev is odd #of HWORDs */
+#if ((MAX_CPU_ENGS - 1) % 2)            /* if prev is odd #of HWORDs */
     HWORD   resv4;                      /* then need some alignment  */
 #endif
 };
@@ -2519,10 +2558,10 @@ typedef struct PTFFQSI PTFFQSI;
 #define FPC_DXC_X       0x00000800
 #define FPC_DXC_Y       0x00000400
 #define FPC_DRM         0x00000070
-#define FPC_BRM_3BIT    0x00000007                              /*810*/
-#define FPC_BIT29       0x00000004                              /*810*/
-#define FPC_BRM_2BIT    0x00000003                              /*810*/
-#define FPC_RESV_FPX    0x03030088                              /*810*/
+#define FPC_BRM_3BIT    0x00000007
+#define FPC_BIT29       0x00000004
+#define FPC_BRM_2BIT    0x00000003
+#define FPC_RESV_FPX    0x03030088
 #define FPC_RESERVED    0x0707008C
 
 /*-------------------------------------------------------------------*/
@@ -2558,6 +2597,7 @@ typedef struct PTFFQSI PTFFQSI;
 #define DXC_IEEE_DIV_ZERO_IISE  0x43    /* IEEE div by zero(IISE) DFP*/
 #define DXC_IEEE_INVALID_OP     0x80    /* IEEE invalid operation    */
 #define DXC_IEEE_INV_OP_IISE    0x83    /* IEEE invalid op (IISE) DFP*/
+#define DXC_VECTOR_INSTRUCTION  0xFE    /* Vector instruction        */
 #define DXC_COMPARE_AND_TRAP    0xFF    /* Compare-and-trap exception*/
 /* Note: IISE = IEEE-interruption-simulation event */
 

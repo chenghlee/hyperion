@@ -105,6 +105,7 @@ HPAN_DLL_IMPORT U32    prev_high_sios_rate; // (saved high water mark for previo
 HPAN_DLL_IMPORT time_t curr_int_start_time; // (start time of current interval)
 HPAN_DLL_IMPORT time_t prev_int_start_time; // (start time of previous interval)
 HPAN_DLL_IMPORT void update_maxrates_hwm(); // (update high-water-mark values)
+HPAN_DLL_IMPORT void set_panel_colors();    // (set panel message colors)
 
 /* Functions in module hao.c (Hercules Automatic Operator) */
 #if defined(OPTION_HAO)
@@ -115,6 +116,7 @@ HAO_DLL_IMPORT void hao_command(char *command); /* process hao command */
 HCMD_DLL_IMPORT const char* ptyp2long ( BYTE ptyp );       // diag224_call()
 HCMD_DLL_IMPORT const char* ptyp2short( BYTE ptyp );       // PTYPSTR()
 HCMD_DLL_IMPORT BYTE short2ptyp( const char* shortname );  // engines_cmd()
+HCMD_DLL_IMPORT int devinit_cmd( int argc, char* argv[], char* cmdline ); // used by CTCE_Recovery()
 extern int qproc_cmd( int argc, char* argv[], char* cmdline );
 
 /* Functions in module hscpufun.c (so PTT debugging patches can access them) */
@@ -182,6 +184,7 @@ HSYS_DLL_IMPORT  DBGT32TR*      debug_tt32_tracing;
 
 HSYS_DLL_IMPORT  HDLDBGCD*      debug_cd_cmd;
 HSYS_DLL_IMPORT  HDLDBGCPU*     debug_cpu_state;
+HSYS_DLL_IMPORT  HDLDBGCPU*     debug_watchdog_signal;
 HSYS_DLL_IMPORT  HDLDBGPGMI*    debug_program_interrupt;
 HSYS_DLL_IMPORT  HDLDBGDIAG*    debug_diagnose;
 
@@ -270,6 +273,20 @@ SERV_DLL_IMPORT void sclp_sysg_attention();
 int servc_hsuspend(void *file);
 int servc_hresume(void *file);
 
+#if defined( _FEATURE_073_TRANSACT_EXEC_FACILITY )
+/* Functions in module transact.c */
+TRANS_DLL_IMPORT BYTE* txf_maddr_l( const U64  vaddr,   const size_t  len,
+                                    const int  arn,     REGS*         regs,
+                                    const int  acctype, BYTE*         maddr );
+TRANS_DLL_IMPORT void s370_abort_transaction( REGS* regs, int retry, int txf_tac, const char* loc );
+TRANS_DLL_IMPORT void s390_abort_transaction( REGS* regs, int retry, int txf_tac, const char* loc );
+TRANS_DLL_IMPORT void z900_abort_transaction( REGS* regs, int retry, int txf_tac, const char* loc );
+TRANS_DLL_IMPORT void z900_txf_do_pi_filtering( REGS* regs, int code );
+void alloc_txfmap( REGS* regs );
+void free_txfmap( REGS* regs );
+void txf_abort_all( U16 cpuad, int why, const char* location );
+#endif
+
 /* Functions in module ckddasd.c */
 void ckd_build_sense ( DEVBLK *, BYTE, BYTE, BYTE, BYTE, BYTE);
 int ckd_dasd_init_handler   ( DEVBLK *dev, int argc, char *argv[]);
@@ -355,9 +372,14 @@ const char* FormatORB( ORB* orb, char* buf, size_t bufsz );
 const char* FormatSCL( ESW* esw, char* buf, size_t bufsz );
 const char* FormatERW( ESW* esw, char* buf, size_t bufsz );
 const char* FormatESW( ESW* esw, char* buf, size_t bufsz );
+HMISC_DLL_IMPORT REGS* copy_regs( REGS* regs );
 HMISC_DLL_IMPORT const char* FormatSID( BYTE* iobuf, int num, char* buf, size_t bufsz );
 HMISC_DLL_IMPORT const char* FormatRCD( BYTE* iobuf, int num, char* buf, size_t bufsz );
 HMISC_DLL_IMPORT const char* FormatRNI( BYTE* iobuf, int num, char* buf, size_t bufsz );
+HMISC_DLL_IMPORT const char* PIC2Name( int code );
+HMISC_DLL_IMPORT int s370_virt_to_real( U64* raptr, int* siptr, U64 vaddr, int arn, REGS* regs, int acctype );
+HMISC_DLL_IMPORT int s390_virt_to_real( U64* raptr, int* siptr, U64 vaddr, int arn, REGS* regs, int acctype );
+HMISC_DLL_IMPORT int z900_virt_to_real( U64* raptr, int* siptr, U64 vaddr, int arn, REGS* regs, int acctype );
 void get_connected_client (DEVBLK* dev, char** pclientip, char** pclientname);
 void alter_display_real_or_abs (REGS *regs, int argc, char *argv[], char *cmdline);
 void alter_display_virt (REGS *regs, int argc, char *argv[], char *cmdline);
@@ -377,7 +399,7 @@ int resume_cmd(int argc, char *argv[],char *cmdline);
 /* Functions in ecpsvm.c that are not *direct* instructions */
 /* but support functions either used by other instruction   */
 /* functions or from somewhere else                         */
-#ifdef FEATURE_ECPSVM
+#if defined( _FEATURE_ECPSVM )
 int  ecpsvm_dosvc(REGS *regs, int svccode);
 int  ecpsvm_dossm(REGS *regs,int b,VADR ea);
 int  ecpsvm_dolpsw(REGS *regs,int b,VADR ea);

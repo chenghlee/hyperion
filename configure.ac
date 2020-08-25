@@ -26,8 +26,8 @@ AC_CONFIG_AUX_DIR(autoconf)   # (directory containing auxillary build tools)
 # -----------------------------------------------------------------------------
 
 VERS_MAJ=4                    # first  digit of version
-VERS_INT=2                    # second digit of version
-VERS_MIN=1                    # third  digit of version
+VERS_INT=3                    # second digit of version
+VERS_MIN=9999                 # third  digit of version
 
 AM_INIT_AUTOMAKE(hercules,${VERS_MAJ}.${VERS_INT}.${VERS_MIN})
 m4_ifdef([AM_SILENT_RULES], [AM_SILENT_RULES([yes])])
@@ -143,6 +143,11 @@ case "$target_cpu" in
     sparc*)
         hc_cv_cpu_arch=sparc
         hc_cv_pkg_lib_subdir="/sparc"
+        ;;
+
+    s390x*)
+        hc_cv_cpu_arch=s390x
+        hc_cv_pkg_lib_subdir="/s390x"
         ;;
 
     xscale*)
@@ -338,6 +343,32 @@ AC_LIBTOOL_DLOPEN()                     # (we need libtool's dlopen support)
 
 AC_LIBTOOL_WIN32_DLL()                  # (we need Win32 support in libtool)
 
+# -----------------------------------------------------------------------------
+#  This is a hack:
+#
+#    On NetBSD, override how libtool decides that a library can be linked into
+#    a shared library. The libSoftFloat.a library is not permissible by the
+#    usual rule, which allows *.so and *_pic.a (because all code in a shared
+#    library must be Position Independent Code).
+#
+#    The result is that the shared libraries are not built and hercules
+#    does not work.
+#
+#    Linux commonly seems to have "pass_all" for this setting.
+#    We want to affect the line deplibs_check_method=... in the copied
+#    libtool script.
+#
+#    Since we know that External Packages static libs are always built as PIC,
+#    the following should workaround the problem.
+#
+# -----------------------------------------------------------------------------
+
+case $host_os in
+    netbsd*)
+      #lt_cv_deplibs_check_method="match_pattern /lib[^/]+(\\.so|_pic\\.a|\\.a)\$"
+      lt_cv_deplibs_check_method="pass_all"
+      ;;
+esac
 
 # -----------------------------------------------------------------------------
 #  See: 'AC_PROG_LIBTOOL' below.
@@ -484,7 +515,7 @@ hc_error=no
 #  statements coded somewhere. We place them all here simply for convenience.
 
 AH_TEMPLATE( [CUSTOM_BUILD_STRING],     [Define to provide additional information about this build] )
-AH_TEMPLATE( [MAX_CPU_ENGINES],         [Defines the maximum number of emulated CPU engines] )
+AH_TEMPLATE( [MAX_CPU_ENGS],            [Defines the maximum number of emulated CPU engines] )
 AH_TEMPLATE( [HOST_ARCH],               [Define as quoted 'target_cpu' value = target host CPU architecture] )
 AH_TEMPLATE( [DEBUG],                   [Define to enable extra debugging code (TRACE/VERIFY/ASSERT macros)] )
 AH_TEMPLATE( [C99_FLEXIBLE_ARRAYS],     [Define if your gcc properly supports C99 flexible arrays] )
@@ -540,6 +571,8 @@ AH_TEMPLATE( [HAVE_SWAP_BUILTINS],           [Define if '__builtin_bswap32' and 
 AH_TEMPLATE( [HAVE_SYNC_BUILTINS],           [Define if '__sync_xor_and_fetch' and friends are available] )
 AH_TEMPLATE( [HAVE_PTHREAD_SETNAME_NP],      [Define if 'pthread_setname_np()' is available] )
 AH_TEMPLATE( [PTHREAD_SET_NAME_ONLY],        [Define if 'pthread_setname_np()' takes only name argument] )
+AH_TEMPLATE( [PTHREAD_SET_NAME_3ARGS],       [Define if 'pthread_setname_np()' takes 3 arguments like NetBSD] )
+AH_TEMPLATE( [HAVE_PTHREAD_RWLOCKATTR_SETPSHARED], [Define if 'pthread_rwlockattr_setpshared()' is available] )
 
 ###############################################################################
 #   Checks for REQUIRED (non-optional) header files...
@@ -684,7 +717,7 @@ AC_CHECK_HEADERS( linux/ipv6.h,   [hc_cv_have_linux_ipv6_h=yes],   [hc_cv_have_l
       #include <sys/socket.h>
     #endif
 ] )
-AC_CHECK_HEADERS( net/if_var.h,   [hc_cv_have_net_in_var_h=yes],   [hc_cv_have_net_in_var_h=no],
+AC_CHECK_HEADERS( net/if_var.h,   [hc_cv_have_net_if_var_h=yes],   [hc_cv_have_net_if_var_h=no],
 [
     #include <sys/types.h>
     #ifdef HAVE_SYS_SOCKET_H
@@ -700,8 +733,10 @@ AC_CHECK_HEADERS( netinet/in_var.h,  [hc_cv_have_netinet_in_var_h=yes],  [hc_cv_
     #ifdef HAVE_SYS_SOCKET_H
       #include <sys/socket.h>
     #endif
-    #ifdef HAVE_NET_IF_VAR_H
+    #ifdef HAVE_NET_IF_H
       #include <net/if.h>
+    #endif
+    #ifdef HAVE_NET_IF_VAR_H
       #include <net/if_var.h>
     #endif
     #ifdef HAVE_NETINET_IN_H
@@ -714,8 +749,10 @@ AC_CHECK_HEADERS( netinet6/in6_var.h,  [hc_cv_have_netinet6_in6_var_h=yes],  [hc
     #ifdef HAVE_SYS_SOCKET_H
       #include <sys/socket.h>
     #endif
-    #ifdef HAVE_NET_IF_VAR_H
+    #ifdef HAVE_NET_IF_H
       #include <net/if.h>
+    #endif
+    #ifdef HAVE_NET_IF_VAR_H
       #include <net/if_var.h>
     #endif
     #ifdef HAVE_NETINET_IN_VAR_H
@@ -916,8 +953,7 @@ AC_CACHE_SAVE()
 #   Checks for types...
 ###############################################################################
 
-AC_CHECK_TYPES(__int128_t,  [hc_cv_have_int128_t=yes],   [hc_cv_have_int128_t=no]   )
-AC_CHECK_TYPES(__uint128_t, [hc_cv_have_u_int128_t=yes], [hc_cv_have_u_int128_t=no] )
+AC_CHECK_TYPES(__int128_t,  [hc_cv_have___int128_t=yes], [hc_cv_have___int128_t=no] )
 AC_CHECK_TYPES( u_int8_t,   [hc_cv_have_u_int8_t=yes],   [hc_cv_have_u_int8_t=no]   )
 AC_CHECK_TYPES( useconds_t, [hc_cv_have_useconds_t=yes], [hc_cv_have_useconds_t=no] )
 AC_CHECK_TYPES( id_t,       [hc_cv_have_id_t=yes],       [hc_cv_have_id_t=no]       )
@@ -1011,6 +1047,9 @@ AC_CACHE_SAVE()
 AC_CHECK_FUNCS( pthread_setname_np,
     [hc_cv_have_pthread_setname_np=yes],
     [hc_cv_have_pthread_setname_np=no] )
+AC_CHECK_FUNCS( pthread_rwlockattr_setpshared,
+    [hc_cv_have_pthread_rwlockattr_setpshared=yes],
+    [hc_cv_have_pthread_rwlockattr_setpshared=no] )
 AC_CHECK_FUNCS( memrchr )
 AC_CHECK_FUNCS( getopt_long )
 AC_CHECK_FUNCS( sqrtl ldexpl fabsl fmodl frexpl )
@@ -1139,10 +1178,16 @@ AC_CHECK_MEMBERS( [struct in6_ifreq.ifr_ifru.ifru_flags],
     #ifdef HAVE_LINUX_IPV6_H
       #include <linux/ipv6.h>
     #endif
-    #ifdef HAVE_NETINET6_IN6_VAR_H
+    #ifdef HAVE_NET_IF_H
       #include <net/if.h>
+    #endif
+    #ifdef HAVE_NET_IF_VAR_H
       #include <net/if_var.h>
+    #endif
+    #ifdef HAVE_NETINET_IN_H
       #include <netinet/in.h>
+    #endif
+    #ifdef HAVE_NETINET6_IN6_VAR_H
       #include <netinet/in_var.h>  // Not the ipv6 file, please
     #endif
 ] )
@@ -1202,7 +1247,7 @@ AC_CHECK_SIZEOF(size_t)
 AC_CHECK_SIZEOF(int *)
 AC_CHECK_SIZEOF(off_t)
 
-if test "$hc_cv_have_pthread_h" == "yes"; then
+if test "$hc_cv_have_pthread_h" = "yes"; then
   AC_CHECK_SIZEOF(pthread_t)
 fi
 
@@ -1865,6 +1910,31 @@ if test "$hc_cv_have_pthread_setname_np" = "yes"; then
 
 fi
 
+#-------------------------------------------------#
+# Check if 'pthread_setname_np' takes 3 arguments #
+#-------------------------------------------------#
+
+if test "$hc_cv_have_pthread_setname_np" = "yes"; then
+
+  AC_CACHE_CHECK( [if 'pthread_setname_np' takes 3 arguments],
+
+      [hc_cv_pthread_set_name_3args],
+      [
+          AC_COMPILE_IFELSE(
+          [
+              #include <pthread.h>
+              void main()
+              {
+                  pthread_setname_np( pthread_self(), "%s", "main" );
+              }
+          ],
+          [hc_cv_pthread_set_name_3args=yes],
+          [hc_cv_pthread_set_name_3args=no] )
+      ]
+  )
+
+fi
+
 #------------------------------------------------------#
 #  Test for GCC strict aliasing insanity               #
 #------------------------------------------------------#
@@ -2268,17 +2338,33 @@ AC_ARG_ENABLE( fthreads,
 # "There is no support in GCC for expressing an integer constant of type
 #  __int128 for targets with long long integer less than 128 bits wide."
 
-if test "$hc_cv_have_u_int128_t" != "yes"; then
+if test "$hc_cv_have___int128_t" != "yes"; then
   hc_cv_max_cpu_engines=64
+  AC_MSG_NOTICE( [NOTICE: __int128_t NOT supported; max CPU engines = ${hc_cv_max_cpu_engines}] )
 else
-  AC_PREPROC_IFELSE([AC_LANG_SOURCE([
-    #if SIZEOF_LONG_LONG < 16
-    #error native 128-bit integers are not supported
-    #endif
-    ])],
-    [hc_cv_max_cpu_engines=128],
-    [hc_cv_max_cpu_engines=64]
+  AC_TRY_RUN(
+      [
+          #include <stdio.h>
+          #include <stdlib.h>
+
+          int main()
+          {
+              __int128_t  foo;
+              if (sizeof( foo ) >= 16)
+                return 0;
+              else
+                return -1;
+          }
+      ],
+      [hc_cv_max_cpu_engines=128],
+      [hc_cv_max_cpu_engines=64],
+      [hc_cv_max_cpu_engines=64]
   )
+  if test "${hc_cv_max_cpu_engines}" = "128"; then
+    AC_MSG_NOTICE( [NOTICE: sizeof(__int128_t) >= 16; max CPU engines = ${hc_cv_max_cpu_engines}] )
+  else
+    AC_MSG_NOTICE( [NOTICE: sizeof(__int128_t) < 16; max CPU engines = ${hc_cv_max_cpu_engines}] )
+  fi
 fi
 
 hc_cv_default_num_cpu_engines=8
@@ -2788,8 +2874,8 @@ if test "x$hc_cv_opt_custom_build_str" != "x"; then
     AC_DEFINE_UNQUOTED( [CUSTOM_BUILD_STRING], "${hc_cv_opt_custom_build_str}" )
 fi
 
-AC_DEFINE_UNQUOTED( [MAX_CPU_ENGINES],  ${hc_cv_opt_num_cpu_engines} )
-AC_DEFINE_UNQUOTED( [HOST_ARCH],       "${target_cpu}" )
+AC_DEFINE_UNQUOTED( [MAX_CPU_ENGS],  ${hc_cv_opt_num_cpu_engines} )
+AC_DEFINE_UNQUOTED( [HOST_ARCH],    "${target_cpu}" )
 
 AC_DEFINE_UNQUOTED( [C11_ATOMIC_BOOL_LOCK_FREE],     ${hc_cv_c11_atomic_bool_lock_free}     )
 AC_DEFINE_UNQUOTED( [C11_ATOMIC_CHAR_LOCK_FREE],     ${hc_cv_c11_atomic_char_lock_free}     )
@@ -2848,7 +2934,9 @@ test "$hc_cv_swap_builtins_available"     = "yes"  &&  AC_DEFINE(HAVE_SWAP_BUILT
 test "$hc_cv_sync_builtins_available"     = "yes"  &&  AC_DEFINE(HAVE_SYNC_BUILTINS)
 test "$hc_cv_have_pthread_setname_np"     = "yes"  &&  AC_DEFINE(HAVE_PTHREAD_SETNAME_NP)
 test "$hc_cv_pthread_set_name_only"       = "yes"  &&  AC_DEFINE(PTHREAD_SET_NAME_ONLY)
-test "$enable_interlocked_access_facility_2" = "no" && AC_DEFINE(DISABLE_IAF2)
+test "$hc_cv_pthread_set_name_3args"      = "yes"  &&  AC_DEFINE(PTHREAD_SET_NAME_3ARGS)
+test "$hc_cv_have_pthread_rwlockattr_setpshared" = "yes" && AC_DEFINE(HAVE_PTHREAD_RWLOCKATTR_SETPSHARED)
+test "$enable_interlocked_access_facility_2"     = "no"  && AC_DEFINE(DISABLE_IAF2)
 test "$hc_cv_have_gcc_diag_pragma"         = "yes" &&  AC_DEFINE(HAVE_GCC_DIAG_PRAGMA)
 test "$hc_cv_have_gcc_diag_pushpop"        = "yes" &&  AC_DEFINE(HAVE_GCC_DIAG_PUSHPOP)
 test "$hc_cv_have_gcc_unused_func_warning" = "yes" &&  AC_DEFINE(HAVE_GCC_UNUSED_FUNC_WARNING)

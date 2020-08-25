@@ -231,7 +231,7 @@ int aea_cmd( int argc, char* argv[], char* cmdline )
             // HHC02282 == "%s"  // (aea_cmd)
             WRMSG( HHC02282, "I", "aea SIE" );
 
-            regs = regs->guestregs;
+            regs = GUESTREGS;
             report_aea( regs );
         }
     }
@@ -367,7 +367,7 @@ DLL_EXPORT int aia_cmd( int argc, char* argv[], char* cmdline )
         {
             char wrk[128];
 
-            regs = regs->guestregs;
+            regs = GUESTREGS;
 
             MSGBUF( wrk, "AIV %16.16"PRIx64" aip %p ip %p aie %p"
 
@@ -456,8 +456,8 @@ int tlb_cmd(int argc, char *argv[], char *cmdline)
 
     if (regs->sie_active)
     {
-        regs = regs->guestregs;
-        shift = regs->guestregs->arch_mode == ARCH_370_IDX ? 11 : 12;
+        regs = GUESTREGS;
+        shift = GUESTREGS->arch_mode == ARCH_370_IDX ? 11 : 12;
         bytemask = regs->arch_mode == ARCH_370_IDX ? 0x1FFFFF : 0x3FFFFF;
         pagemask = regs->arch_mode == ARCH_370_IDX ? 0x00E00000 :
                    regs->arch_mode == ARCH_390_IDX ? 0x7FC00000 :
@@ -1158,8 +1158,284 @@ int trace_cmd( int argc, char* argv[], char* cmdline )
     if (sysblk.auto_trace_beg || sysblk.auto_trace_amt)
         panel_command( "-t+-" );
 
+#if defined( _FEATURE_073_TRANSACT_EXEC_FACILITY )
+    /* Also show txf tracing settings if enabled */
+    if (sysblk.txf_tracing & TXF_TR_INSTR)
+        panel_command( "-txf" );
+#endif
+
     return 0;
 }
+
+
+#if defined( _FEATURE_073_TRANSACT_EXEC_FACILITY )
+/*-------------------------------------------------------------------*/
+/* txf_cmd - control TXF tracing                                     */
+/*-------------------------------------------------------------------*/
+int txf_cmd( int argc, char* argv[], char* cmdline )
+{
+    U32  txf_tracing  = sysblk.txf_tracing;
+    U32  txf_why_mask = sysblk.txf_why_mask;
+    int  txf_tac      = sysblk.txf_tac;
+    int  txf_tnd      = sysblk.txf_tnd;
+    int  txf_cpuad    = sysblk.txf_cpuad;
+    int  txf_cfails   = sysblk.txf_cfails;
+    int  rc           = 0;
+    char c;
+
+    UNREFERENCED( cmdline );
+
+    // txf  [0 | [INSTR] [U] [C] [GOOD] [BAD] [TDB] [PAGES|LINES]
+    //      [WHY hhhhhhhh] [TAC nnn] [TND nn] [CPU nnn] [CFAILS nn] ]
+
+    if (argc > 1)  // (define new settings?)
+    {
+        // Disable all TXF tracing?
+        if (str_caseless_eq( argv[1], "0"))
+        {
+            if (argc > 2)
+                rc = -1;
+            else
+                txf_tracing = 0;
+        }
+        else // Define new options...
+        {
+            int i;
+
+            txf_tracing  = 0;
+            txf_why_mask = 0;
+            txf_tac      = 0;
+            txf_tnd      = 0;    
+            txf_cpuad    = -1;
+            txf_cfails   = 0;
+
+            for (i=1; i < argc; ++i)
+            {
+                     if (str_caseless_eq( argv[i], "INSTR"   )) txf_tracing |= TXF_TR_INSTR;
+                else if (str_caseless_eq( argv[i], "U"       )) txf_tracing |= TXF_TR_U;
+                else if (str_caseless_eq( argv[i], "C"       )) txf_tracing |= TXF_TR_C;
+                else if (str_caseless_eq( argv[i], "GOOD"    )) txf_tracing |= TXF_TR_SUCCESS;
+                else if (str_caseless_eq( argv[i], "SUCCESS" )) txf_tracing |= TXF_TR_SUCCESS;
+                else if (str_caseless_eq( argv[i], "BAD"     )) txf_tracing |= TXF_TR_FAILURE;
+                else if (str_caseless_eq( argv[i], "FAILURE" )) txf_tracing |= TXF_TR_FAILURE;
+                else if (str_caseless_eq( argv[i], "FAIL"    )) txf_tracing |= TXF_TR_FAILURE;
+                else if (str_caseless_eq( argv[i], "TDB"     )) txf_tracing |= TXF_TR_TDB;
+                else if (str_caseless_eq( argv[i], "PAGES"   )) txf_tracing |= TXF_TR_PAGES;
+                else if (str_caseless_eq( argv[i], "LINES"   )) txf_tracing |= TXF_TR_LINES;
+                else if (1
+                    && str_caseless_eq(   argv[i+0], "WHY" )
+                    &&                    argv[i+1]
+                    && sscanf(            argv[i+1], "%"SCNx32"%c", &txf_why_mask, &c ) == 1
+                )
+                {
+                    txf_tracing |= TXF_TR_WHY;
+                    ++i;
+                }
+                else if (1
+                    && str_caseless_eq( argv[i+0], "TAC" )
+                    &&                  argv[i+1]
+                    && (txf_tac = atoi( argv[i+1] )) > 0
+                )
+                {
+                    txf_tracing |= TXF_TR_TAC;
+                    ++i;
+                }
+                else if (1
+                    && str_caseless_eq( argv[i+0], "TND" )
+                    &&                  argv[i+1]
+                    && (txf_tnd = atoi( argv[i+1] )) > 0
+                )
+                {
+                    txf_tracing |= TXF_TR_TND;
+                    ++i;
+                }
+                else if (1
+                    && str_caseless_eq(   argv[i+0], "CPU" )
+                    &&                    argv[i+1]
+                    && (txf_cpuad = atoi( argv[i+1] )) >= 0
+                )
+                {
+                    txf_tracing |= TXF_TR_CPU;
+                    ++i;
+                }
+                else if (1
+                    && str_caseless_eq(    argv[i+0], "CFAILS" )
+                    &&                     argv[i+1]
+                    && (txf_cfails = atoi( argv[i+1] )) > 0
+                )
+                {
+                    txf_tracing |= TXF_TR_CFAILS;
+                    ++i;
+                }
+                else
+                {
+                    rc = -1;
+                    break;
+                }
+            }
+
+            if (rc == 0)
+            {
+                //------------------------------------------------
+                //   If neither U nor C specified, set both.
+                //------------------------------------------------
+                if (!(txf_tracing & (TXF_TR_U | TXF_TR_C)))
+                {
+                    txf_tracing |= (TXF_TR_U | TXF_TR_C);
+                }
+
+                //------------------------------------------------
+                //  If neither GOOD nor BAD specified, set both.
+                //------------------------------------------------
+                if (!(txf_tracing & (TXF_TR_SUCCESS | TXF_TR_FAILURE)))
+                {
+                    txf_tracing |= (TXF_TR_SUCCESS | TXF_TR_FAILURE);
+                }
+
+                //------------------------------------------------
+                //   If WHY, TAC or CFAILS specified, set BAD.
+                //------------------------------------------------
+                if (txf_tracing & (TXF_TR_WHY | TXF_TR_TAC | TXF_TR_CFAILS))
+                {
+                    txf_tracing |= TXF_TR_FAILURE;
+                }
+
+                //------------------------------------------------
+                //   If CFAILS specified, set C BAD.
+                //------------------------------------------------
+                if (txf_tracing & TXF_TR_CFAILS)
+                {
+                    txf_tracing |= (TXF_TR_C | TXF_TR_FAILURE);
+                }
+
+                //------------------------------------------------
+                //      If LINES specified, set PAGES too.
+                //------------------------------------------------
+                if (txf_tracing & TXF_TR_LINES)
+                {
+                    txf_tracing |= TXF_TR_PAGES;
+                }
+
+                //------------------------------------------------
+                //     Ignore TDB unless BAD also specified.
+                //------------------------------------------------
+                if (!(txf_tracing & TXF_TR_FAILURE))
+                {
+                    txf_tracing &= ~TXF_TR_TDB;
+                }
+
+                //------------------------------------------------
+                //     Ignore WHY unless BAD also specified.
+                //------------------------------------------------
+                if (!(txf_tracing & TXF_TR_FAILURE))
+                {
+                    txf_tracing &= ~TXF_TR_WHY;
+                    txf_why_mask = 0;
+                }
+
+                //------------------------------------------------
+                //     Ignore TAC unless BAD also specified.
+                //------------------------------------------------
+                if (!(txf_tracing & TXF_TR_FAILURE))
+                {
+                    txf_tracing &= ~TXF_TR_TAC;
+                    txf_tac = 0;
+                }
+
+                //------------------------------------------------
+                //     Ignore CFAILS unless BAD also specified.
+                //------------------------------------------------
+                if (!(txf_tracing & TXF_TR_FAILURE))
+                {
+                    txf_tracing &= ~TXF_TR_CFAILS;
+                    txf_cfails = 0;
+                }
+
+                //------------------------------------------------
+                //     Ignore CFAILS unless C also specified.
+                //------------------------------------------------
+                if (!(txf_tracing & TXF_TR_C))
+                {
+                    txf_tracing &= ~TXF_TR_CFAILS;
+                    txf_cfails = 0;
+                }
+            }
+        }
+
+        if (rc == 0)
+        {
+            sysblk.txf_tracing  = txf_tracing;
+            sysblk.txf_why_mask = txf_why_mask;
+            sysblk.txf_tac      = txf_tac;
+            sysblk.txf_tnd      = txf_tnd;
+            sysblk.txf_cpuad    = txf_cpuad;
+            sysblk.txf_cfails   = txf_cfails;
+        }
+    }
+
+    if (rc != 0)
+    {
+        // "Invalid command usage. Type 'help %s' for assistance."
+        WRMSG( HHC02299, "E", argv[0] );
+    }
+    else // Display new/current settings
+    {
+        char buf[1024] = {0};
+
+        // txf  [0 | [INSTR] [U] [C] [GOOD] [BAD] [TDB] [PAGES|LINES]
+        //      [WHY hhhhhhhh] [TAC nnn] [TND nn] [CPU nnn] [CFAILS nn] ]
+
+        if (txf_tracing)
+        {
+            char why[256] = {0}; // WHY hhhhhhhh (xxx xxx xxx ... )
+            char tac[64]  = {0};
+            char tnd[32]  = {0};
+            char cpu[32]  = {0};
+            char cfl[32]  = {0};
+  
+            if (txf_why_mask)    MSGBUF( why, "WHY 0x%8.8"PRIX32" ",  txf_why_mask );
+            if (txf_tac    >  0) MSGBUF( tac, "TAC %d ",              txf_tac      );
+            if (txf_tnd    >  0) MSGBUF( tnd, "TND %d ",              txf_tnd      );
+            if (txf_cpuad  >= 0) MSGBUF( cpu, "CPU %d ",              txf_cpuad    );
+            if (txf_cfails >  0) MSGBUF( cfl, "CFAILS %d ",           txf_cfails   );
+
+            MSGBUF( buf, "%s%s%s%s%s%s%s%s" "%s%s%s%s%s"
+
+                , txf_tracing & TXF_TR_INSTR   ? "INSTR " : ""
+                , txf_tracing & TXF_TR_U       ? "U "     : ""
+                , txf_tracing & TXF_TR_C       ? "C "     : ""
+                , txf_tracing & TXF_TR_SUCCESS ? "GOOD "  : ""
+                , txf_tracing & TXF_TR_FAILURE ? "BAD "   : ""
+                , txf_tracing & TXF_TR_TDB     ? "TDB "   : ""
+                , txf_tracing & TXF_TR_PAGES   ? "PAGES " : ""
+                , txf_tracing & TXF_TR_LINES   ? "LINES " : ""
+
+                , why
+                , tac
+                , tnd
+                , cpu
+                , cfl
+            );
+            RTRIM( buf );
+        }
+
+        UPPER_ARGV_0( argv );
+
+        if (argc > 1)  // Defined new options...
+        {
+            // "%-14s set to %s"
+            WRMSG( HHC02204, "I", argv[0], buf );
+        }
+        else // Display current settings...
+        {
+            // "%-14s: %s"
+            WRMSG( HHC02203, "I", argv[0], buf );
+        }
+    }
+
+    return rc;
+}
+#endif /* defined( _FEATURE_073_TRANSACT_EXEC_FACILITY ) */
 
 
 /*-------------------------------------------------------------------*/
@@ -1369,36 +1645,36 @@ int ipending_cmd(int argc, char *argv[], char *cmdline)
         {
             WRMSG( HHC00850, "I", "IE", sysblk.regs[i]->cpuad,
                             IC_INTERRUPT_CPU(sysblk.regs[i]),
-                            sysblk.regs[i]->guestregs->ints_state,
-                            sysblk.regs[i]->guestregs->ints_mask);
+                            GUEST( sysblk.regs[i] )->ints_state,
+                            GUEST( sysblk.regs[i] )->ints_mask);
             WRMSG( HHC00851, "I", "IE", sysblk.regs[i]->cpuad,
-                            IS_IC_INTERRUPT(sysblk.regs[i]->guestregs) ? "" : "not ");
+                            IS_IC_INTERRUPT( GUEST( sysblk.regs[i] )) ? "" : "not ");
             WRMSG( HHC00852, "I", "IE", sysblk.regs[i]->cpuad, IS_IC_IOPENDING ? "" : "not ");
-            WRMSG( HHC00853, "I", "IE", sysblk.regs[i]->cpuad, IS_IC_CLKC(sysblk.regs[i]->guestregs) ? "" : "not ");
-            WRMSG( HHC00854, "I", "IE", sysblk.regs[i]->cpuad, IS_IC_PTIMER(sysblk.regs[i]->guestregs) ? "" : "not ");
-            WRMSG( HHC00855, "I", "IE", sysblk.regs[i]->cpuad, IS_IC_ITIMER(sysblk.regs[i]->guestregs) ? "" : "not ");
-            WRMSG( HHC00857, "I", "IE", sysblk.regs[i]->cpuad, IS_IC_EXTCALL(sysblk.regs[i]->guestregs) ? "" : "not ");
-            WRMSG( HHC00858, "I", "IE", sysblk.regs[i]->cpuad, IS_IC_EMERSIG(sysblk.regs[i]->guestregs) ? "" : "not ");
-            WRMSG( HHC00859, "I", "IE", sysblk.regs[i]->cpuad, IS_IC_MCKPENDING(sysblk.regs[i]->guestregs) ? "" : "not ");
+            WRMSG( HHC00853, "I", "IE", sysblk.regs[i]->cpuad, IS_IC_CLKC(       GUEST( sysblk.regs[i] )) ? "" : "not ");
+            WRMSG( HHC00854, "I", "IE", sysblk.regs[i]->cpuad, IS_IC_PTIMER(     GUEST( sysblk.regs[i] )) ? "" : "not ");
+            WRMSG( HHC00855, "I", "IE", sysblk.regs[i]->cpuad, IS_IC_ITIMER(     GUEST( sysblk.regs[i] )) ? "" : "not ");
+            WRMSG( HHC00857, "I", "IE", sysblk.regs[i]->cpuad, IS_IC_EXTCALL(    GUEST( sysblk.regs[i] )) ? "" : "not ");
+            WRMSG( HHC00858, "I", "IE", sysblk.regs[i]->cpuad, IS_IC_EMERSIG(    GUEST( sysblk.regs[i] )) ? "" : "not ");
+            WRMSG( HHC00859, "I", "IE", sysblk.regs[i]->cpuad, IS_IC_MCKPENDING( GUEST( sysblk.regs[i] )) ? "" : "not ");
             WRMSG( HHC00860, "I", "IE", sysblk.regs[i]->cpuad, IS_IC_SERVSIG ? "" : "not ");
             WRMSG( HHC00864, "I", "IE", sysblk.regs[i]->cpuad, test_lock(&sysblk.cpulock[i]) ? "" : "not ");
 
             if (ARCH_370_IDX == sysblk.arch_mode)
             {
-                if (0xFFFF == sysblk.regs[i]->guestregs->chanset)
+                if (0xFFFF == GUEST( sysblk.regs[i] )->chanset)
                 {
                     MSGBUF( buf, "none");
                 }
                 else
                 {
-                    MSGBUF( buf, "%4.4X", sysblk.regs[i]->guestregs->chanset);
+                    MSGBUF( buf, "%4.4X", GUEST( sysblk.regs[i] )->chanset);
                 }
                 WRMSG( HHC00865, "I", "IE", sysblk.regs[i]->cpuad, buf );
             }
-            WRMSG( HHC00866, "I", "IE", sysblk.regs[i]->cpuad, states[sysblk.regs[i]->guestregs->cpustate]);
-            WRMSG( HHC00867, "I", "IE", sysblk.regs[i]->cpuad, (S64)sysblk.regs[i]->guestregs->instcount);
-            WRMSG( HHC00868, "I", "IE", sysblk.regs[i]->cpuad, sysblk.regs[i]->guestregs->siototal);
-            copy_psw(sysblk.regs[i]->guestregs, curpsw);
+            WRMSG( HHC00866, "I", "IE", sysblk.regs[i]->cpuad, states[ GUEST( sysblk.regs[i] )->cpustate ]);
+            WRMSG( HHC00867, "I", "IE", sysblk.regs[i]->cpuad, (S64)GUEST( sysblk.regs[i] )->instcount);
+            WRMSG( HHC00868, "I", "IE", sysblk.regs[i]->cpuad, GUEST( sysblk.regs[i] )->siototal);
+            copy_psw( GUEST( sysblk.regs[i] ), curpsw );
             if (ARCH_900_IDX == sysblk.arch_mode)
             {
                MSGBUF( buf, "%2.2X%2.2X%2.2X%2.2X%2.2X%2.2X%2.2X%2.2X %2.2X%2.2X%2.2X%2.2X%2.2X%2.2X%2.2X%2.2X",
@@ -2139,7 +2415,7 @@ void setCpuIdregs
     U16  MCEL;
 
     /* Return if CPU out-of-range */
-    if (regs->cpuad >= MAX_CPU_ENGINES)
+    if (regs->cpuad >= MAX_CPU_ENGS)
         return;
 
     /* Gather needed values */
@@ -2220,7 +2496,7 @@ void setCpuId
     REGS*  regs;
 
     /* Return if CPU out-of-range */
-    if (cpu >= MAX_CPU_ENGINES)
+    if (cpu >= MAX_CPU_ENGS)
         return;
 
     /* Return if CPU undefined */
@@ -2284,7 +2560,7 @@ BYTE setAllCpuIds( const S32 model, const S16 version, const S32 serial, const S
     sysblk.cpuid = createCpuId( sysblk.cpumodel, sysblk.cpuversion, sysblk.cpuserial, mcel );
 
     /* Set a tailored CPU ID for each and every defined CPU */
-    for (cpu=0; cpu < MAX_CPU_ENGINES; ++cpu )
+    for (cpu=0; cpu < MAX_CPU_ENGS; ++cpu )
         setCpuId( cpu, model, version, serial, MCEL );
 
    return TRUE;

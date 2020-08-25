@@ -294,8 +294,18 @@ auth_addr_excp:
 /*      If successful, the ASTE is copied into the 16-word area,     */
 /*      the real address of the ASTE is stored into the word pointed */
 /*      word pointed to by asteop, and the return value is zero;     */
+#if defined( OPTION_GH275_PIC12_FIX )
+/*                                                                   */
+/*      regs->dat.pvtaddr is set to 1 if the private address space   */
+/*      bit in the ALE is set, otherwise it is set to zero.          */
+/*                                                                   */
+/*      regs->dat.protect is set to 2 if the fetch-only bit in the   */
+/*      ALE is set and acctype specifies write access, otherwise     */
+/*      it is set to zero.                                           */
+#else
 /*      regs->dat.protect is set to 2 if the fetch-only bit          */
 /*      in the ALE is set, otherwise it is set to zero.              */
+#endif
 /*                                                                   */
 /*      If unsuccessful, the return value is a non-zero exception    */
 /*      code in the range X'0028' through X'002D' (this is to allow  */
@@ -320,7 +330,11 @@ U32     abs;                            /* Absolute address          */
 BYTE   *mn;                             /* Mainstor address          */
 int     i;                              /* Array subscript           */
 
+#if defined( OPTION_GH275_PIC12_FIX )
+    regs->dat.pvtaddr = regs->dat.protect = 0;
+#else // (original code)
     regs->dat.protect = 0;
+#endif
 
     /* [5.8.4.3] Check the reserved bits in the ALET */
     if ( alet & ALET_RESV )
@@ -436,11 +450,27 @@ int     i;                              /* Array subscript           */
                 goto ext_auth_excp;
         }
 
-    } /* end if(!ACCTYPE_BSG) */
+    } /* end if(!ACC_SPECIAL_ART) */
+
+#if defined( OPTION_GH275_PIC12_FIX )
+
+    /* Check for private space */
+    if (ale[0] & ALE0_PRIVATE)
+        regs->dat.pvtaddr = 1;
+
+    /* [5.8.4.8] Check for access-list controlled protection */
+    if (ale[0] & ALE0_FETCHONLY)
+    {
+        if (acctype & (ACC_WRITE|ACC_CHECK))
+            regs->dat.protect = 2;
+    }
+
+#else // (original code)
 
     /* [5.8.4.8] Check for access-list controlled protection */
     if (ale[0] & ALE0_FETCHONLY)
         regs->dat.protect = 2;
+#endif
 
     /* Return the ASTE origin address */
     *asteo = aste_addr;
@@ -502,10 +532,10 @@ int i;
         if(regs->AEA_AR(i) >= CR_ALB_OFFSET)
             regs->AEA_AR(i) = 0;
 
-    if(regs->host && regs->guestregs)
+    if(regs->host && GUESTREGS)
         for(i = 1; i < 16; i++)
-            if(regs->guestregs->AEA_AR(i) >= CR_ALB_OFFSET)
-                regs->guestregs->AEA_AR(i) = 0;
+            if(GUESTREGS->AEA_AR(i) >= CR_ALB_OFFSET)
+                GUESTREGS->AEA_AR(i) = 0;
 
 } /* end function purge_alb */
 
@@ -625,7 +655,7 @@ U16     eax;                            /* Authorization index       */
 
     #if defined(FEATURE_ACCESS_REGISTERS)
         if (ACCESS_REGISTER_MODE(&regs->psw)
-         || (SIE_ACTIVE(regs) && MULTIPLE_CONTROLLED_DATA_SPACE(regs->guestregs))
+         || (SIE_ACTIVE(regs) && MULTIPLE_CONTROLLED_DATA_SPACE(GUESTREGS))
          || (arn >= USE_ARMODE)
            )
         {
@@ -635,8 +665,8 @@ U16     eax;                            /* Authorization index       */
             /* [5.8.4.1] Select the access-list-entry token */
             alet = (arn == 0) ? 0 :
                    /* Guest ALET if XC guest in AR mode */
-                   (SIE_ACTIVE(regs) && MULTIPLE_CONTROLLED_DATA_SPACE(regs->guestregs))
-                   ? regs->guestregs->AR(arn) :
+                   (SIE_ACTIVE(regs) && MULTIPLE_CONTROLLED_DATA_SPACE(GUESTREGS))
+                   ? GUESTREGS->AR(arn) :
                    /* If SIE host but not XC guest in AR mode then alet is 0 */
                    SIE_ACTIVE(regs) ? 0 :
                    /* Otherwise alet is in the access register */
@@ -679,7 +709,15 @@ U16     eax;                            /* Authorization index       */
                     /* [5.8.4.9] Obtain the STD or ASCE from the ASTE */
                     regs->dat.asd = ASTE_AS_DESIGNATOR(aste);
                     regs->dat.stid = TEA_ST_ARMODE;
-                    if(regs->dat.protect & 2)
+
+#if defined( OPTION_GH275_PIC12_FIX )
+
+                    if (regs->dat.pvtaddr)
+
+#else // (original code)
+
+                    if (regs->dat.protect & 2)
+#endif
                     {
                 #if defined(FEATURE_001_ZARCH_INSTALLED_FACILITY)
                        regs->dat.asd ^= ASCE_RESV;
@@ -959,7 +997,7 @@ U32     ptl;                            /* Page table length         */
             regs->tlb.common[tlbix]    = (ste & SEGTAB_370_CMN) ? 1 : 0;
             regs->tlb.protect[tlbix]   = regs->dat.protect;
             regs->tlb.acc[tlbix]       = 0;
-            regs->tlb.main[tlbix]       = NULL;
+            regs->tlb.main[tlbix]      = NULL;
 
         /* Set adjacent TLB entry if 4K page sizes */
             if ((regs->CR(0) & CR0_PAGE_SIZE) == CR0_PAGE_SZ_4K)
@@ -1097,7 +1135,7 @@ U32     ptl;                            /* Page table length         */
             regs->tlb.common[tlbix]    = (ste & SEGTAB_COMMON) ? 1 : 0;
             regs->tlb.acc[tlbix]       = 0;
             regs->tlb.protect[tlbix]   = regs->dat.protect;
-            regs->tlb.main[tlbix]       = NULL;
+            regs->tlb.main[tlbix]      = NULL;
         }
     } /* end if(!TLB) */
 
@@ -1140,7 +1178,7 @@ U16     sx, px;                         /* Segment and page index,
     /* Extract the private space bit from the ASCE */
     regs->dat.pvtaddr = ((regs->dat.asd & (ASCE_P|ASCE_R)) != 0);
 
-//  logmsg("asce=%16.16"PRIX64"\n",regs->dat.asd);
+//  LOGMSG("asce=%16.16"PRIX64"\n",regs->dat.asd);
 
     /* [3.11.4] Look up the address in the TLB */
     if (   ((vaddr & TLBID_PAGEMASK) | regs->tlbID) == regs->tlb.TLB_VADDR(tlbix)
@@ -1157,7 +1195,7 @@ U16     sx, px;                         /* Segment and page index,
         /* If ASCE indicates a real-space then real addr = virtual addr */
         if (regs->dat.asd & ASCE_R)
         {
-//      logmsg("asce type = real\n");
+//      LOGMSG("asce type = real\n");
 
             /* Translation specification exception if LKPG for a real-space */
             if(acctype & ACC_PTE)
@@ -1228,7 +1266,7 @@ U16     sx, px;                         /* Segment and page index,
                    All bytes must be fetched concurrently as observed by
                    other CPUs */
                 rte = ARCH_DEP(fetch_doubleword_absolute) (rto, regs);
-//              logmsg("r1te:%16.16"PRIX64"=>%16.16"PRIX64"\n",rto,rte);
+//              LOGMSG("r1te:%16.16"PRIX64"=>%16.16"PRIX64"\n",rto,rte);
 
                 /* Region-first translation exception if the bit 58 of
                    the region-first table entry is set (region invalid) */
@@ -1282,7 +1320,7 @@ U16     sx, px;                         /* Segment and page index,
                    All bytes must be fetched concurrently as observed by
                    other CPUs */
                 rte = ARCH_DEP(fetch_doubleword_absolute) (rto, regs);
-//              logmsg("r2te:%16.16"PRIX64"=>%16.16"PRIX64"\n",rto,rte);
+//              LOGMSG("r2te:%16.16"PRIX64"=>%16.16"PRIX64"\n",rto,rte);
 
                 /* Region-second translation exception if the bit 58 of
                    the region-second table entry is set (region invalid) */
@@ -1336,7 +1374,7 @@ U16     sx, px;                         /* Segment and page index,
                    All bytes must be fetched concurrently as observed by
                    other CPUs */
                 rte = ARCH_DEP(fetch_doubleword_absolute) (rto, regs);
-//              logmsg("r3te:%16.16"PRIX64"=>%16.16"PRIX64"\n",rto,rte);
+//              LOGMSG("r3te:%16.16"PRIX64"=>%16.16"PRIX64"\n",rto,rte);
 
                 /* Region-third translation exception if the bit 58 of
                    the region-third table entry is set (region invalid) */
@@ -1388,7 +1426,7 @@ U16     sx, px;                         /* Segment and page index,
             /* Fetch segment table entry from absolute storage.  All bytes
                must be fetched concurrently as observed by other CPUs */
             ste = ARCH_DEP(fetch_doubleword_absolute) (sto, regs);
-//          logmsg("ste:%16.16"PRIX64"=>%16.16"PRIX64"\n",sto,ste);
+//          LOGMSG("ste:%16.16"PRIX64"=>%16.16"PRIX64"\n",sto,ste);
 
             /* Segment translation exception if segment invalid */
             if (ste & ZSEGTAB_I)
@@ -1418,7 +1456,7 @@ U16     sx, px;                         /* Segment and page index,
                 if (unlikely(acctype & ACC_LPTEA))
                 {
                     regs->dat.raddr = sto | (regs->dat.protect ? 0x04 : 0);
-//                  logmsg("raddr:%16.16"PRIX64" cc=2\n",regs->dat.raddr);
+//                  LOGMSG("raddr:%16.16"PRIX64" cc=2\n",regs->dat.raddr);
                     regs->dat.xcode = 0;
                     cc = 2;
                     return cc;
@@ -1430,7 +1468,7 @@ U16     sx, px;                         /* Segment and page index,
                 /* Fake 4K PFRA for TLB purposes */
                 regs->dat.rpfra = ((ste & ZSEGTAB_SFAA) | (vaddr & ~ZSEGTAB_SFAA)) & PAGEFRAME_PAGEMASK;
 
-//              logmsg("raddr:%16.16"PRIX64" cc=0\n",regs->dat.raddr);
+//              LOGMSG("raddr:%16.16"PRIX64" cc=0\n",regs->dat.raddr);
 
                 /* [3.11.4.2] Place the translated address in the TLB */
                 if (!(acctype & ACC_NOTLB))
@@ -1483,7 +1521,7 @@ U16     sx, px;                         /* Segment and page index,
             /* Fetch the page table entry from absolute storage.  All bytes
                must be fetched concurrently as observed by other CPUs */
             pte = ARCH_DEP(fetch_doubleword_absolute) (pto, regs);
-//          logmsg("pte:%16.16"PRIX64"=>%16.16"PRIX64"\n",pto,pte);
+//          LOGMSG("pte:%16.16"PRIX64"=>%16.16"PRIX64"\n",pto,pte);
 
             /* Page translation exception if page invalid */
             if (pte & ZPGETAB_I)
@@ -1535,19 +1573,19 @@ U16     sx, px;                         /* Segment and page index,
 /* Conditions which always cause program check, except
    when performing translation for the control panel */
 address_excp:
-//    logmsg("dat.c: addressing exception: %8.8X %8.8X %4.4X %8.8X\n",
+//    LOGMSG("dat.c: addressing exception: %8.8X %8.8X %4.4X %8.8X\n",
 //        regs->CR(0),regs->dat.asd,pte,vaddr);
     regs->dat.xcode = PGM_ADDRESSING_EXCEPTION;
     goto tran_prog_check;
 
 tran_spec_excp:
 #if defined( FEATURE_001_ZARCH_INSTALLED_FACILITY )
-//    logmsg("dat.c: translation specification exception...\n");
-//    logmsg("       pte = %16.16"PRIX64", ste = %16.16"PRIX64", rte=%16.16"PRIX64"\n",
+//    LOGMSG("dat.c: translation specification exception...\n");
+//    LOGMSG("       pte = %16.16"PRIX64", ste = %16.16"PRIX64", rte=%16.16"PRIX64"\n",
 //        pte, ste, rte);
 #else
-//    logmsg("dat.c: translation specification exception...\n");
-//    logmsg("       cr0=%8.8X ste=%8.8X pte=%4.4X vaddr=%8.8X\n",
+//    LOGMSG("dat.c: translation specification exception...\n");
+//    LOGMSG("       cr0=%8.8X ste=%8.8X pte=%4.4X vaddr=%8.8X\n",
 //        regs->CR(0),ste,pte,vaddr);
 #endif
     regs->dat.xcode = PGM_TRANSLATION_SPECIFICATION_EXCEPTION;
@@ -1602,8 +1640,8 @@ page_tran_length:
 #endif
 
 seg_tran_length:
-//  logmsg("dat.c: segment translation exception due to segment length\n");
-//  logmsg("       cr0=" F_RADR " sto=" F_RADR "\n",regs->CR(0),sto);
+//  LOGMSG("dat.c: segment translation exception due to segment length\n");
+//  LOGMSG("       cr0=" F_RADR " sto=" F_RADR "\n",regs->CR(0),sto);
     regs->dat.xcode = PGM_SEGMENT_TRANSLATION_EXCEPTION;
     regs->dat.raddr = sto;
     cc = 3;
@@ -1652,7 +1690,7 @@ reg_third_invalid:
     goto reg_third_excp;
 
 asce_type_excp:
-//  logmsg("rfx = %4.4X, rsx %4.4X, rtx = %4.4X, tt = %1.1X\n",
+//  LOGMSG("rfx = %4.4X, rsx %4.4X, rtx = %4.4X, tt = %1.1X\n",
 //      rfx, rsx, rtx, tt);
     regs->dat.xcode = PGM_ASCE_TYPE_EXCEPTION;
     cc = 4;
@@ -1728,7 +1766,7 @@ tran_excp_addr:
 #endif
     /* Set the exception access identification */
     if (ACCESS_REGISTER_MODE(&regs->psw)
-     || (SIE_ACTIVE(regs) && MULTIPLE_CONTROLLED_DATA_SPACE(regs->guestregs))
+     || (SIE_ACTIVE(regs) && MULTIPLE_CONTROLLED_DATA_SPACE(GUESTREGS))
        )
        regs->excarid = arn < 0 ? 0 : arn;
 
@@ -1744,20 +1782,23 @@ tran_excp_addr:
 void ARCH_DEP(purge_tlb) (REGS *regs)
 {
     INVALIDATE_AIA(regs);
+
     if (((++regs->tlbID) & TLBID_BYTEMASK) == 0)
     {
         memset(&regs->tlb.vaddr, 0, TLBN * sizeof(DW) );
         regs->tlbID = 1;
     }
+
 #if defined(_FEATURE_SIE)
     /* Also clear the guest registers in the SIE copy */
-    if(regs->host && regs->guestregs)
+    if(regs->host && GUESTREGS)
     {
-        INVALIDATE_AIA(regs->guestregs);
-        if (((++regs->guestregs->tlbID) & TLBID_BYTEMASK) == 0)
+        INVALIDATE_AIA(GUESTREGS);
+
+        if (((++GUESTREGS->tlbID) & TLBID_BYTEMASK) == 0)
         {
-            memset(&regs->guestregs->tlb.vaddr, 0, TLBN * sizeof(DW));
-            regs->guestregs->tlbID = 1;
+            memset(&GUESTREGS->tlb.vaddr, 0, TLBN * sizeof(DW));
+            GUESTREGS->tlbID = 1;
         }
     }
 #endif /*defined(_FEATURE_SIE)*/
@@ -1805,42 +1846,43 @@ RADR ptemask;
 #endif /* defined(FEATURE_001_ZARCH_INSTALLED_FACILITY) */
 
     INVALIDATE_AIA(regs);
+
     for (i = 0; i < TLBN; i++)
         if ((regs->tlb.TLB_PTE(i) & ptemask) == pte)
             regs->tlb.TLB_VADDR(i) &= TLBID_PAGEMASK;
 
 #if defined(_FEATURE_SIE)
     /* Also clear the guest registers in the SIE copy */
-    if (regs->host && regs->guestregs)
+    if (regs->host && GUESTREGS)
     {
-        INVALIDATE_AIA(regs->guestregs);
+        INVALIDATE_AIA(GUESTREGS);
+
+/**************************************************************************/
+/* The guest registers in the SIE copy TLB PTE entries for DAT-OFF guests */
+/* like CMS do NOT actually contain the PTE (but rather the host primary  */
+/* virtual address, both masked with TBLID_PAGEMASK).  In order to check  */
+/* if such guest TLB entry needs to be cleared, one needs to check the    */
+/* parallel host registers TLB PTE entry.  Hence that the if-test that    */
+/* follows needed to be expanded.  Originally it was just :               */
+/*                                                                        */
+/*          if ((GUESTREGS->tlb.TLB_PTE(i) & ptemask) == pte)       */
+/*                                                                        */
+/* and it is now expanded with the additional test as follows :           */
+/*                                                                        */
+/*                                        (Peter J. Jansen, 29-Jul-2016)  */
+/**************************************************************************/
         for (i = 0; i < TLBN; i++)
-/************************************************************************** @PJJ */
-/* The guest registers in the SIE copy TLB PTE entries for DAT-OFF guests * @PJJ */
-/* like CMS do NOT actually contain the PTE (but rather the host primary  * @PJJ */
-/* virtual address, both masked with TBLID_PAGEMASK).  In order to check  * @PJJ */
-/* if such guest TLB entry needs to be cleared, one needs to check the    * @PJJ */
-/* parallel host registers TLB PTE entry.  Hence that the if-test that    * @PJJ */
-/* follows needed to be expanded.  Originally it was just :               * @PJJ */
-/*                                                                        * @PJJ */
-/*          if ((regs->guestregs->tlb.TLB_PTE(i) & ptemask) == pte)       * @PJJ */
-/*                                                                        * @PJJ */
-/* and it is now expanded with the additional test as follows :           * @PJJ */
-/*                                                                        * @PJJ */
-/*                                        (Peter J. Jansen, 29-Jul-2016)  * @PJJ */
-/************************************************************************** @PJJ */
-            if ((regs->guestregs->tlb.TLB_PTE(i) & ptemask) == pte ||    /* @PJJ */
-                 (regs->hostregs->tlb.TLB_PTE(i) & ptemask) == pte)      /* @PJJ */
-                regs->guestregs->tlb.TLB_VADDR(i) &= TLBID_PAGEMASK;
+            if ((GUESTREGS->tlb.TLB_PTE(i) & ptemask) == pte ||
+                 (HOSTREGS->tlb.TLB_PTE(i) & ptemask) == pte)
+                GUESTREGS->tlb.TLB_VADDR(i) &= TLBID_PAGEMASK;
     }
-    else
-    /* For guests, clear any host entries */
-    if (regs->guest)
+    else if (regs->guest)  /* For guests, clear any host entries */
     {
-        INVALIDATE_AIA(regs->hostregs);
+        INVALIDATE_AIA(HOSTREGS);
+
         for (i = 0; i < TLBN; i++)
-            if ((regs->hostregs->tlb.TLB_PTE(i) & ptemask) == pte)
-                regs->hostregs->tlb.TLB_VADDR(i) &= TLBID_PAGEMASK;
+            if ((HOSTREGS->tlb.TLB_PTE(i) & ptemask) == pte)
+                HOSTREGS->tlb.TLB_VADDR(i) &= TLBID_PAGEMASK;
     }
 #endif /*defined(_FEATURE_SIE)*/
 
@@ -1879,27 +1921,27 @@ int  i;
 
 #if defined(_FEATURE_SIE)
     /* Also invalidate the guest registers in the SIE copy */
-    if(regs->host && regs->guestregs)
+    if(regs->host && GUESTREGS)
     {
-        INVALIDATE_AIA(regs->guestregs);
+        INVALIDATE_AIA(GUESTREGS);
         if (mask == 0)
-            memset(&regs->guestregs->tlb.acc, 0, TLBN);
+            memset(&GUESTREGS->tlb.acc, 0, TLBN);
         else
             for (i = 0; i < TLBN; i++)
-                if ((regs->guestregs->tlb.TLB_VADDR(i) & TLBID_BYTEMASK) == regs->guestregs->tlbID)
-                    regs->guestregs->tlb.acc[i] &= mask;
+                if ((GUESTREGS->tlb.TLB_VADDR(i) & TLBID_BYTEMASK) == GUESTREGS->tlbID)
+                    GUESTREGS->tlb.acc[i] &= mask;
     }
     else
     /* Also invalidate the guest registers in the SIE copy */
     if(regs->guest)
     {
-        INVALIDATE_AIA(regs->hostregs);
+        INVALIDATE_AIA(HOSTREGS);
         if (mask == 0)
-            memset(&regs->hostregs->tlb.acc, 0, TLBN);
+            memset(&HOSTREGS->tlb.acc, 0, TLBN);
         else
             for (i = 0; i < TLBN; i++)
-                if ((regs->hostregs->tlb.TLB_VADDR(i) & TLBID_BYTEMASK) == regs->hostregs->tlbID)
-                    regs->hostregs->tlb.acc[i] &= mask;
+                if ((HOSTREGS->tlb.TLB_VADDR(i) & TLBID_BYTEMASK) == HOSTREGS->tlbID)
+                    HOSTREGS->tlb.acc[i] &= mask;
     }
 
 #endif /*defined(_FEATURE_SIE)*/
@@ -1956,19 +1998,19 @@ void ARCH_DEP(invalidate_tlbe) (REGS *regs, BYTE *main)
 
 #if defined(_FEATURE_SIE)
     /* Also clear the guest registers in the SIE copy */
-    if (regs->host && regs->guestregs)
+    if (regs->host && GUESTREGS)
     {
-        INVALIDATE_AIA_MAIN(regs->guestregs, main);
-        shift = regs->guestregs->arch_mode == ARCH_370_IDX ? 11 : 12;
+        INVALIDATE_AIA_MAIN(GUESTREGS, main);
+        shift = GUESTREGS->arch_mode == ARCH_370_IDX ? 11 : 12;
         for (i = 0; i < TLBN; i++)
-            if (MAINADDR(regs->guestregs->tlb.main[i],
-                         (regs->guestregs->tlb.TLB_VADDR(i) | (i << shift)))
+            if (MAINADDR(GUESTREGS->tlb.main[i],
+                         (GUESTREGS->tlb.TLB_VADDR(i) | (i << shift)))
                          == mainwid)
             {
-                regs->guestregs->tlb.acc[i] = 0;
+                GUESTREGS->tlb.acc[i] = 0;
 #if !defined(FEATURE_S390_DAT) && !defined(FEATURE_001_ZARCH_INSTALLED_FACILITY)
-                if ((regs->guestregs->CR(0) & CR0_PAGE_SIZE) == CR0_PAGE_SZ_4K)
-                    regs->guestregs->tlb.acc[i^1] = 0;
+                if ((GUESTREGS->CR(0) & CR0_PAGE_SIZE) == CR0_PAGE_SZ_4K)
+                    GUESTREGS->tlb.acc[i^1] = 0;
 #endif
             }
     }
@@ -1976,17 +2018,17 @@ void ARCH_DEP(invalidate_tlbe) (REGS *regs, BYTE *main)
     /* Also clear the host registers in the SIE copy */
     if (regs->guest)
     {
-        INVALIDATE_AIA_MAIN(regs->hostregs, main);
-        shift = regs->hostregs->arch_mode == ARCH_370_IDX ? 11 : 12;
+        INVALIDATE_AIA_MAIN(HOSTREGS, main);
+        shift = HOSTREGS->arch_mode == ARCH_370_IDX ? 11 : 12;
         for (i = 0; i < TLBN; i++)
-            if (MAINADDR(regs->hostregs->tlb.main[i],
-                         (regs->hostregs->tlb.TLB_VADDR(i) | (i << shift)))
+            if (MAINADDR(HOSTREGS->tlb.main[i],
+                         (HOSTREGS->tlb.TLB_VADDR(i) | (i << shift)))
                          == mainwid)
             {
-                regs->hostregs->tlb.acc[i] = 0;
+                HOSTREGS->tlb.acc[i] = 0;
 #if !defined(FEATURE_S390_DAT) && !defined(FEATURE_001_ZARCH_INSTALLED_FACILITY)
-                if ((regs->hostregs->CR(0) & CR0_PAGE_SIZE) == CR0_PAGE_SZ_4K)
-                    regs->hostregs->tlb.acc[i^1] = 0;
+                if ((HOSTREGS->CR(0) & CR0_PAGE_SIZE) == CR0_PAGE_SZ_4K)
+                    HOSTREGS->tlb.acc[i^1] = 0;
 #endif
             }
     }
@@ -2054,7 +2096,7 @@ RADR    pfra;
 
         /* Set the page invalid bit in the page table entry,
            again subject to storage protection mechansims */
-// /*debug*/ logmsg("dat.c: IPTE issued for entry %4.4X at %8.8X...\n"
+// /*debug*/ LOGMSG("dat.c: IPTE issued for entry %4.4X at %8.8X...\n"
 //                  "       page table %8.8X, page index %8.8X, cr0 %8.8X\n",
 //                  pte, raddr, regs->GR_L(r1), regs->GR_L(r2), regs->CR(0));
         if ((regs->CR(0) & CR0_PAGE_SIZE) == CR0_PAGE_SZ_2K)
@@ -2200,7 +2242,7 @@ int     ix = TLBIX(addr);               /* TLB index                 */
                             && arn == USE_PRIMARY_SPACE
 #else
 //                          && ( (arn == USE_PRIMARY_SPACE)
-//                               || SIE_STATB(regs->guestregs, MX, XC) )
+//                               || SIE_STATE_BIT_ON(GUESTREGS, MX, XC) )
 #endif /* defined( _FEATURE_MULTIPLE_CONTROLLED_DATA_SPACE ) */
           )
 #endif /* defined( FEATURE_INTERPRETIVE_EXECUTION ) */
@@ -2236,17 +2278,17 @@ int     ix = TLBIX(addr);               /* TLB index                 */
         goto vabs_addr_excp;
 
 #if defined( _FEATURE_SIE )
-    if(SIE_MODE(regs)) regs->hostregs->dat.protect = 0;
+    if(SIE_MODE(regs)) HOSTREGS->dat.protect = 0;
     if(SIE_MODE(regs)  && !regs->sie_pref)
     {
 
         if (SIE_TRANSLATE_ADDR (regs->sie_mso + regs->dat.aaddr,
                     (arn > 0 && MULTIPLE_CONTROLLED_DATA_SPACE(regs)) ? arn : USE_PRIMARY_SPACE,
-                    regs->hostregs, ACCTYPE_SIE))
-            (regs->hostregs->program_interrupt) (regs->hostregs, regs->hostregs->dat.xcode);
+                    HOSTREGS, ACCTYPE_SIE))
+            (HOSTREGS->program_interrupt) (HOSTREGS, HOSTREGS->dat.xcode);
 
-        regs->dat.protect     |= regs->hostregs->dat.protect;
-        regs->tlb.protect[ix] |= regs->hostregs->dat.protect;
+        regs->dat.protect     |= HOSTREGS->dat.protect;
+        regs->tlb.protect[ix] |= HOSTREGS->dat.protect;
 
         if ( REAL_MODE(&regs->psw) || (arn == USE_REAL_ADDR) )
             regs->tlb.TLB_PTE(ix)   = addr & TLBID_PAGEMASK;
@@ -2256,30 +2298,30 @@ int     ix = TLBIX(addr);               /* TLB index                 */
         {
             regs->tlb.TLB_ASD(ix) = regs->dat.asd;
             /* Ensure that the private bit is percolated to the guest such that LAP is applied correctly */
-            regs->dat.pvtaddr = regs->hostregs->dat.pvtaddr;
+            regs->dat.pvtaddr = HOSTREGS->dat.pvtaddr;
 
             /* Build tlb entry of XC dataspace */
-            regs->dat.asd = regs->hostregs->dat.asd ^ TLB_HOST_ASD;
+            regs->dat.asd = HOSTREGS->dat.asd ^ TLB_HOST_ASD;
             regs->CR(CR_ALB_OFFSET + arn) = regs->dat.asd;
             regs->AEA_AR(arn) = CR_ALB_OFFSET + arn;
             regs->AEA_COMMON(CR_ALB_OFFSET + arn) = (regs->dat.asd & ASD_PRIVATE) == 0;
-            regs->aea_aleprot[arn] = regs->hostregs->dat.protect & 2;
+            regs->aea_aleprot[arn] = HOSTREGS->dat.protect & 2;
         }
 
         /* Convert host real address to host absolute address */
         /* ISW 20181005 */
         /* Use the Prefixing logic of the SIE host (not the guest) */
-        switch(regs->hostregs->arch_mode)
+        switch(HOSTREGS->arch_mode)
         {
             case ARCH_390_IDX:
-                regs->hostregs->dat.aaddr = aaddr =
-                        s390_apply_prefixing( regs->hostregs->dat.raddr, regs->hostregs->PX );
-                apfra = s390_apply_prefixing( regs->hostregs->dat.rpfra, regs->hostregs->PX );
+                HOSTREGS->dat.aaddr = aaddr =
+                        s390_apply_prefixing( HOSTREGS->dat.raddr, HOSTREGS->PX );
+                apfra = s390_apply_prefixing( HOSTREGS->dat.rpfra, HOSTREGS->PX );
                 break;
             case ARCH_900_IDX:
-                regs->hostregs->dat.aaddr = aaddr =
-                        z900_apply_prefixing( regs->hostregs->dat.raddr, regs->hostregs->PX );
-                apfra = z900_apply_prefixing( regs->hostregs->dat.rpfra, regs->hostregs->PX );
+                HOSTREGS->dat.aaddr = aaddr =
+                        z900_apply_prefixing( HOSTREGS->dat.raddr, HOSTREGS->PX );
+                apfra = z900_apply_prefixing( HOSTREGS->dat.rpfra, HOSTREGS->PX );
                 break;
             /* No S/370 or any other SIE host exist */
             default:
@@ -2287,7 +2329,7 @@ int     ix = TLBIX(addr);               /* TLB index                 */
                 CRASH();
         }
 
-        if (regs->hostregs->dat.aaddr > regs->hostregs->mainlim)
+        if (HOSTREGS->dat.aaddr > HOSTREGS->mainlim)
             goto vabs_addr_excp;
 
         /* Take into account SIE guests with a 2K page scheme
@@ -2314,7 +2356,7 @@ int     ix = TLBIX(addr);               /* TLB index                 */
         /* Program check if fetch protected location */
         if (unlikely(ARCH_DEP(is_fetch_protected) (addr, *regs->dat.storkey, akey, regs)))
         {
-            if (SIE_MODE(regs)) regs->hostregs->dat.protect = 0;
+            if (SIE_MODE(regs)) HOSTREGS->dat.protect = 0;
             goto vabs_prot_excp;
         }
 
@@ -2333,10 +2375,10 @@ int     ix = TLBIX(addr);               /* TLB index                 */
         /* Program check if store protected location */
         if (unlikely(ARCH_DEP(is_store_protected) (addr, *regs->dat.storkey, akey, regs)))
         {
-            if (SIE_MODE(regs)) regs->hostregs->dat.protect = 0;
+            if (SIE_MODE(regs)) HOSTREGS->dat.protect = 0;
             goto vabs_prot_excp;
         }
-        if (SIE_MODE(regs) && regs->hostregs->dat.protect)
+        if (SIE_MODE(regs) && HOSTREGS->dat.protect)
             goto vabs_prot_excp;
 
         /* Set the reference and change bits in the storage key */
@@ -2391,13 +2433,13 @@ vabs_prot_excp:
 #endif /* defined( FEATURE_SUPPRESSION_ON_PROTECTION ) */
 
 #if defined( _FEATURE_PROTECTION_INTERCEPTION_CONTROL )
-    if(SIE_MODE(regs) && regs->hostregs->dat.protect)
+    if(SIE_MODE(regs) && HOSTREGS->dat.protect)
     {
 #if defined( FEATURE_SUPPRESSION_ON_PROTECTION )
-        regs->hostregs->TEA = regs->TEA;
-        regs->hostregs->excarid = regs->excarid;
+        HOSTREGS->TEA = regs->TEA;
+        HOSTREGS->excarid = regs->excarid;
 #endif
-        (regs->hostregs->program_interrupt) (regs->hostregs, PGM_PROTECTION_EXCEPTION);
+        (HOSTREGS->program_interrupt) (HOSTREGS, PGM_PROTECTION_EXCEPTION);
     }
     else
 #endif /* defined( _FEATURE_PROTECTION_INTERCEPTION_CONTROL ) */
@@ -2445,5 +2487,5 @@ _LOGICAL_C_STATIC BYTE *ARCH_DEP(logical_to_main) (VADR addr, int arn,
 /*-------------------------------------------------------------------*/
 
 // (we have no non-ARCH_DEP code to place here -- yet!)
- 
+
 #endif /* !defined( _GEN_ARCH )*/

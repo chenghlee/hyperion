@@ -48,7 +48,10 @@ int     r1, r2;                         /* Values of R fields        */
 int     i1, i2;                         /* FP register subscripts    */
 
     RRE(inst, regs, r1, r2);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     HFPREG2_CHECK(r1, r2, regs);
+
     i1 = FPR2I(r1);
     i2 = FPR2I(r2);
 
@@ -68,7 +71,10 @@ int     r1, r2;                         /* Values of R fields        */
 int     i1, i2;                         /* FP register subscripts    */
 
     RRE(inst, regs, r1, r2);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     HFPREG2_CHECK(r1, r2, regs);
+
     i1 = FPR2I(r1);
     i2 = FPR2I(r2);
 
@@ -80,7 +86,7 @@ int     i1, i2;                         /* FP register subscripts    */
 
 
 /*-------------------------------------------------------------------*/
-/* B372 CPSDR - Copy Sign FPR Long Register                    [RRF] */
+/* B372 CPSDR - Copy Sign FPR Long Register                  [RRF-b] */
 /*-------------------------------------------------------------------*/
 DEF_INST(copy_sign_fpr_long_reg)
 {
@@ -89,8 +95,11 @@ int     i1, i2, i3;                     /* FP register subscripts    */
 U32     sign;                           /* Work area for sign bit    */
 
     RRF_M(inst, regs, r1, r2, r3);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     HFPREG2_CHECK(r1, r2, regs);
     HFPREG_CHECK(r3, regs);
+
     i1 = FPR2I(r1);
     i2 = FPR2I(r2);
     i3 = FPR2I(r3);
@@ -118,7 +127,10 @@ int     r1, r2;                         /* Values of R fields        */
 int     i1, i2;                         /* FP register subscripts    */
 
     RRE(inst, regs, r1, r2);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     HFPREG2_CHECK(r1, r2, regs);
+
     i1 = FPR2I(r1);
     i2 = FPR2I(r2);
 
@@ -140,7 +152,10 @@ int     r1, r2;                         /* Values of R fields        */
 int     i1;                             /* FP register subscript     */
 
     RRE(inst, regs, r1, r2);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     HFPREG_CHECK(r1, regs);
+
     i1 = FPR2I(r1);
 
     /* Load FP register contents from general register */
@@ -159,7 +174,10 @@ int     r1, r2;                         /* Values of R fields        */
 int     i2;                             /* FP register subscript     */
 
     RRE(inst, regs, r1, r2);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     HFPREG_CHECK(r2, regs);
+
     i2 = FPR2I(r2);
 
     /* Load general register contents from FP register */
@@ -181,6 +199,7 @@ VADR            effective_addr2;        /* Effective address         */
 
     S(inst, regs, b2, effective_addr2);
 
+    TRAN_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
 
     /* Set DFP rounding mode in FPC register from address bits 61-63 */
@@ -272,6 +291,7 @@ BYTE            dxc;                    /* Data exception code       */
 
     S(inst, regs, b2, effective_addr2);
 
+    TRAN_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
 
     /* Load new FPC register contents from operand location */
@@ -304,12 +324,13 @@ BYTE            dxc;                    /* Data exception code       */
 /*-------------------------------------------------------------------*/
 DEF_INST(set_fpc_and_signal)
 {
-int             r1, unused;             /* Values of R fields        */
+int             r1, r2;                 /* Values of R fields        */
 U32             src_fpc, new_fpc;       /* New value for FPC         */
 BYTE            dxc;                    /* Data exception code       */
 
-    RRE(inst, regs, r1, unused);
+    RRE(inst, regs, r1, r2);
 
+    TRAN_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
 
     /* Load new FPC register contents from R1 register bits 32-63 */
@@ -1238,7 +1259,7 @@ decContext      setmax;                 /* Working context           */
 #endif /*!defined(_DFP_FPE_ARCH_INDEPENDENT_)*/
 #endif /* defined( FEATURE_037_FP_EXTENSION_FACILITY ) */
 
-#if defined(FEATURE_048_DFP_ZONE_CONV_FACILITY)                 /*912*/
+#if defined(FEATURE_048_DFP_ZONE_CONV_FACILITY)
 #if !defined(_DFP_ZONED_ARCH_INDEPENDENT_)
 #define CDZT_MAXLEN 16                  /* CDZT maximum operand len  */
 #define CXZT_MAXLEN 34                  /* CXZT maximum operand len  */
@@ -1401,7 +1422,7 @@ int             zwind;                  /* Index into zwork string   */
 
 #define _DFP_ZONED_ARCH_INDEPENDENT_
 #endif /*!defined(_DFP_ZONED_ARCH_INDEPENDENT_)*/
-#endif /*defined(FEATURE_048_DFP_ZONE_CONV_FACILITY)*/          /*912*/
+#endif /*defined(FEATURE_048_DFP_ZONE_CONV_FACILITY)*/
 
 /*-------------------------------------------------------------------*/
 /* Set rounding mode in decimal context structure                    */
@@ -1738,7 +1759,7 @@ int     suppress = 0;                   /* 1=suppress, 0=complete    */
 
 
 /*-------------------------------------------------------------------*/
-/* B3DA AXTR  - Add DFP Extended Register                      [RRR] */
+/* B3DA AXTR  - Add DFP Extended Register                    [RRF-a] */
 /*-------------------------------------------------------------------*/
 DEF_INST(add_dfp_ext_reg)
 {
@@ -1749,6 +1770,8 @@ decContext      set;                    /* Working context           */
 BYTE            dxc;                    /* Data exception code       */
 
     RRR(inst, regs, r1, r2, r3);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
     DFPREGPAIR3_CHECK(r1, r2, r3, regs);
 
@@ -1786,7 +1809,7 @@ BYTE            dxc;                    /* Data exception code       */
 
 
 /*-------------------------------------------------------------------*/
-/* B3D2 ADTR  - Add DFP Long Register                          [RRR] */
+/* B3D2 ADTR  - Add DFP Long Register                        [RRF-a] */
 /*-------------------------------------------------------------------*/
 DEF_INST(add_dfp_long_reg)
 {
@@ -1797,6 +1820,8 @@ decContext      set;                    /* Working context           */
 BYTE            dxc;                    /* Data exception code       */
 
     RRR(inst, regs, r1, r2, r3);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
 
     /* Initialise the context for long DFP */
@@ -1844,6 +1869,8 @@ decContext      set;                    /* Working context           */
 BYTE            dxc;                    /* Data exception code       */
 
     RRE(inst, regs, r1, r2);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
     DFPREGPAIR2_CHECK(r1, r2, regs);
 
@@ -1887,6 +1914,8 @@ decContext      set;                    /* Working context           */
 BYTE            dxc;                    /* Data exception code       */
 
     RRE(inst, regs, r1, r2);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
 
     /* Initialise the context for long DFP */
@@ -1929,6 +1958,8 @@ decContext      set;                    /* Working context           */
 BYTE            dxc;                    /* Data exception code       */
 
     RRE(inst, regs, r1, r2);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
     DFPREGPAIR2_CHECK(r1, r2, regs);
 
@@ -1976,6 +2007,8 @@ decContext      set;                    /* Working context           */
 BYTE            dxc;                    /* Data exception code       */
 
     RRE(inst, regs, r1, r2);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
 
     /* Initialise the context for long DFP */
@@ -2021,6 +2054,8 @@ decNumber       d1, d2;                 /* Working decimal numbers   */
 decContext      set;                    /* Working context           */
 
     RRE(inst, regs, r1, r2);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
     DFPREGPAIR2_CHECK(r1, r2, regs);
 
@@ -2050,6 +2085,8 @@ decNumber       d1, d2;                 /* Working decimal numbers   */
 decContext      set;                    /* Working context           */
 
     RRE(inst, regs, r1, r2);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
 
     /* Initialise the context for long DFP */
@@ -2069,7 +2106,7 @@ decContext      set;                    /* Working context           */
 
 #if defined( FEATURE_037_FP_EXTENSION_FACILITY )
 /*-------------------------------------------------------------------*/
-/* B959 CXFTR - Convert from fixed 32 to DFP Extended Register [RRF] */
+/* B959 CXFTR - Convert from fixed 32 to DFP Extended Register [RRE] */
 /*-------------------------------------------------------------------*/
 DEF_INST(convert_fix32_to_dfp_ext_reg)
 {
@@ -2081,6 +2118,8 @@ decNumber       d1;                     /* Working decimal number    */
 decContext      set;                    /* Working context           */
 
     RRF_MM(inst, regs, r1, r2, m3, m4);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
     DFPREGPAIR_CHECK(r1, regs);
 
@@ -2102,7 +2141,7 @@ decContext      set;                    /* Working context           */
 
 
 /*-------------------------------------------------------------------*/
-/* B951 CDFTR - Convert from fixed 32 to DFP Long Register     [RRF] */
+/* B951 CDFTR - Convert from fixed 32 to DFP Long Register     [RRE] */
 /*-------------------------------------------------------------------*/
 DEF_INST(convert_fix32_to_dfp_long_reg)
 {
@@ -2115,6 +2154,8 @@ decContext      set;                    /* Working context           */
 BYTE            dxc;                    /* Data exception code       */
 
     RRF_MM(inst, regs, r1, r2, m3, m4);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
 
     /* Initialise the context for long DFP */
@@ -2138,7 +2179,7 @@ BYTE            dxc;                    /* Data exception code       */
 
 
 /*-------------------------------------------------------------------*/
-/* B95B CXLFTR - Convert from unsigned 32 to DFP Ext Register [RRF]  */
+/* B95B CXLFTR - Convert from unsigned 32 to DFP Ext. Reg.   [RRF-e] */
 /*-------------------------------------------------------------------*/
 DEF_INST(convert_u32_to_dfp_ext_reg)
 {
@@ -2150,6 +2191,8 @@ decNumber       d1;                     /* Working decimal number    */
 decContext      set;                    /* Working context           */
 
     RRF_MM(inst, regs, r1, r2, m3, m4);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
     DFPREGPAIR_CHECK(r1, regs);
 
@@ -2171,7 +2214,7 @@ decContext      set;                    /* Working context           */
 
 
 /*-------------------------------------------------------------------*/
-/* B953 CDLFTR - Convert from unsigned 32 to DFP Long Register [RRF] */
+/* B953 CDLFTR - Convert from unsigned 32 to DFP Long Reg.   [RRF-e] */
 /*-------------------------------------------------------------------*/
 DEF_INST(convert_u32_to_dfp_long_reg)
 {
@@ -2184,6 +2227,8 @@ decContext      set;                    /* Working context           */
 BYTE            dxc;                    /* Data exception code       */
 
     RRF_MM(inst, regs, r1, r2, m3, m4);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
 
     /* Initialise the context for long DFP */
@@ -2208,7 +2253,7 @@ BYTE            dxc;                    /* Data exception code       */
 
 
 /*-------------------------------------------------------------------*/
-/* B3F9 CXGTR - Convert from fixed 64 to DFP Extended Register [RRE] */
+/* B3F9 CXGTR - Convert from fixed 64 to DFP Extended Reg.   [RRF-e] */
 /*-------------------------------------------------------------------*/
 DEF_INST(convert_fix64_to_dfp_ext_reg)
 {
@@ -2219,6 +2264,8 @@ decNumber       d1;                     /* Working decimal number    */
 decContext      set;                    /* Working context           */
 
     RRE(inst, regs, r1, r2);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
     DFPREGPAIR_CHECK(r1, regs);
 
@@ -2240,7 +2287,7 @@ decContext      set;                    /* Working context           */
 
 
 /*-------------------------------------------------------------------*/
-/* B3F1 CDGTR - Convert from fixed 64 to DFP Long Register     [RRE] */
+/* B3F1 CDGTR - Convert from fixed 64 to DFP Long Register   [RRF-e] */
 /*-------------------------------------------------------------------*/
 DEF_INST(convert_fix64_to_dfp_long_reg)
 {
@@ -2252,6 +2299,8 @@ decContext      set;                    /* Working context           */
 BYTE            dxc;                    /* Data exception code       */
 
     RRE(inst, regs, r1, r2);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
 
     /* Initialise the context for long DFP */
@@ -2283,7 +2332,7 @@ BYTE            dxc;                    /* Data exception code       */
 
 #if defined( FEATURE_037_FP_EXTENSION_FACILITY )
 /*-------------------------------------------------------------------*/
-/* B95A CXLGTR - Convert from unsigned 64 to DFP Ext Register [RRF]  */
+/* B95A CXLGTR - Convert from unsigned 64 to DFP Ext Reg.    [RRF-e] */
 /*-------------------------------------------------------------------*/
 DEF_INST(convert_u64_to_dfp_ext_reg)
 {
@@ -2295,6 +2344,8 @@ decNumber       d1;                     /* Working decimal number    */
 decContext      set;                    /* Working context           */
 
     RRF_MM(inst, regs, r1, r2, m3, m4);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
     DFPREGPAIR_CHECK(r1, regs);
 
@@ -2316,7 +2367,7 @@ decContext      set;                    /* Working context           */
 
 
 /*-------------------------------------------------------------------*/
-/* B952 CDLGTR - Convert from unsigned 64 to DFP Long Register [RRF] */
+/* B952 CDLGTR - Convert from unsigned 64 to DFP Long Reg.   [RRF-e] */
 /*-------------------------------------------------------------------*/
 DEF_INST(convert_u64_to_dfp_long_reg)
 {
@@ -2329,6 +2380,8 @@ decContext      set;                    /* Working context           */
 BYTE            dxc;                    /* Data exception code       */
 
     RRF_MM(inst, regs, r1, r2, m3, m4);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
 
     /* Initialise the context for long DFP */
@@ -2365,6 +2418,8 @@ BYTE            pwork[16];              /* 31-digit packed work area */
 int32_t         scale = 0;              /* Scaling factor            */
 
     RRE(inst, regs, r1, r2);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
     DFPREGPAIR_CHECK(r1, regs);
     ODD_CHECK(r2, regs);
@@ -2408,6 +2463,8 @@ BYTE            pwork[8];               /* 15-digit packed work area */
 int32_t         scale = 0;              /* Scaling factor            */
 
     RRE(inst, regs, r1, r2);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
 
     /* Initialise the context for long DFP */
@@ -2449,6 +2506,8 @@ BYTE            pwork[17];              /* 33-digit packed work area */
 int32_t         scale = 0;              /* Scaling factor            */
 
     RRE(inst, regs, r1, r2);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
     DFPREGPAIR_CHECK(r1, regs);
     ODD_CHECK(r2, regs);
@@ -2499,6 +2558,8 @@ BYTE            pwork[9];               /* 17-digit packed work area */
 int32_t         scale = 0;              /* Scaling factor            */
 
     RRE(inst, regs, r1, r2);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
 
     /* Initialise the context for long DFP */
@@ -2532,11 +2593,11 @@ int32_t         scale = 0;              /* Scaling factor            */
 } /* end DEF_INST(convert_ubcd64_to_dfp_long_reg) */
 
 
-#if defined(FEATURE_048_DFP_ZONE_CONV_FACILITY)                 /*912*/
+#if defined(FEATURE_048_DFP_ZONE_CONV_FACILITY)
 /*-------------------------------------------------------------------*/
-/* EDAB CXZT  - Convert from zoned to DFP Extended             [RSL] */
+/* EDAB CXZT  - Convert from zoned to DFP Extended           [RSL-b] */
 /*-------------------------------------------------------------------*/
-DEF_INST(convert_zoned_to_dfp_ext)                              /*912*/
+DEF_INST(convert_zoned_to_dfp_ext)
 {
 int             rc;                     /* Return code               */
 int             r1, m3;                 /* Values of R and M fields  */
@@ -2549,6 +2610,8 @@ decContext      set;                    /* Working context           */
 char            zoned[CXZT_MAXLEN];     /* Zoned decimal operand     */
 
     RSL_RM(inst, regs, r1, l2, b2, effective_addr2, m3);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
     DFPREGPAIR_CHECK(r1, regs);
 
@@ -2584,9 +2647,9 @@ char            zoned[CXZT_MAXLEN];     /* Zoned decimal operand     */
 
 
 /*-------------------------------------------------------------------*/
-/* EDAA CDZT  - Convert from zoned to DFP Long                 [RSL] */
+/* EDAA CDZT  - Convert from zoned to DFP Long               [RSL-b] */
 /*-------------------------------------------------------------------*/
-DEF_INST(convert_zoned_to_dfp_long)                             /*912*/
+DEF_INST(convert_zoned_to_dfp_long)
 {
 int             rc;                     /* Return code               */
 int             r1, m3;                 /* Values of R and M fields  */
@@ -2599,6 +2662,8 @@ decContext      set;                    /* Working context           */
 char            zoned[CDZT_MAXLEN];     /* Zoned decimal operand     */
 
     RSL_RM(inst, regs, r1, l2, b2, effective_addr2, m3);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
 
     /* Program check if operand length exceeds maximum */
@@ -2630,12 +2695,12 @@ char            zoned[CDZT_MAXLEN];     /* Zoned decimal operand     */
     ARCH_DEP(dfp_reg_from_decimal64)(r1, &x1, regs);
 
 } /* end DEF_INST(convert_zoned_to_dfp_long) */
-#endif /*defined(FEATURE_048_DFP_ZONE_CONV_FACILITY)*/          /*912*/
+#endif /*defined(FEATURE_048_DFP_ZONE_CONV_FACILITY)*/
 
 
 #if defined( FEATURE_037_FP_EXTENSION_FACILITY )
 /*-------------------------------------------------------------------*/
-/* B949 CFXTR - Convert from DFP Extended Register to fixed 32 [RRF] */
+/* B949 CFXTR - Convert from DFP Extended Reg. to fixed 32   [RRF-e] */
 /*-------------------------------------------------------------------*/
 DEF_INST(convert_dfp_ext_to_fix32_reg)
 {
@@ -2648,6 +2713,8 @@ decContext      set;                    /* Working context           */
 BYTE            dxc;                    /* Data exception code       */
 
     RRF_MM(inst, regs, r1, r2, m3, m4);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
     DFPREGPAIR_CHECK(r2, regs);
 
@@ -2684,7 +2751,7 @@ BYTE            dxc;                    /* Data exception code       */
 
 
 /*-------------------------------------------------------------------*/
-/* B941 CFDTR - Convert from DFP Long Register to fixed 32     [RRF] */
+/* B941 CFDTR - Convert from DFP Long Register to fixed 32   [RRF-e] */
 /*-------------------------------------------------------------------*/
 DEF_INST(convert_dfp_long_to_fix32_reg)
 {
@@ -2697,6 +2764,8 @@ decContext      set;                    /* Working context           */
 BYTE            dxc;                    /* Data exception code       */
 
     RRF_MM(inst, regs, r1, r2, m3, m4);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
 
     /* Initialise the context for long DFP */
@@ -2732,7 +2801,7 @@ BYTE            dxc;                    /* Data exception code       */
 
 
 /*-------------------------------------------------------------------*/
-/* B94B CLFXTR - Convert from DFP Ext Register to unsigned 32 [RRF]  */
+/* B94B CLFXTR - Convert from DFP Ext Reg. to unsigned 32    [RRF-e] */
 /*-------------------------------------------------------------------*/
 DEF_INST(convert_dfp_ext_to_u32_reg)
 {
@@ -2745,6 +2814,8 @@ decContext      set;                    /* Working context           */
 BYTE            dxc;                    /* Data exception code       */
 
     RRF_MM(inst, regs, r1, r2, m3, m4);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
     DFPREGPAIR_CHECK(r2, regs);
 
@@ -2781,7 +2852,7 @@ BYTE            dxc;                    /* Data exception code       */
 
 
 /*-------------------------------------------------------------------*/
-/* B943 CLFDTR - Convert from DFP Long Register to unsigned 32 [RRF] */
+/* B943 CLFDTR - Convert from DFP Long Reg. to unsigned 32   [RRF-e] */
 /*-------------------------------------------------------------------*/
 DEF_INST(convert_dfp_long_to_u32_reg)
 {
@@ -2794,6 +2865,8 @@ decContext      set;                    /* Working context           */
 BYTE            dxc;                    /* Data exception code       */
 
     RRF_MM(inst, regs, r1, r2, m3, m4);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
 
     /* Initialise the context for long DFP */
@@ -2830,7 +2903,7 @@ BYTE            dxc;                    /* Data exception code       */
 
 
 /*-------------------------------------------------------------------*/
-/* B3E9 CGXTR - Convert from DFP Extended Register to fixed 64 [RRF] */
+/* B3E9 CGXTR - Convert from DFP Extended Reg. to fixed 64   [RRF-e] */
 /*-------------------------------------------------------------------*/
 DEF_INST(convert_dfp_ext_to_fix64_reg)
 {
@@ -2843,6 +2916,8 @@ decContext      set;                    /* Working context           */
 BYTE            dxc;                    /* Data exception code       */
 
     RRF_M(inst, regs, r1, r2, m3);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
     DFPREGPAIR_CHECK(r2, regs);
 
@@ -2879,7 +2954,7 @@ BYTE            dxc;                    /* Data exception code       */
 
 
 /*-------------------------------------------------------------------*/
-/* B3E1 CGDTR - Convert from DFP Long Register to fixed 64     [RRF] */
+/* B3E1 CGDTR - Convert from DFP Long Register to fixed 64   [RRF-e] */
 /*-------------------------------------------------------------------*/
 DEF_INST(convert_dfp_long_to_fix64_reg)
 {
@@ -2892,6 +2967,8 @@ decContext      set;                    /* Working context           */
 BYTE            dxc;                    /* Data exception code       */
 
     RRF_M(inst, regs, r1, r2, m3);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
 
     /* Initialise the context for long DFP */
@@ -2928,7 +3005,7 @@ BYTE            dxc;                    /* Data exception code       */
 
 #if defined( FEATURE_037_FP_EXTENSION_FACILITY )
 /*-------------------------------------------------------------------*/
-/* B94A CLGXTR - Convert from DFP Ext Register to unsigned 64 [RRF]  */
+/* B94A CLGXTR - Convert from DFP Ext Reg. to unsigned 64    [RRF-e] */
 /*-------------------------------------------------------------------*/
 DEF_INST(convert_dfp_ext_to_u64_reg)
 {
@@ -2941,6 +3018,8 @@ decContext      set;                    /* Working context           */
 BYTE            dxc;                    /* Data exception code       */
 
     RRF_MM(inst, regs, r1, r2, m3, m4);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
     DFPREGPAIR_CHECK(r2, regs);
 
@@ -2977,7 +3056,7 @@ BYTE            dxc;                    /* Data exception code       */
 
 
 /*-------------------------------------------------------------------*/
-/* B942 CLGDTR - Convert from DFP Long Register to unsigned 64 [RRF] */
+/* B942 CLGDTR - Convert from DFP Long Reg. to unsigned 64   [RRF-e] */
 /*-------------------------------------------------------------------*/
 DEF_INST(convert_dfp_long_to_u64_reg)
 {
@@ -2990,6 +3069,8 @@ decContext      set;                    /* Working context           */
 BYTE            dxc;                    /* Data exception code       */
 
     RRF_MM(inst, regs, r1, r2, m3, m4);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
 
     /* Initialise the context for long DFP */
@@ -3026,7 +3107,7 @@ BYTE            dxc;                    /* Data exception code       */
 
 
 /*-------------------------------------------------------------------*/
-/* B3EB CSXTR - Convert to signed BCD (DFP ext to 128-bit)     [RRF] */
+/* B3EB CSXTR - Convert to signed BCD (DFP ext to 128-bit)   [RRF-d] */
 /*-------------------------------------------------------------------*/
 DEF_INST(convert_dfp_ext_to_sbcd128_reg)
 {
@@ -3039,6 +3120,8 @@ int32_t         scale;                  /* Scaling factor            */
 BYTE            pwork[18];              /* 33-digit packed work area */
 
     RRF_M4(inst, regs, r1, r2, m4);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
     DFPREGPAIR_CHECK(r2, regs);
     ODD_CHECK(r1, regs);
@@ -3073,7 +3156,7 @@ BYTE            pwork[18];              /* 33-digit packed work area */
 
 
 /*-------------------------------------------------------------------*/
-/* B3E3 CSDTR - Convert to signed BCD (DFP long to 64-bit)     [RRF] */
+/* B3E3 CSDTR - Convert to signed BCD (DFP long to 64-bit)   [RRF-d] */
 /*-------------------------------------------------------------------*/
 DEF_INST(convert_dfp_long_to_sbcd64_reg)
 {
@@ -3086,6 +3169,8 @@ int32_t         scale;                  /* Scaling factor            */
 BYTE            pwork[9];               /* 17-digit packed work area */
 
     RRF_M4(inst, regs, r1, r2, m4);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
 
     /* Initialise the context for long DFP */
@@ -3130,6 +3215,8 @@ int32_t         scale;                  /* Scaling factor            */
 BYTE            pwork[17];              /* 33-digit packed work area */
 
     RRE(inst, regs, r1, r2);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
     DFPREGPAIR_CHECK(r2, regs);
     ODD_CHECK(r1, regs);
@@ -3177,6 +3264,8 @@ int32_t         scale;                  /* Scaling factor            */
 BYTE            pwork[9];               /* 17-digit packed work area */
 
     RRE(inst, regs, r1, r2);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
 
     /* Initialise the context for long DFP */
@@ -3207,11 +3296,11 @@ BYTE            pwork[9];               /* 17-digit packed work area */
 } /* end DEF_INST(convert_dfp_long_to_ubcd64_reg) */
 
 
-#if defined(FEATURE_048_DFP_ZONE_CONV_FACILITY)                 /*912*/
+#if defined(FEATURE_048_DFP_ZONE_CONV_FACILITY)
 /*-------------------------------------------------------------------*/
-/* EDA9 CZXT  - Convert to zoned from DFP Extended             [RSL] */
+/* EDA9 CZXT  - Convert to zoned from DFP Extended           [RSL-b] */
 /*-------------------------------------------------------------------*/
-DEF_INST(convert_dfp_ext_to_zoned)                              /*912*/
+DEF_INST(convert_dfp_ext_to_zoned)
 {
 int             r1, m3;                 /* Values of R and M fields  */
 int             l2;                     /* Operand length minus 1    */
@@ -3224,6 +3313,8 @@ int             cc;                     /* Condition code            */
 char            zoned[CZXT_MAXLEN];     /* Zoned decimal result      */
 
     RSL_RM(inst, regs, r1, l2, b2, effective_addr2, m3);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
     DFPREGPAIR_CHECK(r1, regs);
 
@@ -3260,9 +3351,9 @@ char            zoned[CZXT_MAXLEN];     /* Zoned decimal result      */
 
 
 /*-------------------------------------------------------------------*/
-/* EDA8 CZDT  - Convert to zoned from DFP Long                 [RSL] */
+/* EDA8 CZDT  - Convert to zoned from DFP Long               [RSL-b] */
 /*-------------------------------------------------------------------*/
-DEF_INST(convert_dfp_long_to_zoned)                             /*912*/
+DEF_INST(convert_dfp_long_to_zoned)
 {
 int             r1, m3;                 /* Values of R and M fields  */
 int             l2;                     /* Operand length minus 1    */
@@ -3275,6 +3366,8 @@ int             cc;                     /* Condition code            */
 char            zoned[CZDT_MAXLEN];     /* Zoned decimal result      */
 
     RSL_RM(inst, regs, r1, l2, b2, effective_addr2, m3);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
 
     /* Program check if operand length exceeds 16 */
@@ -3307,11 +3400,11 @@ char            zoned[CZDT_MAXLEN];     /* Zoned decimal result      */
     regs->psw.cc = cc;
 
 } /* end DEF_INST(convert_dfp_long_to_zoned) */
-#endif /*defined(FEATURE_048_DFP_ZONE_CONV_FACILITY)*/          /*912*/
+#endif /*defined(FEATURE_048_DFP_ZONE_CONV_FACILITY)*/
 
 
 /*-------------------------------------------------------------------*/
-/* B3D9 DXTR  - Divide DFP Extended Register                   [RRR] */
+/* B3D9 DXTR  - Divide DFP Extended Register                 [RRF-a] */
 /*-------------------------------------------------------------------*/
 DEF_INST(divide_dfp_ext_reg)
 {
@@ -3322,6 +3415,8 @@ decContext      set;                    /* Working context           */
 BYTE            dxc;                    /* Data exception code       */
 
     RRR(inst, regs, r1, r2, r3);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
     DFPREGPAIR3_CHECK(r1, r2, r3, regs);
 
@@ -3354,7 +3449,7 @@ BYTE            dxc;                    /* Data exception code       */
 
 
 /*-------------------------------------------------------------------*/
-/* B3D1 DDTR  - Divide DFP Long Register                       [RRR] */
+/* B3D1 DDTR  - Divide DFP Long Register                     [RRF-a] */
 /*-------------------------------------------------------------------*/
 DEF_INST(divide_dfp_long_reg)
 {
@@ -3365,6 +3460,8 @@ decContext      set;                    /* Working context           */
 BYTE            dxc;                    /* Data exception code       */
 
     RRR(inst, regs, r1, r2, r3);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
 
     /* Initialise the context for long DFP */
@@ -3407,6 +3504,8 @@ decContext      set;                    /* Working context           */
 S64             exponent;               /* Biased exponent           */
 
     RRE(inst, regs, r1, r2);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
     DFPREGPAIR_CHECK(r2, regs);
 
@@ -3447,6 +3546,8 @@ decContext      set;                    /* Working context           */
 S64             exponent;               /* Biased exponent           */
 
     RRE(inst, regs, r1, r2);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
 
     /* Initialise the context for long DFP */
@@ -3486,6 +3587,8 @@ decContext      set;                    /* Working context           */
 S64             digits;                 /* Number of decimal digits  */
 
     RRE(inst, regs, r1, r2);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
     DFPREGPAIR_CHECK(r2, regs);
 
@@ -3528,6 +3631,8 @@ decContext      set;                    /* Working context           */
 S64             digits;                 /* Number of decimal digits  */
 
     RRE(inst, regs, r1, r2);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
 
     /* Initialise the context for long DFP */
@@ -3558,7 +3663,7 @@ S64             digits;                 /* Number of decimal digits  */
 
 
 /*-------------------------------------------------------------------*/
-/* B3FE IEXTR - Insert Biased Exponent DFP Extended Register   [RRF] */
+/* B3FE IEXTR - Insert Biased Exponent DFP Extended Register [RRF-b] */
 /*-------------------------------------------------------------------*/
 DEF_INST(insert_biased_exponent_fix64_to_dfp_ext_reg)
 {
@@ -3569,6 +3674,8 @@ decContext      set;                    /* Working context           */
 S64             bexp;                   /* Biased exponent           */
 
     RRF_M(inst, regs, r1, r2, r3);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
     DFPREGPAIR2_CHECK(r1, r3, regs);
 
@@ -3627,7 +3734,7 @@ S64             bexp;                   /* Biased exponent           */
 
 
 /*-------------------------------------------------------------------*/
-/* B3F6 IEDTR - Insert Biased Exponent DFP Long Register       [RRF] */
+/* B3F6 IEDTR - Insert Biased Exponent DFP Long Register     [RRF-b] */
 /*-------------------------------------------------------------------*/
 DEF_INST(insert_biased_exponent_fix64_to_dfp_long_reg)
 {
@@ -3638,6 +3745,8 @@ decContext      set;                    /* Working context           */
 S64             bexp;                   /* Biased exponent           */
 
     RRF_M(inst, regs, r1, r2, r3);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
 
     /* Initialise the context for long DFP */
@@ -3706,6 +3815,8 @@ decContext      set;                    /* Working context           */
 BYTE            dxc;                    /* Data exception code       */
 
     RRE(inst, regs, r1, r2);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
     DFPREGPAIR2_CHECK(r1, r2, regs);
 
@@ -3758,6 +3869,8 @@ decContext      set;                    /* Working context           */
 BYTE            dxc;                    /* Data exception code       */
 
     RRE(inst, regs, r1, r2);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
 
     /* Initialise the context for long DFP */
@@ -3798,7 +3911,7 @@ BYTE            dxc;                    /* Data exception code       */
 
 
 /*-------------------------------------------------------------------*/
-/* B3DF FIXTR - Load FP Integer DFP Extended Register          [RRF] */
+/* B3DF FIXTR - Load FP Integer DFP Extended Register        [RRF-e] */
 /*-------------------------------------------------------------------*/
 DEF_INST(load_fp_int_dfp_ext_reg)
 {
@@ -3809,6 +3922,8 @@ decContext      set;                    /* Working context           */
 BYTE            dxc;                    /* Data exception code       */
 
     RRF_MM(inst, regs, r1, r2, m3, m4);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
     DFPREGPAIR2_CHECK(r1, r2, regs);
 
@@ -3872,7 +3987,7 @@ BYTE            dxc;                    /* Data exception code       */
 
 
 /*-------------------------------------------------------------------*/
-/* B3D7 FIDTR - Load FP Integer DFP Long Register              [RRF] */
+/* B3D7 FIDTR - Load FP Integer DFP Long Register            [RRF-e] */
 /*-------------------------------------------------------------------*/
 DEF_INST(load_fp_int_dfp_long_reg)
 {
@@ -3883,6 +3998,8 @@ decContext      set;                    /* Working context           */
 BYTE            dxc;                    /* Data exception code       */
 
     RRF_MM(inst, regs, r1, r2, m3, m4);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
 
     /* Initialise the context for long DFP */
@@ -3945,7 +4062,7 @@ BYTE            dxc;                    /* Data exception code       */
 
 
 /*-------------------------------------------------------------------*/
-/* B3DC LXDTR - Load Lengthened DFP Long to Extended Register  [RRF] */
+/* B3DC LXDTR - Load Lengthened DFP Long to Extended Reg.    [RRF-d] */
 /*-------------------------------------------------------------------*/
 DEF_INST(load_lengthened_dfp_long_to_ext_reg)
 {
@@ -3957,6 +4074,8 @@ decContext      set;                    /* Working context           */
 BYTE            dxc;                    /* Data exception code       */
 
     RRF_M4(inst, regs, r1, r2, m4);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
     DFPREGPAIR_CHECK(r1, regs);
 
@@ -4012,7 +4131,7 @@ BYTE            dxc;                    /* Data exception code       */
 
 
 /*-------------------------------------------------------------------*/
-/* B3D4 LDETR - Load Lengthened DFP Short to Long Register     [RRF] */
+/* B3D4 LDETR - Load Lengthened DFP Short to Long Register   [RRF-d] */
 /*-------------------------------------------------------------------*/
 DEF_INST(load_lengthened_dfp_short_to_long_reg)
 {
@@ -4024,6 +4143,8 @@ decContext      set;                    /* Working context           */
 BYTE            dxc;                    /* Data exception code       */
 
     RRF_M4(inst, regs, r1, r2, m4);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
 
     /* Initialise the context for long DFP */
@@ -4078,7 +4199,7 @@ BYTE            dxc;                    /* Data exception code       */
 
 
 /*-------------------------------------------------------------------*/
-/* B3DD LDXTR - Load Rounded DFP Extended to Long Register     [RRF] */
+/* B3DD LDXTR - Load Rounded DFP Extended to Long Register   [RRF-e] */
 /*-------------------------------------------------------------------*/
 DEF_INST(load_rounded_dfp_ext_to_long_reg)
 {
@@ -4092,6 +4213,8 @@ BYTE            pwork[17];              /* 33-digit packed work area */
 BYTE            dxc;                    /* Data exception code       */
 
     RRF_MM(inst, regs, r1, r2, m3, m4);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
     DFPREGPAIR_CHECK(r2, regs);
 
@@ -4163,7 +4286,7 @@ BYTE            dxc;                    /* Data exception code       */
 
 
 /*-------------------------------------------------------------------*/
-/* B3D5 LEDTR - Load Rounded DFP Long to Short Register        [RRF] */
+/* B3D5 LEDTR - Load Rounded DFP Long to Short Register      [RRF-e] */
 /*-------------------------------------------------------------------*/
 DEF_INST(load_rounded_dfp_long_to_short_reg)
 {
@@ -4177,6 +4300,8 @@ BYTE            pwork[9];               /* 17-digit packed work area */
 BYTE            dxc;                    /* Data exception code       */
 
     RRF_MM(inst, regs, r1, r2, m3, m4);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
 
     /* Initialise the context for long DFP */
@@ -4247,7 +4372,7 @@ BYTE            dxc;                    /* Data exception code       */
 
 
 /*-------------------------------------------------------------------*/
-/* B3D8 MXTR  - Multiply DFP Extended Register                 [RRR] */
+/* B3D8 MXTR  - Multiply DFP Extended Register               [RRF-a] */
 /*-------------------------------------------------------------------*/
 DEF_INST(multiply_dfp_ext_reg)
 {
@@ -4258,6 +4383,8 @@ decContext      set;                    /* Working context           */
 BYTE            dxc;                    /* Data exception code       */
 
     RRR(inst, regs, r1, r2, r3);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
     DFPREGPAIR3_CHECK(r1, r2, r3, regs);
 
@@ -4290,7 +4417,7 @@ BYTE            dxc;                    /* Data exception code       */
 
 
 /*-------------------------------------------------------------------*/
-/* B3D0 MDTR  - Multiply DFP Long Register                     [RRR] */
+/* B3D0 MDTR  - Multiply DFP Long Register                   [RRF-a] */
 /*-------------------------------------------------------------------*/
 DEF_INST(multiply_dfp_long_reg)
 {
@@ -4301,6 +4428,8 @@ decContext      set;                    /* Working context           */
 BYTE            dxc;                    /* Data exception code       */
 
     RRR(inst, regs, r1, r2, r3);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
 
     /* Initialise the context for long DFP */
@@ -4332,7 +4461,7 @@ BYTE            dxc;                    /* Data exception code       */
 
 
 /*-------------------------------------------------------------------*/
-/* B3FD QAXTR - Quantize DFP Extended Register                 [RRF] */
+/* B3FD QAXTR - Quantize DFP Extended Register               [RRF-b] */
 /*-------------------------------------------------------------------*/
 DEF_INST(quantize_dfp_ext_reg)
 {
@@ -4343,6 +4472,8 @@ decContext      set;                    /* Working context           */
 BYTE            dxc;                    /* Data exception code       */
 
     RRF_RM(inst, regs, r1, r2, r3, m4);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
     DFPREGPAIR3_CHECK(r1, r2, r3, regs);
 
@@ -4375,7 +4506,7 @@ BYTE            dxc;                    /* Data exception code       */
 
 
 /*-------------------------------------------------------------------*/
-/* B3F5 QADTR - Quantize DFP Long Register                     [RRF] */
+/* B3F5 QADTR - Quantize DFP Long Register                   [RRF-b] */
 /*-------------------------------------------------------------------*/
 DEF_INST(quantize_dfp_long_reg)
 {
@@ -4386,6 +4517,8 @@ decContext      set;                    /* Working context           */
 BYTE            dxc;                    /* Data exception code       */
 
     RRF_RM(inst, regs, r1, r2, r3, m4);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
 
     /* Initialise the context for long DFP */
@@ -4417,7 +4550,7 @@ BYTE            dxc;                    /* Data exception code       */
 
 
 /*-------------------------------------------------------------------*/
-/* B3FF RRXTR - Reround DFP Extended Register                  [RRF] */
+/* B3FF RRXTR - Reround DFP Extended Register                [RRF-b] */
 /*-------------------------------------------------------------------*/
 DEF_INST(reround_dfp_ext_reg)
 {
@@ -4429,6 +4562,8 @@ decContext      set;                    /* Working context           */
 BYTE            dxc;                    /* Data exception code       */
 
     RRF_RM(inst, regs, r1, r2, r3, m4);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
     DFPREGPAIR2_CHECK(r1, r3, regs);
 
@@ -4472,7 +4607,7 @@ BYTE            dxc;                    /* Data exception code       */
 
 
 /*-------------------------------------------------------------------*/
-/* B3F7 RRDTR - Reround DFP Long Register                      [RRF] */
+/* B3F7 RRDTR - Reround DFP Long Register                    [RRF-b] */
 /*-------------------------------------------------------------------*/
 DEF_INST(reround_dfp_long_reg)
 {
@@ -4484,6 +4619,8 @@ decContext      set;                    /* Working context           */
 BYTE            dxc;                    /* Data exception code       */
 
     RRF_RM(inst, regs, r1, r2, r3, m4);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
 
     /* Initialise the context for long DFP */
@@ -4539,6 +4676,8 @@ decContext      set;                    /* Working context           */
 int             n;                      /* Number of bits to shift   */
 
     RXF(inst, regs, r1, r3, b2, effective_addr2);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
     DFPREGPAIR2_CHECK(r1, r3, regs);
 
@@ -4599,6 +4738,8 @@ decContext      set;                    /* Working context           */
 int             n;                      /* Number of bits to shift   */
 
     RXF(inst, regs, r1, r3, b2, effective_addr2);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
 
     /* Isolate rightmost 6 bits of second operand address */
@@ -4658,6 +4799,8 @@ decContext      set;                    /* Working context           */
 int             n;                      /* Number of bits to shift   */
 
     RXF(inst, regs, r1, r3, b2, effective_addr2);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
     DFPREGPAIR2_CHECK(r1, r3, regs);
 
@@ -4718,6 +4861,8 @@ decContext      set;                    /* Working context           */
 int             n;                      /* Number of bits to shift   */
 
     RXF(inst, regs, r1, r3, b2, effective_addr2);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
 
     /* Isolate rightmost 6 bits of second operand address */
@@ -4764,7 +4909,7 @@ int             n;                      /* Number of bits to shift   */
 
 
 /*-------------------------------------------------------------------*/
-/* B3DB SXTR  - Subtract DFP Extended Register                 [RRR] */
+/* B3DB SXTR  - Subtract DFP Extended Register               [RRF-a] */
 /*-------------------------------------------------------------------*/
 DEF_INST(subtract_dfp_ext_reg)
 {
@@ -4775,6 +4920,8 @@ decContext      set;                    /* Working context           */
 BYTE            dxc;                    /* Data exception code       */
 
     RRR(inst, regs, r1, r2, r3);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
     DFPREGPAIR3_CHECK(r1, r2, r3, regs);
 
@@ -4812,7 +4959,7 @@ BYTE            dxc;                    /* Data exception code       */
 
 
 /*-------------------------------------------------------------------*/
-/* B3D3 SDTR  - Subtract DFP Long Register                     [RRR] */
+/* B3D3 SDTR  - Subtract DFP Long Register                   [RRF-a] */
 /*-------------------------------------------------------------------*/
 DEF_INST(subtract_dfp_long_reg)
 {
@@ -4823,6 +4970,8 @@ decContext      set;                    /* Working context           */
 BYTE            dxc;                    /* Data exception code       */
 
     RRR(inst, regs, r1, r2, r3);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
 
     /* Initialise the context for long DFP */
@@ -4872,6 +5021,8 @@ decContext      set;                    /* Working context           */
 U32             bits;                   /* Low 12 bits of address    */
 
     RXE(inst, regs, r1, b2, effective_addr2);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
     DFPREGPAIR_CHECK(r1, regs);
 
@@ -4905,6 +5056,8 @@ decContext      set;                    /* Working context           */
 U32             bits;                   /* Low 12 bits of address    */
 
     RXE(inst, regs, r1, b2, effective_addr2);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
 
     /* Initialise the context for long DFP */
@@ -4937,6 +5090,8 @@ decContext      set;                    /* Working context           */
 U32             bits;                   /* Low 12 bits of address    */
 
     RXE(inst, regs, r1, b2, effective_addr2);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
 
     /* Initialise the context for short DFP */
@@ -4970,6 +5125,8 @@ U32             bits;                   /* Low 12 bits of address    */
 int             lmd;                    /* Leftmost digit            */
 
     RXE(inst, regs, r1, b2, effective_addr2);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
     DFPREGPAIR_CHECK(r1, regs);
 
@@ -5009,6 +5166,8 @@ U32             bits;                   /* Low 12 bits of address    */
 int             lmd;                    /* Leftmost digit            */
 
     RXE(inst, regs, r1, b2, effective_addr2);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
 
     /* Initialise the context for long DFP */
@@ -5047,6 +5206,8 @@ U32             bits;                   /* Low 12 bits of address    */
 int             lmd;                    /* Leftmost digit            */
 
     RXE(inst, regs, r1, b2, effective_addr2);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
 
     /* Initialise the context for short DFP */

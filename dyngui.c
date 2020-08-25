@@ -158,7 +158,7 @@ REGS* CopyREGS( int cpu )               // (same logic as in panel.c)
 #if defined(_FEATURE_SIE)
     if (regs->sie_active)
     {
-        memcpy( &copysieregs, regs->guestregs, sysblk.regs_copy_len );
+        memcpy( &copysieregs, GUESTREGS, sysblk.regs_copy_len );
         copyregs.guestregs = &copysieregs;
         copysieregs.hostregs = &copyregs;
         regs = &copysieregs;
@@ -340,7 +340,7 @@ BYTE   gui_wants_new_devlist = 1;       // (should always be initially on)
 BYTE   gui_wants_aggregates  = 1;
 BYTE   gui_wants_cpupct      = 0;
 BYTE   gui_wants_cpupct_all  = 0;
-int    prev_cpupct    [ MAX_CPU_ENGINES ];
+int    prev_cpupct    [ MAX_CPU_ENGS ];
 U32    prev_mips_rate  = 0;
 U32    prev_sios_rate  = 0;
 

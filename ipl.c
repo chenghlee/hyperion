@@ -479,8 +479,8 @@ int rc;
     /* Enable the subchannel for the IPL device */
     dev->pmcw.flag5 |= PMCW5_E;
 
-    /* Build the operation request block */                    /*@IWZ*/
-    memset (&dev->orb, 0, sizeof(ORB));                        /*@IWZ*/
+    /* Build the operation request block */
+    memset (&dev->orb, 0, sizeof(ORB));
     dev->busy = 1;
 
     RELEASE_INTLOCK(NULL);
@@ -620,6 +620,14 @@ int i, rc = 0;                          /* Array subscript           */
     regs->checkstop = 0;
     regs->sigp_reset = 0;
     regs->extccpu = 0;
+#if defined( FEATURE_073_TRANSACT_EXEC_FACILITY )
+    PTT_TXF( "TXF CPURES", 0, 0, regs->txf_tnd );
+    /* EXIT SILENTLY from transactional execution mode */
+    regs->txf_tnd = 0;
+    regs->txf_caborts = 0;
+    regs->txf_contran = false;
+    regs->txf_UPGM_abort = false;
+#endif
     for (i = 0; i < sysblk.maxcpu; i++)
         regs->emercpu[i] = 0;
     regs->instinvalid = 1;
@@ -654,12 +662,12 @@ int i, rc = 0;                          /* Array subscript           */
     ARCH_DEP(store_int_timer_nolock) (regs);
 #endif
 
-   if(regs->host && regs->guestregs)
+   if(regs->host && GUESTREGS)
    {
-        rc = ARCH_DEP(cpu_reset)(regs->guestregs);
+        rc = ARCH_DEP(cpu_reset)(GUESTREGS);
         /* CPU state of SIE copy cannot be controlled */
-        regs->guestregs->opinterv = 0;
-        regs->guestregs->cpustate = CPUSTATE_STARTED;
+        GUESTREGS->opinterv = 0;
+        GUESTREGS->cpustate = CPUSTATE_STARTED;
    }
 
     /* Re-initialize the facilities list for this CPU */
@@ -682,13 +690,9 @@ int ARCH_DEP( initial_cpu_reset )( REGS* regs )
     regs->sigp_ini_reset = regs->sigp_reset = 0;
 
     /* Clear the registers */
-    memset ( &regs->psw,           0, sizeof(regs->psw)           );
-    memset ( &regs->captured_zpsw, 0, sizeof(regs->captured_zpsw) );
-#if !defined( NOCHECK_AEA_ARRAY_BOUNDS )
-    memset ( &regs->cr_struct,     0, sizeof(regs->cr_struct)     );
-#else
-    memset ( &regs->cr,            0, sizeof(regs->cr)            );
-#endif
+    memset ( &regs->psw,           0, sizeof( regs->psw           ));
+    memset ( &regs->captured_zpsw, 0, sizeof( regs->captured_zpsw ));
+    memset ( &regs->cr_struct,     0, sizeof( regs->cr_struct     ));
     regs->fpc    = 0;
     regs->PX     = 0;
     regs->psw.AMASK_G = AMASK24;
@@ -704,6 +708,14 @@ int ARCH_DEP( initial_cpu_reset )( REGS* regs )
 
     regs->todpr  = 0;
     regs->clkc   = 0;
+#if defined( FEATURE_073_TRANSACT_EXEC_FACILITY )
+    PTT_TXF( "TXF ICPURES", 0, 0, regs->txf_tnd );
+    /* EXIT SILENTLY from transactional execution mode */
+    regs->txf_tnd = 0;
+    regs->txf_caborts = 0;
+    regs->txf_contran = false;
+    regs->txf_UPGM_abort = false;
+#endif
     set_cpu_timer( regs, 0 );
 #if defined( _FEATURE_INTERVAL_TIMER )
     set_int_timer( regs, 0 );
@@ -718,7 +730,10 @@ int ARCH_DEP( initial_cpu_reset )( REGS* regs )
 
 #if defined( FEATURE_S370_CHANNEL ) && !defined( FEATURE_ACCESS_REGISTERS )
     /* For S/370 initialize the channel masks in CR2 */
-    regs->CR(2) = 0xFFFFFFFF;
+    regs->CR(2) = (U32)0xFFFFFFFFF;
+#endif
+#if defined( FEATURE_073_TRANSACT_EXEC_FACILITY )
+    regs->CR(2) &= ~(CR2_TDS | CR2_TDC);
 #endif
 
     regs->chanset =
@@ -735,8 +750,8 @@ int ARCH_DEP( initial_cpu_reset )( REGS* regs )
     regs->CR(15) = 512;
 #endif
 
-    if (regs->host && regs->guestregs)
-        if ((rc = ARCH_DEP( initial_cpu_reset )( regs->guestregs )) != 0)
+    if (regs->host && GUESTREGS)
+        if ((rc = ARCH_DEP( initial_cpu_reset )( GUESTREGS )) != 0)
             rc1 = rc;
 
     return rc1;

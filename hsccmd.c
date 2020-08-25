@@ -117,6 +117,78 @@ static void* test_locks_thread( void* parg)
     return NULL;
 }
 
+static LOCK deadlocks_a;
+static LOCK deadlocks_b;
+static LOCK deadlocks_c;
+
+/* $test command helper thread */
+static void* deadlocks_1( void* parg)
+{
+    UNREFERENCED( parg );
+
+    // 1 acq a, then b
+    // 2 acq b, then c
+    // 3 acq c, then a
+
+    obtain_lock( &deadlocks_a );
+    {
+        SLEEP(1);
+
+        obtain_lock( &deadlocks_b );
+        {
+            SLEEP(1);
+        }
+        release_lock( &deadlocks_b );
+    }
+    release_lock( &deadlocks_a );
+
+    return NULL;
+}
+static void* deadlocks_2( void* parg)
+{
+    UNREFERENCED( parg );
+
+    // 1 acq a, then b
+    // 2 acq b, then c
+    // 3 acq c, then a
+
+    obtain_lock( &deadlocks_b );
+    {
+        SLEEP(1);
+
+        obtain_lock( &deadlocks_c );
+        {
+            SLEEP(1);
+        }
+        release_lock( &deadlocks_c );
+    }
+    release_lock( &deadlocks_b );
+
+    return NULL;
+}
+static void* deadlocks_3( void* parg)
+{
+    UNREFERENCED( parg );
+
+    // 1 acq a, then b
+    // 2 acq b, then c
+    // 3 acq c, then a
+
+    obtain_lock( &deadlocks_c );
+    {
+        SLEEP(1);
+
+        obtain_lock( &deadlocks_a );
+        {
+            SLEEP(1);
+        }
+        release_lock( &deadlocks_a );
+    }
+    release_lock( &deadlocks_c );
+
+    return NULL;
+}
+
 #define  NUM_THREADS    10
 #define  MAX_WAIT_SECS  6
 
@@ -138,15 +210,58 @@ int $test_cmd(int argc, char *argv[],char *cmdline)
 
     if (argc > 1)
     {
-        if      (CMD( argv[1], CRASH,   5 )) CRASH();
-        else if (CMD( argv[1], LOCKS,   5 ))
+        if (CMD( argv[1], CRASH, 5 ))
+            CRASH();
+        else if (CMD( argv[1], DEADLOCK, 8 ))
+        {
+            static TID tid;
+
+            initialize_lock( &deadlocks_a );
+            initialize_lock( &deadlocks_b );
+            initialize_lock( &deadlocks_c );
+
+            set_lock_name( &deadlocks_a, "a" );
+            set_lock_name( &deadlocks_b, "b" );
+            set_lock_name( &deadlocks_c, "c" );
+
+            VERIFY( create_thread( &tid, DETACHED, deadlocks_1, 0, "#1"  ) == 0);
+            VERIFY( create_thread( &tid, DETACHED, deadlocks_2, 0, "#2" ) == 0);
+            VERIFY( create_thread( &tid, DETACHED, deadlocks_3, 0, "#3"  ) == 0);
+        }
+        else if (CMD( argv[1], LOCKS, 5 ))
         {
             // test thread exit with lock still held
             static TID tid;
             VERIFY( create_thread( &tid, DETACHED,
                 test_locks_thread, 0, "test_locks_thread" ) == 0);
         }
-        else if (CMD( argv[1], NANO,    4 ))
+        else if (CMD( argv[1], LOCKS2, 6 ))
+        {
+            // test lock init ALREADY INIT
+            static LOCK testlock;
+            initialize_lock( &testlock );
+            initialize_lock( &testlock );   // (error here)
+            destroy_lock( &testlock );
+        }
+        else if (CMD( argv[1], LOCKS3, 6 ))
+        {
+            // test lock init ALREADY INIT STILL HELD
+            static LOCK testlock;
+            initialize_lock( &testlock );
+            obtain_lock( &testlock );
+            initialize_lock( &testlock );   // (error here)
+            release_lock( &testlock );
+            destroy_lock( &testlock );
+        }
+        else if (CMD( argv[1], LOCKS4, 6 ))
+        {
+            // test destroy lock STILL HELD
+            static LOCK testlock;
+            initialize_lock( &testlock );
+            obtain_lock( &testlock );
+            destroy_lock( &testlock );      // (error here)
+        }
+        else if (CMD( argv[1], NANO, 4 ))
         {
             /*-------------------------------------------*/
             /*             test 'nanosleep'              */
@@ -193,6 +308,38 @@ int $test_cmd(int argc, char *argv[],char *cmdline)
         else if (CMD( argv[1], SIGUSR1, 7 )) raise( SIGUSR1 );
         else if (CMD( argv[1], SIGUSR2, 7 )) raise( SIGUSR2 );
 #endif
+#if defined( FISHTEST_TXF_STATS )
+        else if (CMD( argv[1], TXF, 3 ))
+        {
+            LOGMSG("+++ acc_read  =%12"PRIu64"\n", sysblk.acc_read   );
+            LOGMSG("+++ acc_write =%12"PRIu64"\n", sysblk.acc_write  );
+            LOGMSG("+++ acc_check =%12"PRIu64"\n", sysblk.acc_check  );
+            LOGMSG("+++ acc_notrw =%12"PRIu64"\n", sysblk.acc_notrw  );
+            LOGMSG("+++ acc_none  =%12"PRIu64"\n", sysblk.acc_none   );
+            LOGMSG("+++ ctrans    =%12"PRIu64"\n", sysblk.txf_ctrans );
+
+            if (sysblk.txf_ctrans)
+            {
+                double count, total = sysblk.txf_ctrans;
+
+#define         TXF_BUCKET(n) \
+                count = sysblk.txf_caborts[n]; \
+                LOGMSG("+++ " #n " retries =%12"PRIu64"  (%4.1f%%)\n", sysblk.txf_caborts[n], (count/total) * 100.0 )
+
+                TXF_BUCKET(0);
+                TXF_BUCKET(1);
+                TXF_BUCKET(2);
+                TXF_BUCKET(3);
+                TXF_BUCKET(4);
+                TXF_BUCKET(5);
+                TXF_BUCKET(6);
+                TXF_BUCKET(7);
+//              TXF_BUCKET(8);
+                count = sysblk.txf_caborts[8];
+                LOGMSG("+++ 8+retries =%12"PRIu64"  (%4.1f%%)\n", sysblk.txf_caborts[8], (count/total) * 100.0 );
+            }
+        }
+#endif /* defined( FISHTEST_TXF_STATS ) */
         else
             // "%s%s"
             WRMSG( HHC00001, "E", argv[1], ": unknown test");
@@ -599,45 +746,69 @@ int log_cmd(int argc, char *argv[], char *cmdline)
 /*-------------------------------------------------------------------*/
 /* logopt command - change log options                               */
 /*-------------------------------------------------------------------*/
-int logopt_cmd(int argc, char *argv[], char *cmdline)
+int logopt_cmd( int argc, char* argv[], char* cmdline)
 {
-    int rc = 0;
-    UNREFERENCED(cmdline);
+    int i, rc = 0;
+    char buf[64];
+    bool bDateStamp = !sysblk.logoptnodate;
+    bool bTimeStamp = !sysblk.logoptnotime;
 
+    UNREFERENCED( cmdline );
     UPPER_ARGV_0( argv );
 
-    if ( argc < 2 )
+    if (argc <= 1)
     {
-        WRMSG( HHC02203, "I", argv[0],
-            sysblk.logoptnotime ? "NOTIMESTAMP" : "TIMESTAMP" );
-    }
-    else
-    {
-        char *cmd = argv[0];
+        MSGBUF( buf, "%s %s"
+            , bDateStamp ? "DATESTAMP" : "NODATESTAMP"
+            , bTimeStamp ? "TIMESTAMP" : "NOTIMESTAMP"
+        );
 
-        while ( argc > 1 )
+        // "%-14s: %s"
+        WRMSG( HHC02203, "I", argv[0], buf );
+        return 0;
+    }
+
+    // ISO 8601: YYYY-MM-DD
+
+    for (i=1; i < argc; i++)
+    {
+        if (CMD( argv[i], DATESTAMP, 4 ))
         {
-            argv++;
-            argc--;
+            bDateStamp = true;
+            continue;
+        }
+        if (CMD( argv[i], NODATESTAMP, 6 ))
+        {
+            bDateStamp = false;
+            continue;
+        }
+        if (CMD( argv[i], TIMESTAMP, 4 ))
+        {
+            bTimeStamp = true;
+            continue;
+        }
+        if (CMD( argv[i], NOTIMESTAMP, 6 ))
+        {
+            bTimeStamp = false;
+            continue;
+        }
 
-            if ( CMD(argv[0],timestamp,4) )
-            {
-                sysblk.logoptnotime = FALSE;
-                WRMSG( HHC02204, "I", cmd, "TIMESTAMP" );
-                continue;
-            }
-            if ( CMD(argv[0],notimestamp,6) )
-            {
-                sysblk.logoptnotime = TRUE;
-                WRMSG( HHC02204, "I", cmd, "NOTIMESTAMP" );
-                continue;
-            }
-
-            WRMSG( HHC02205, "E", argv[0], "" );
-            rc = -1;
-            break;
-        } /* while (argc > 1) */
+        // "Invalid argument %s%s"
+        WRMSG( HHC02205, "E", argv[i], "" );
+        return -1;
     }
+
+    sysblk.logoptnodate = !bDateStamp;
+    sysblk.logoptnotime = !bTimeStamp;
+
+    MSGBUF( buf, "%s %s"
+        , bDateStamp ? "DATESTAMP" : "NODATESTAMP"
+        , bTimeStamp ? "TIMESTAMP" : "NOTIMESTAMP"
+    );
+
+    // "%-14s set to %s"
+    WRMSG( HHC02204, "I", argv[0], buf );
+
     return rc;
 }
 
@@ -1853,6 +2024,7 @@ int ctc_cmd( int argc, char *argv[], char *cmdline )
     U16      lcss;
     U16      devnum;
     BYTE     onoff;
+    BYTE     startup;
     u_int    mask;
 
     UNREFERENCED( cmdline );
@@ -1867,6 +2039,7 @@ int ctc_cmd( int argc, char *argv[], char *cmdline )
         || (1
             && !CMD(argv[2],on,2)
             && !CMD(argv[2],off,3)
+            && !CMD(argv[2],startup,7)
            )
         || argc > 4
         || (1
@@ -1881,6 +2054,7 @@ int ctc_cmd( int argc, char *argv[], char *cmdline )
     }
 
     onoff = ( CMD(argv[2],on,2) );
+    startup = ( CMD(argv[2],startup,7) );
     if( onoff )
         mask = DBGPTPPACKET;
     else
@@ -1893,7 +2067,7 @@ int ctc_cmd( int argc, char *argv[], char *cmdline )
             if (0
                 || !dev->allocated
                 || 0x3088 != dev->devtype
-                || (CTC_CTCI != dev->ctctype && CTC_LCS != dev->ctctype && CTC_PTP != dev->ctctype)
+                || (CTC_CTCI != dev->ctctype && CTC_LCS != dev->ctctype && CTC_PTP != dev->ctctype && CTC_CTCE != dev->ctctype)
             )
                 continue;
 
@@ -1916,7 +2090,7 @@ int ctc_cmd( int argc, char *argv[], char *cmdline )
             }
         }
 
-        WRMSG(HHC02204, "I", "CTC DEBUG", onoff ? "on ALL" : "off ALL");
+        WRMSG(HHC02204, "I", "CTC DEBUG", startup ? "startup ALL" : onoff ? "on ALL" : "off ALL");
     }
     else
     {
@@ -1962,18 +2136,33 @@ int ctc_cmd( int argc, char *argv[], char *cmdline )
                 pPTPBLK->uDebugMask = mask;
             }
         }
+        else if (CTC_CTCE == dev->ctctype)
+        {
+            if (onoff)
+            {
+                dev->ctce_trace_cntr = CTCE_TRACE_ON;
+            }
+            else if (startup)
+            {
+                dev->ctce_trace_cntr = CTCE_TRACE_STARTUP;
+            }
+            else
+            {
+                dev->ctce_trace_cntr = CTCE_TRACE_OFF;
+            }
+        }
         else
         {
-            WRMSG(HHC02209, "E", lcss, devnum, "supported CTCI, LSC or PTP" );
+            WRMSG(HHC02209, "E", lcss, devnum, "supported CTCI, LSC, PTP or CTCE" );
             return -1;
         }
 
         {
           char buf[128];
-          MSGBUF( buf, "%s for %s device %1d:%04X pair",
-                  onoff ? "ON" : "OFF",
-                  CTC_LCS == dev->ctctype ? "LCS" : CTC_PTP == dev->ctctype ? "PTP" : "CTCI",
-                  lcss, devnum );
+          MSGBUF( buf, "%s for %s device %1d:%04X%s",
+                  startup ? "STARTUP" : onoff ? "ON" : "OFF",
+                  CTC_CTCE == dev->ctctype ? "CTCE" : CTC_LCS == dev->ctctype ? "LCS" : CTC_PTP == dev->ctctype ? "PTP" : "CTCI",
+                  lcss, devnum, CTC_CTCE != dev->ctctype ? "pair" : "" );
           WRMSG(HHC02204, "I", "CTC DEBUG", buf);
         }
     }
@@ -3581,7 +3770,7 @@ int maxcpu_cmd( int argc, char* argv[], char* cmdline )
 
     /* Parse maximum number of CPUs operand */
     if (sscanf( argv[1], "%hu%c", &maxcpu, &c ) != 1
-        || maxcpu > MAX_CPU_ENGINES)
+        || maxcpu > MAX_CPU_ENGS)
     {
         // "Invalid value %s specified for %s"
         WRMSG( HHC01451, "E", argv[1], argv[0] );
@@ -3794,30 +3983,53 @@ int toddrag_cmd(int argc, char *argv[], char *cmdline)
 /*-------------------------------------------------------------------*/
 int panopt_cmd( int argc, char* argv[], char* cmdline)
 {
+    char buf[64];
+
     UNREFERENCED( cmdline );
     UPPER_ARGV_0(  argv   );
 
-    if (argc < 2)
+    // panopt [MSGCOLOR=NO|YES] [FULLPATH|NAMEONLY]
+
+    if (argc <= 1)
     {
+        MSGBUF( buf, "MSGCOLOR=%s %s",
+            sysblk.pan_colors  ? "YES"      : "NO",
+            sysblk.devnameonly ? "NAMEONLY" : "FULLPATH"
+        );
+
         // "%-14s: %s"
-        WRMSG( HHC02203, "I", argv[0], sysblk.devnameonly ?
-            "NAMEONLY" : "FULLPATH" );
+        WRMSG( HHC02203, "I", argv[0], buf );
         return 0;
     }
-    else if (argc == 2)
+    else if (argc <= 3)
     {
-        if      (CMD( argv[1], NAMEONLY, 4 )) sysblk.devnameonly = 1;
-        else if (CMD( argv[1], FULLPATH, 4 )) sysblk.devnameonly = 0;
-        else // error
+        int  i;
+        for (i=1; i < argc; i++)
         {
-            // "Invalid argument %s%s"
-            WRMSG( HHC02205, "E", argv[1], "" );
-            return -1;
+            if      (CMD( argv[i], NAMEONLY,      4 )) sysblk.devnameonly = 1;
+            else if (CMD( argv[i], FULLPATH,      4 )) sysblk.devnameonly = 0;
+            else if (CMD( argv[i], MSGCOLOR=NO,  11 )) sysblk.pan_colors = false;
+            else if (CMD( argv[i], MSGCOLOR=YES, 12 )) sysblk.pan_colors = true;
+            else // error
+            {
+                // "Invalid argument %s%s"
+                WRMSG( HHC02205, "E", argv[i], "" );
+                return -1;
+            }
         }
 
+        set_panel_colors();
+
         if (MLVL( VERBOSE ))
+        {
+            MSGBUF( buf, "MSGCOLOR=%s %s",
+                sysblk.pan_colors  ? "YES"      : "NO",
+                sysblk.devnameonly ? "NAMEONLY" : "FULLPATH"
+            );
+
             // "%-14s set to %s"
-            WRMSG( HHC02204, "I", argv[0], argv[1] );
+            WRMSG( HHC02204, "I", argv[0], buf );
+        }
 
         return 0;
     }
@@ -5029,27 +5241,29 @@ int cpuidfmt_cmd( int argc, char* argv[], char* cmdline )
 /*-------------------------------------------------------------------*/
 /* loadparm - set or display IPL parameter                           */
 /*-------------------------------------------------------------------*/
-int loadparm_cmd(int argc, char *argv[], char *cmdline)
+int loadparm_cmd( int argc, char* argv[], char* cmdline )
 {
-    UNREFERENCED(cmdline);
-
+    UNREFERENCED( cmdline );
     UPPER_ARGV_0( argv );
 
-    /* Update IPL parameter if operand is specified */
-    if ( argc > 2 )
+    /* Update the default loadparm value if operand is specified */
+    if (argc > 2)
     {
+        // "Invalid number of arguments for %s"
         WRMSG( HHC01455, "E", argv[0] );
         return -1;
     }
 
-    if ( argc == 2 )
+    if (argc == 2)
     {
-        set_loadparm(argv[1]);
-        if ( MLVL(VERBOSE) )
-            WRMSG(HHC02204, "I", argv[0], str_loadparm());
+        STRLCPY( sysblk.loadparm, argv[1] );
+        if (MLVL( VERBOSE ))
+            // "%-14s set to %s"
+            WRMSG( HHC02204, "I", argv[0], sysblk.loadparm );
     }
     else
-        WRMSG(HHC02203, "I", argv[0], str_loadparm());
+        // "%-14s: %s"
+        WRMSG( HHC02203, "I", argv[0], sysblk.loadparm );
 
     return 0;
 }
@@ -5103,6 +5317,10 @@ int devlist_cmd( int argc, char* argv[], char* cmdline )
     int       single_devnum = FALSE;
     char      buf[1024];
 
+    DEVNUMSDESC  dnd;
+    size_t       devncount = 0;
+    int          dev_found = FALSE;
+
     UNREFERENCED( cmdline );
 
     if (1
@@ -5117,22 +5335,32 @@ int devlist_cmd( int argc, char* argv[], char* cmdline )
 
     if (argc >= 2 && !strlen( devtype ))
     {
-        single_devnum = TRUE;
 
-        if ( parse_single_devnum( argv[1], &lcss, &devnum ) < 0 )
+        // We now also support multiple CCUU addresses.
+        if ((devncount = parse_devnums( argv[1], &dnd )) > 0)
         {
-            // (error message already issued)
-            return -1;
+            ssid = LCSS_TO_SSID( dnd.lcss );
         }
+        else
 
-        if (!(dev = find_device_by_devnum( lcss, devnum )))
         {
-            // HHC02200 "%1d:%04X device not found"
-            devnotfound_msg( lcss, devnum );
-            return -1;
-        }
+            single_devnum = TRUE;
 
-        ssid = LCSS_TO_SSID( lcss );
+            if ( parse_single_devnum( argv[1], &lcss, &devnum ) < 0 )
+            {
+                // (error message already issued)
+                return -1;
+            }
+
+            if (!(dev = find_device_by_devnum( lcss, devnum )))
+            {
+                // HHC02200 "%1d:%04X device not found"
+                devnotfound_msg( lcss, devnum );
+                return -1;
+            }
+
+            ssid = LCSS_TO_SSID( lcss );
+        }
     }
 
     // Since we wish to display the list of devices in ascending device
@@ -5159,6 +5387,20 @@ int devlist_cmd( int argc, char* argv[], char* cmdline )
         if (dev->allocated)  // (valid device?)
         {
             if (single_devnum && (dev->ssid != ssid || dev->devnum != devnum))
+                continue;
+
+            // Multiple devnum support is active when devncount > 0,
+            // otherwise we are in single devnum or ALL devnum mode.
+            for (i=0, dev_found=FALSE; dev_found==FALSE && i < devncount && !bTooMany; i++)
+            {
+                if (1
+                    && dev->ssid == ssid
+                    && dev->devnum >= dnd.da[i].cuu1
+                    && dev->devnum <= dnd.da[i].cuu2
+                )
+                    dev_found = TRUE;
+            }
+            if (devncount > 0 && dev_found == FALSE)
                 continue;
 
             if (nDevCount < MAX_DEVLIST_DEVICES)
@@ -5247,6 +5489,8 @@ int devlist_cmd( int argc, char* argv[], char* cmdline )
     }
 
     free( orig_pDevBlkPtrs );
+    if (devncount > 0)
+        free( dnd.da );
 
     if (bTooMany)
     {
@@ -6526,7 +6770,7 @@ BYTE     unitstat, code = 0;
 /*-------------------------------------------------------------------*/
 /* devinit command - assign/open a file for a configured device      */
 /*-------------------------------------------------------------------*/
-int devinit_cmd(int argc, char *argv[], char *cmdline)
+DLL_EXPORT int devinit_cmd(int argc, char *argv[], char *cmdline)
 {
 DEVBLK*  dev;
 U16      devnum;

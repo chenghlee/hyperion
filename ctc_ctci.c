@@ -99,7 +99,7 @@ static BYTE CTCI_Immed_Commands[256]=
 // Declarations
 // ====================================================================
 
-static BYTE     ctc_halt_or_clear( DEVBLK* pDEVBLK );
+static void     ctc_halt_or_clear( DEVBLK* pDEVBLK );
 
 static void*    CTCI_ReadThread( void* arg /*PCTCBLK pCTCBLK */ );
 
@@ -670,7 +670,7 @@ void  CTCI_Query( DEVBLK* pDEVBLK, char** ppszClass,
 // instruction and is notifying us of that fact so we can stop our
 // CTCI_Read CCW processing loop.
 
-static BYTE ctc_halt_or_clear( DEVBLK* pDEVBLK )
+static void ctc_halt_or_clear( DEVBLK* pDEVBLK )
 {
     PCTCBLK pCTCBLK = (PCTCBLK) pDEVBLK->dev_data;
     obtain_lock( &pCTCBLK->EventLock );
@@ -682,7 +682,6 @@ static BYTE ctc_halt_or_clear( DEVBLK* pDEVBLK )
         }
     }
     release_lock( &pCTCBLK->EventLock );
-    return (CSW_CE | CSW_DE);
 }
 
 // -------------------------------------------------------------------
@@ -1508,7 +1507,7 @@ static int  ParseArgs( DEVBLK* pDEVBLK, PCTCBLK pCTCBLK,
             return -1;
         }
 
-#if defined(__APPLE__) || defined(__FreeBSD__)
+#if defined( __APPLE__ ) || defined( FREEBSD_OR_NETBSD )
         if (TRUE == pCTCBLK->fPreconfigured)
         {
             /* Need  to append the interface number to the character */

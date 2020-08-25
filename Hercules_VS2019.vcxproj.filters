@@ -226,6 +226,9 @@
     <Filter Include="Source Files\Hercules\ExtPkgs\telnet\lib">
       <UniqueIdentifier>{7E51CA54-4311-406d-9C9D-ED79986330BB}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Other Files\DOC\README\images">
+      <UniqueIdentifier>{959cf32d-895f-4258-b529-320fdeeeac1f}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="cckdcdsk.c">
@@ -363,6 +366,9 @@
     <ClCompile Include="ctcadpt.c">
       <Filter>Source Files\Hercules\Devices\CTC\Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="dummydev.c">
+      <Filter>Source Files\Hercules\Devices\CTC\Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="hercifc.c">
       <Filter>Source Files\Hercules\Devices\CTC\Source Files</Filter>
     </ClCompile>
@@ -370,6 +376,9 @@
       <Filter>Source Files\Hercules\Devices\CTC\Source Files</Filter>
     </ClCompile>
     <ClCompile Include="qeth.c">
+      <Filter>Source Files\Hercules\Devices\CTC\Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="tcpnje.c">
       <Filter>Source Files\Hercules\Devices\CTC\Source Files</Filter>
     </ClCompile>
     <ClCompile Include="tuntap.c">
@@ -932,6 +941,9 @@
     <None Include="RELEASE.NOTES">
       <Filter>Other Files\DOC</Filter>
     </None>
+    <None Include="readme\README.ADDING.md">
+      <Filter>Other Files\DOC\README</Filter>
+    </None>
     <None Include="readme\README.AIX.md">
       <Filter>Other Files\DOC\README</Filter>
     </None>
@@ -954,6 +966,9 @@
       <Filter>Other Files\DOC\README</Filter>
     </None>
     <None Include="readme\README.ECPSVM.md">
+      <Filter>Other Files\DOC\README</Filter>
+    </None>
+    <None Include="readme\README.FACILITIES.md">
       <Filter>Other Files\DOC\README</Filter>
     </None>
     <None Include="readme\README.EXTPKG.md">
@@ -1014,6 +1029,9 @@
       <Filter>Other Files\DOC\README</Filter>
     </None>
     <None Include="readme\README.TCPIP.md">
+      <Filter>Other Files\DOC\README</Filter>
+    </None>
+    <None Include="readme\README.TCPNJE.md">
       <Filter>Other Files\DOC\README</Filter>
     </None>
     <None Include="readme\README.VMFPLC2.md">
@@ -1527,6 +1545,9 @@
       <Filter>Other Files\Utilities</Filter>
     </None>
     <None Include="util\cckddump.hla">
+      <Filter>Other Files\Utilities</Filter>
+    </None>
+    <None Include="util\cckddu64.hla">
       <Filter>Other Files\Utilities</Filter>
     </None>
     <None Include="util\cckdload.hla">
@@ -2360,6 +2381,21 @@
     <None Include="tests\CCW-ILS.tst">
       <Filter>Other Files\tests\scripts\tst</Filter>
     </None>
+    <None Include="tests\CDSG.core">
+      <Filter>Other Files\tests\core</Filter>
+    </None>
+    <None Include="tests\CDSG.asm">
+      <Filter>Other Files\tests\scripts\asm</Filter>
+    </None>
+    <None Include="tests\CDSG.list">
+      <Filter>Other Files\tests\scripts\asm\list</Filter>
+    </None>
+    <None Include="tests\CDSG.PDF">
+      <Filter>Other Files\tests\scripts\asm\list</Filter>
+    </None>
+    <None Include="tests\CDSG.tst">
+      <Filter>Other Files\tests\scripts\tst</Filter>
+    </None>
     <None Include="tests\CLCL-et-al.core">
       <Filter>Other Files\tests\core</Filter>
     </None>
@@ -2388,6 +2424,21 @@
       <Filter>Other Files\tests\scripts\asm\list</Filter>
     </None>
     <None Include="tests\CLCL.tst">
+      <Filter>Other Files\tests\scripts\tst</Filter>
+    </None>
+    <None Include="tests\CMPSC.core">
+      <Filter>Other Files\tests\core</Filter>
+    </None>
+    <None Include="tests\CMPSC.asm">
+      <Filter>Other Files\tests\scripts\asm</Filter>
+    </None>
+    <None Include="tests\CMPSC.list">
+      <Filter>Other Files\tests\scripts\asm\list</Filter>
+    </None>
+    <None Include="tests\CMPSC.PDF">
+      <Filter>Other Files\tests\scripts\asm\list</Filter>
+    </None>
+    <None Include="tests\CMPSC.tst">
       <Filter>Other Files\tests\scripts\tst</Filter>
     </None>
     <None Include="vstools.cmd">
@@ -2447,6 +2498,9 @@
       <Filter>Source Files\Hercules\Devices\CTC\Header Files</Filter>
     </ClInclude>
     <ClInclude Include="qeth.h">
+      <Filter>Source Files\Hercules\Devices\CTC\Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="tcpnje.h">
       <Filter>Source Files\Hercules\Devices\CTC\Header Files</Filter>
     </ClInclude>
     <ClInclude Include="tt32api.h">
@@ -2713,6 +2767,9 @@
     <ClInclude Include="inline.h">
       <Filter>Source Files\Hercules\Emulation\Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="instfmts.h">
+      <Filter>Source Files\Hercules\Emulation\Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="linklist.h">
       <Filter>Source Files\Hercules\Emulation\Header Files</Filter>
     </ClInclude>
@@ -2765,6 +2822,9 @@
       <Filter>Source Files\Hercules\Emulation\Header Files</Filter>
     </ClInclude>
     <ClInclude Include="tcpip.h">
+      <Filter>Source Files\Hercules\Emulation\Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="transact.h">
       <Filter>Source Files\Hercules\Emulation\Header Files</Filter>
     </ClInclude>
     <ClInclude Include="version.h">
@@ -3537,6 +3597,12 @@
     </Image>
     <Image Include="html\images\telnetwin.png">
       <Filter>Other Files\DOC\html\images</Filter>
+    </Image>
+    <Image Include="readme\images\herclogo.jpg">
+      <Filter>Other Files\DOC\README\images</Filter>
+    </Image>
+    <Image Include="readme\images\image_header_herculeshyperionSDL.png">
+      <Filter>Other Files\DOC\README\images</Filter>
     </Image>
   </ItemGroup>
   <ItemGroup>

@@ -23,6 +23,7 @@
 /*-------------------------------------------------------------------*/
 /* Exit codes                                                        */
 /*-------------------------------------------------------------------*/
+#define EXIT_ERROR_LOGIC_ERROR -99
 #define EXIT_ERROR_SYNTAX      -1
 #define EXIT_NORMAL_SUCCESS     0
 #define EXIT_SEEK_ERROR         1
@@ -607,7 +608,7 @@ char            pathname[ MAX_PATH ];   /* file path in host format  */
                        cmd_offset = true;
 
                        argc--; argv++;
-                       op_offset = (int) offtify(*argv);
+                       op_offset = (U64) offtify(*argv);
 
                        argc--; argv++;
                        op_length = (int) offtify(*argv);
@@ -935,4 +936,5 @@ char            pathname[ MAX_PATH ];   /* file path in host format  */
     /* Close file, exit */
     clean();
     ErrExit( cckd_diag_rc );
+    UNREACHABLE_CODE( return EXIT_ERROR_LOGIC_ERROR );
 }

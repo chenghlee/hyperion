@@ -360,10 +360,11 @@
 #define ctc_cmd_desc            "Enable/Disable CTC debugging"
 #define ctc_cmd_help            \
                                 \
-  "Format:  \"ctc  debug  { on | off }  [ <devnum> | ALL ]\".\n\n"              \
-  "Enables/disables debug packet tracing for the specified CTCI/LCS/PTP\n"      \
-  "device group(s) identified by <devnum> or for all CTCI/LCS/PTP device\n"     \
-  "groups if <devnum> is not specified or specified as 'ALL'.\n"
+  "Format:  \"ctc  debug  { on | off | startup }  [ <devnum> | ALL ]\".\n\n"    \
+  "Enables/disables debug packet tracing for the specified CTCI/LCS/PTP/CTCE\n" \
+  "device group(s) identified by <devnum> or for all CTCI/LCS/PTP/CTCE device\n"\
+  "groups if <devnum> is not specified or specified as 'ALL'.\n"                \
+  "Only CTCE devices support 'startup' debugging.\n"
 
 #define define_cmd_desc         "Rename device"
 #define define_cmd_help         \
@@ -676,7 +677,7 @@
   "function prior to starting an IPL.\n"                                         \
   "\n"                                                                           \
   "The optional 'LOADPARM' keyword followed by a 1-8 character string can be\n"  \
-  "used to set the LOADPARM prior to the IPL.\n"                                 \
+  "used to override the default value defined by the 'LOADPARM' command.\n"      \
   "\n"                                                                           \
   "An optional 'PARM' keyword followed by string data can also be used to\n"     \
   "pass data to the IPL command processor. If specified the string data is\n"    \
@@ -713,11 +714,14 @@
   "'savecore' command. The default for 'address' is 0 (beginning of\n"          \
   "storage).\n"
 
-#define loadparm_cmd_desc       "Set the IPL 'LOADPARM' parameter"
+#define loadparm_cmd_desc       "Set the default IPL 'LOADPARM' parameter"
 #define loadparm_cmd_help       \
                                 \
-  "Specifies the eight-character IPL 'LOADPARM' parameter which is used\n"      \
-  "by some operating systems to select certain initialization options.\n"
+  "Specifies the default eight-character IPL 'LOADPARM' parameter used by\n"    \
+  "some operating systems to select certain initialization options. The\n"      \
+  "value specified here can be overridden by specifying a different value\n"   \
+  "on the the IPL command itself. The LOADPARM command simply defines the\n"    \
+  "default value that is used if not overridden on the IPL command itself.\n"
 
 #define loadtext_cmd_desc       "Load a text deck file"
 #define loadtext_cmd_help       \
@@ -729,7 +733,12 @@
 #define locks_cmd_desc          "Display internal locks list"
 #define locks_cmd_help          \
                                 \
-  "Format: \"locks [HELD|tid|ALL] [SORT [TIME|TOD]|[OWNER|TID]|NAME|LOC]\"\n"
+  "Format: \"locks [ALL|HELD|tid] [SORT NAME|{TID|OWNER}|{WHEN|TIME|TOD}|{WHERE|LOC}]\"\n"
+
+#define threads_cmd_desc        "Display internal threads list"
+#define threads_cmd_help        \
+                                \
+  "Format:  \"threads [ALL|WAITING|tid] [SORT NAME|TID|{WHEN|TIME|TOD}|{WHERE|LOC}]\"\n"
 
 #define log_cmd_desc            "Direct logger output"
 #define log_cmd_help            \
@@ -740,12 +749,13 @@
 #define logopt_cmd_desc         "Set/Display logging options"
 #define logopt_cmd_help         \
                                 \
-  "Format: \"logopt [timestamp | notimestamp]\".   Sets logging options.\n"     \
-  "\"timestamp\" inserts a time stamp in front of each log message.\n"          \
-  "\"notimestamp\" displays log messages with no time stamps.  Entering\n"      \
-  "the command with no arguments displays current logging options.\n"           \
-  "\"timestamp\" and \"notimestamp\" may be abbreviated as \"time\"\n"          \
-  "and \"notime\" respectively.\n"
+  "Format: \"LOGOPT [DATESTAMP | NODATESTAMP] [TIMESTAMP | NOTIMESTAMP]\".\n\n" \
+  "Sets logfile options. \"TIMESTAMP\" inserts a time stamp in front of\n"     \
+  "each log message. \"NOTIMESTAMP\" logs messages without time stamps.\n"      \
+  "Similarly, \"DATESTAMP\" and \"NODATESTAMP\" prefixes logfile messages\n"    \
+  "with or without the current date. Entering the command with no arguments\n"  \
+  "displays current logging options. The current resolution of the stamp\n"     \
+  "is one second.\n"
 
 #define lparname_cmd_desc       "Set LPAR name"
 #define lparname_cmd_help       \
@@ -956,11 +966,13 @@
 #define panopt_cmd_desc         "Display or set panel options"
 #define panopt_cmd_help         \
                                 \
-  "Format: \"panopt [NAMEONLY|FULLPATH]\". Sets or displays panel options.\n"   \
-  "The only supported options at this time are 'NAMEONLY' or 'FULLPATH'.\n"     \
-  "NAMEONLY requests the panel to display only the emulated device's base\n"    \
-  "filename instead of the fullpath filename which is the default. Enter\n"    \
-  "the command with no arguments to display the current settings.\n"
+  "Format: \"panopt [MSGCOLOR=NO|YES] [FULLPATH|NAMEONLY]\" sets or displays\n"     \
+  "panel options. MSGCOLOR=YES displays colorized panel messages. NO (default)\n"   \
+  "displays normal uncolorized panel messages. NAMEONLY requests the extended\n"    \
+  "panel screen (that displays the list of devices and is reached by pressing\n"    \
+  "the ESC key) to display only the emulated device's base filename. FULLPATH\n"    \
+  "displays the file's full path filename. Enter the command with no arguments\n"   \
+  "to display the current settings.\n"
 
 #define panrate_cmd_desc        "Display or set rate at which console refreshes"
 #define panrate_cmd_help        \
@@ -1050,6 +1062,12 @@
   "identified by <devnum>, or for all PTP device groups if\n"                   \
   "<devnum> is not specified or specified as 'ALL'.\n"
 
+#if defined( _FEATURE_073_TRANSACT_EXEC_FACILITY )
+  #define ptt_cmd_help_txf "     (no)txf          trace Transactional-Execution Facility events\n"
+#else
+  #define ptt_cmd_help_txf
+#endif
+
 #define ptt_cmd_desc            "Activate or display internal trace table"
 #define ptt_cmd_help            \
                                 \
@@ -1074,6 +1092,7 @@
   "     (no)sie          trace SIE instruction events\n"                            \
   "     (no)sig          trace SIGP instruction events\n"                           \
   "     (no)io           trace I/O instruction events\n"                            \
+  ptt_cmd_help_txf                                                                  \
   "     (no)lcs1         trace LCS timing events\n"                                 \
   "     (no)lcs2         trace LCS general debugging events\n"                      \
   "     (no)qeth         trace QETH general debugging events\n"                     \
@@ -1604,6 +1623,54 @@
   "tracing.  Enter the 't+-' command by itself (without any arguments) to\n"    \
   "display the current settings.\n"
 
+#if defined( _FEATURE_073_TRANSACT_EXEC_FACILITY )
+
+#define txf_cmd_desc            "Transactional-Execution Facility tracing"
+#define txf_cmd_help            \
+                                \
+  "Format:\n"                                                                   \
+  "\n"                                                                          \
+  "   txf  [0 | [INSTR] [U] [C] [GOOD] [BAD] [TDB] [Pages|Lines]\n"             \
+  "        [WHY hhhhhhhh] [TAC nnn] [TND nn] [CPU nnn] [CFAILS nn] ]\n"         \
+  "\n"                                                                          \
+  "Where:\n"                                                                    \
+  "\n"                                                                          \
+  "   0       Disables all txf tracing.\n"                                      \
+  "\n"                                                                          \
+  "   INSTR   Enables instruction tracing of ONLY transactions.\n"              \
+  "           Either 'U' or 'C' or both must also be specified.\n"              \
+  "           Default is both. Use 't+' to activate the tracing.\n"             \
+  "\n"                                                                          \
+  "   U       Enables tracing of unconstrained transactions.\n"                 \
+  "   C       Enables tracing of constrained transactions.\n"                   \
+  "\n"                                                                          \
+  "   GOOD    Enables tracing of successful transactions.\n"                    \
+  "           The keyword 'SUCCESS' is also accepted.\n"                        \
+  "\n"                                                                          \
+  "   BAD     Enables tracing of unsuccessful transactions.\n"                  \
+  "           The keyword 'FAIL'or 'FAILURE' is also accepted.\n"               \
+  "\n"                                                                          \
+  "   TDB     Displays an unsuccessful transaction's TDB.\n"                    \
+  "   PAGES   Displays a transaction's page map information.\n"                 \
+  "   LINES   Displays a page map's cache line information.\n"                  \
+  "\n"                                                                          \
+  "   WHY     Trace only when why abort is any of mask hhhhhhhh.\n"             \
+  "   TAC     Trace only when abort code = nnn.\n"                              \
+  "   TND     Trace only when nesting depth >= nn.\n"                           \
+  "   CPU     Trace only when transaction executes on CPU nnn.\n"               \
+  "   CFAILS  Trace only when constrained cabort count >= nn.\n"                \
+  "\n"                                                                          \
+  "Enter 'txf' by itself to display the current options. Use 'txf 0'\n"         \
+  "to disable all txf tracing. If 'INSTR' is not specified then only\n"         \
+  "the results of transactions are traced. If any option other than\n"          \
+  "'U' or 'C' is also specified with 'INSTR' then both instructions\n"          \
+  "and transaction results are traced. Note: 'txf INSTR' does not by\n"         \
+  "itself enable instruction tracing. Use the 't+' command to do that.\n"       \
+  "WHY masks are #defined in source file transact.h. A common WHY mask\n"       \
+  "is 0xC000FFFF to detect unexpected aborts.\n"
+
+#endif /* defined( _FEATURE_073_TRANSACT_EXEC_FACILITY ) */
+
 #define timerint_cmd_desc       "Display or set timers update interval"
 #define timerint_cmd_help       \
                                 \
@@ -1813,7 +1880,9 @@ COMMAND( "t-",                      trace_cmd,              SYSCMDNOPER,        
 COMMAND( "t",                       trace_cmd,              SYSCMDNOPER,        t_cmd_desc,             t_cmd_help          )
 COMMAND( "t?",                      trace_cmd,              SYSCMDNOPER,        tquest_cmd_desc,        tquest_cmd_help     )
 COMMAND( "t+",                      trace_cmd,              SYSCMDNOPER,        tplus_cmd_desc,         tplus_cmd_help      )
-
+#if defined( _FEATURE_073_TRANSACT_EXEC_FACILITY )
+COMMAND( "txf",                     txf_cmd,                SYSCMDNOPER,        txf_cmd_desc,           txf_cmd_help        )
+#endif
 COMMAND( "t+-",                     auto_trace_cmd,         SYSCMDNOPER,        auto_trace_desc,        auto_trace_help     )
 COMMAND( "timerint",                timerint_cmd,           SYSCMDNOPER,        timerint_cmd_desc,      timerint_cmd_help   )
 COMMAND( "tlb",                     tlb_cmd,                SYSCMDNOPER,        tlb_cmd_desc,           NULL                )
@@ -1867,6 +1936,7 @@ COMMAND( "exit",                    quit_cmd,               SYSALLNDIAG8,       
 COMMAND( "sizeof",                  sizeof_cmd,             SYSCMDNOPERNPROG,   sizeof_cmd_desc,        NULL                )
 
 COMMAND( "locks",                   EXTCMD( locks_cmd ),    SYSPROGDEVEL,       locks_cmd_desc,         locks_cmd_help      )
+COMMAND( "threads",                 EXTCMD( threads_cmd ),  SYSPROGDEVEL,       threads_cmd_desc,       threads_cmd_help    )
 
 /*-------------------------------------------------------------------*/
 /*             Commands optional by build option                     */

@@ -3216,7 +3216,10 @@ int     r1, r2;                         /* Values of R fields        */
 int     i1, i2;
 
     RR(inst, regs, r1, r2);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     HFPREG2_CHECK(r1, r2, regs);
+
     i1 = FPR2I(r1);
     i2 = FPR2I(r2);
 
@@ -3239,7 +3242,10 @@ int     r1, r2;                         /* Values of R fields        */
 int     i1, i2;
 
     RR(inst, regs, r1, r2);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     HFPREG2_CHECK(r1, r2, regs);
+
     i1 = FPR2I(r1);
     i2 = FPR2I(r2);
 
@@ -3263,7 +3269,10 @@ int     r1, r2;                         /* Values of R fields        */
 int     i1, i2;
 
     RR(inst, regs, r1, r2);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     HFPREG2_CHECK(r1, r2, regs);
+
     i1 = FPR2I(r1);
     i2 = FPR2I(r2);
 
@@ -3290,7 +3299,10 @@ int     r1, r2;                         /* Values of R fields        */
 int     i1, i2;
 
     RR(inst, regs, r1, r2);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     HFPREG2_CHECK(r1, r2, regs);
+
     i1 = FPR2I(r1);
     i2 = FPR2I(r2);
 
@@ -3318,6 +3330,8 @@ LONG_FLOAT fl;
 int     pgm_check;
 
     RR(inst, regs, r1, r2);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     HFPREG2_CHECK(r1, r2, regs);
 
     /* Get register content */
@@ -3356,6 +3370,7 @@ int     pgm_check;
 
     RR(inst, regs, r1, r2);
 
+    TRAN_FLOAT_INSTR_CHECK( regs );
     HFPREG_CHECK(r1, regs);
     HFPODD_CHECK(r2, regs);
 
@@ -3396,7 +3411,10 @@ EXTENDED_FLOAT mul_fl;
 int     pgm_check;
 
     RR(inst, regs, r1, r2);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     HFPODD2_CHECK(r1, r2, regs);
+
     i1 = FPR2I(r1);
 
     /* Get the operands */
@@ -3430,8 +3448,11 @@ int     pgm_check;
 
     RR(inst, regs, r1, r2);
 
+    TRAN_FLOAT_INSTR_CHECK( regs );
     HFPODD_CHECK(r1, regs);
+
     i1 = FPR2I(r1);
+
     HFPREG_CHECK(r2, regs);
 
     /* Get the operands */
@@ -3460,7 +3481,10 @@ int     r1, r2;                         /* Values of R fields        */
 int     i1, i2;
 
     RR(inst, regs, r1, r2);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     HFPREG2_CHECK(r1, r2, regs);
+
     i1 = FPR2I(r1);
     i2 = FPR2I(r2);
 
@@ -3480,6 +3504,8 @@ LONG_FLOAT fl;
 LONG_FLOAT cmp_fl;
 
     RR(inst, regs, r1, r2);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     HFPREG2_CHECK(r1, r2, regs);
 
     /* Get the operands */
@@ -3503,7 +3529,10 @@ LONG_FLOAT add_fl;
 int     pgm_check;
 
     RR(inst, regs, r1, r2);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     HFPREG2_CHECK(r1, r2, regs);
+
     i1 = FPR2I(r1);
 
     /* Get the operands */
@@ -3543,7 +3572,10 @@ LONG_FLOAT sub_fl;
 int     pgm_check;
 
     RR(inst, regs, r1, r2);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     HFPREG2_CHECK(r1, r2, regs);
+
     i1 = FPR2I(r1);
 
     /* Get the operands */
@@ -3586,7 +3618,10 @@ LONG_FLOAT mul_fl;
 int     pgm_check;
 
     RR(inst, regs, r1, r2);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     HFPREG2_CHECK(r1, r2, regs);
+
     i1 = FPR2I(r1);
 
     /* Get the operands */
@@ -3619,7 +3654,10 @@ LONG_FLOAT div_fl;
 int     pgm_check;
 
     RR(inst, regs, r1, r2);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     HFPREG2_CHECK(r1, r2, regs);
+
     i1 = FPR2I(r1);
 
     /* Get the operands */
@@ -3651,7 +3689,10 @@ LONG_FLOAT add_fl;
 int     pgm_check;
 
     RR(inst, regs, r1, r2);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     HFPREG2_CHECK(r1, r2, regs);
+
     i1 = FPR2I(r1);
 
     /* Get the operands */
@@ -3691,7 +3732,10 @@ LONG_FLOAT sub_fl;
 int     pgm_check;
 
     RR(inst, regs, r1, r2);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     HFPREG2_CHECK(r1, r2, regs);
+
     i1 = FPR2I(r1);
 
     /* Get the operands */
@@ -3731,7 +3775,10 @@ int     r1, r2;                         /* Values of R fields        */
 int     i1;
 
     RR(inst, regs, r1, r2);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     HFPREG2_CHECK(r1, r2, regs);
+
     i1 = FPR2I(r1);
 
     /* Copy register contents, clear sign bit */
@@ -3751,7 +3798,10 @@ int     r1, r2;                         /* Values of R fields        */
 int     i1;
 
     RR(inst, regs, r1, r2);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     HFPREG2_CHECK(r1, r2, regs);
+
     i1 = FPR2I(r1);
 
     /* Copy register contents, set sign bit */
@@ -3772,7 +3822,10 @@ int     r1, r2;                         /* Values of R fields        */
 int     i1;
 
     RR(inst, regs, r1, r2);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     HFPREG2_CHECK(r1, r2, regs);
+
     i1 = FPR2I(r1);
 
     /* Copy register contents */
@@ -3796,7 +3849,10 @@ int     r1, r2;                         /* Values of R fields        */
 int     i1;
 
     RR(inst, regs, r1, r2);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     HFPREG2_CHECK(r1, r2, regs);
+
     i1 = FPR2I(r1);
 
     /* Copy register contents, invert sign bit */
@@ -3821,6 +3877,8 @@ SHORT_FLOAT fl;
 int     pgm_check;
 
     RR(inst, regs, r1, r2);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     HFPREG2_CHECK(r1, r2, regs);
 
     /* Get register content */
@@ -3859,6 +3917,8 @@ SHORT_FLOAT to_fl;
 int     pgm_check;
 
     RR(inst, regs, r1, r2);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     HFPREG2_CHECK(r1, r2, regs);
 
     /* Get register content */
@@ -3900,7 +3960,10 @@ EXTENDED_FLOAT add_fl;
 int     pgm_check;
 
     RR(inst, regs, r1, r2);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     HFPODD2_CHECK(r1, r2, regs);
+
     i1 = FPR2I(r1);
 
     /* Get the operands */
@@ -3937,7 +4000,10 @@ EXTENDED_FLOAT sub_fl;
 int     pgm_check;
 
     RR(inst, regs, r1, r2);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     HFPODD2_CHECK(r1, r2, regs);
+
     i1 = FPR2I(r1);
 
     /* Get the operands */
@@ -3973,6 +4039,8 @@ DEF_INST(load_float_short_reg)
 int     r1, r2;                         /* Values of R fields        */
 
     RR(inst, regs, r1, r2);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     HFPREG2_CHECK(r1, r2, regs);
 
     /* Copy register content */
@@ -3990,6 +4058,8 @@ SHORT_FLOAT fl;
 SHORT_FLOAT cmp_fl;
 
     RR(inst, regs, r1, r2);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     HFPREG2_CHECK(r1, r2, regs);
 
     /* Get the operands */
@@ -4013,7 +4083,10 @@ SHORT_FLOAT add_fl;
 int     pgm_check;
 
     RR(inst, regs, r1, r2);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     HFPREG2_CHECK(r1, r2, regs);
+
     i1 = FPR2I(r1);
 
     /* Get the operands */
@@ -4053,7 +4126,10 @@ SHORT_FLOAT sub_fl;
 int     pgm_check;
 
     RR(inst, regs, r1, r2);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     HFPREG2_CHECK(r1, r2, regs);
+
     i1 = FPR2I(r1);
 
     /* Get the operands */
@@ -4098,7 +4174,10 @@ LONG_FLOAT result_fl;
 int     pgm_check;
 
     RR(inst, regs, r1, r2);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     HFPREG2_CHECK(r1, r2, regs);
+
     i1 = FPR2I(r1);
 
     /* Get the operands */
@@ -4130,7 +4209,10 @@ SHORT_FLOAT div_fl;
 int     pgm_check;
 
     RR(inst, regs, r1, r2);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     HFPREG2_CHECK(r1, r2, regs);
+
     i1 = FPR2I(r1);
 
     /* Get the operands */
@@ -4162,7 +4244,10 @@ SHORT_FLOAT add_fl;
 int     pgm_check;
 
     RR(inst, regs, r1, r2);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     HFPREG2_CHECK(r1, r2, regs);
+
     i1 = FPR2I(r1);
 
     /* Get the operands */
@@ -4202,7 +4287,10 @@ SHORT_FLOAT sub_fl;
 int     pgm_check;
 
     RR(inst, regs, r1, r2);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     HFPREG2_CHECK(r1, r2, regs);
+
     i1 = FPR2I(r1);
 
     /* Get the operands */
@@ -4234,7 +4322,7 @@ int     pgm_check;
 
 
 /*-------------------------------------------------------------------*/
-/* 60   STD   - Store Floating Point Long                       [RX] */
+/* 60   STD   - Store Floating Point Long                     [RX-a] */
 /*-------------------------------------------------------------------*/
 DEF_INST(store_float_long)
 {
@@ -4245,7 +4333,10 @@ VADR    effective_addr2;                /* Effective address         */
 U64     dreg;                           /* Double word workarea      */
 
     RX(inst, regs, r1, b2, effective_addr2);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     HFPREG_CHECK(r1, regs);
+
     i1 = FPR2I(r1);
 
     /* Store register contents at operand address */
@@ -4256,7 +4347,7 @@ U64     dreg;                           /* Double word workarea      */
 
 
 /*-------------------------------------------------------------------*/
-/* 67   MXD   - Multiply Floating Point Long to Extended        [RX] */
+/* 67   MXD   - Multiply Floating Point Long to Extended      [RX-a] */
 /*-------------------------------------------------------------------*/
 DEF_INST(multiply_float_long_to_ext)
 {
@@ -4270,7 +4361,10 @@ EXTENDED_FLOAT result_fl;
 int     pgm_check;
 
     RX(inst, regs, r1, b2, effective_addr2);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     HFPODD_CHECK(r1, regs);
+
     i1 = FPR2I(r1);
 
     /* Get the operands */
@@ -4291,7 +4385,7 @@ int     pgm_check;
 
 
 /*-------------------------------------------------------------------*/
-/* 68   LD    - Load Floating Point Long                        [RX] */
+/* 68   LD    - Load Floating Point Long                      [RX-a] */
 /*-------------------------------------------------------------------*/
 DEF_INST(load_float_long)
 {
@@ -4302,7 +4396,10 @@ VADR    effective_addr2;                /* Effective address         */
 U64     dreg;                           /* Double word workarea      */
 
     RX(inst, regs, r1, b2, effective_addr2);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     HFPREG_CHECK(r1, regs);
+
     i1 = FPR2I(r1);
 
     /* Fetch value from operand address */
@@ -4315,7 +4412,7 @@ U64     dreg;                           /* Double word workarea      */
 
 
 /*-------------------------------------------------------------------*/
-/* 69   CD    - Compare Floating Point Long                     [RX] */
+/* 69   CD    - Compare Floating Point Long                   [RX-a] */
 /*-------------------------------------------------------------------*/
 DEF_INST(compare_float_long)
 {
@@ -4326,6 +4423,8 @@ LONG_FLOAT fl;
 LONG_FLOAT cmp_fl;
 
     RX(inst, regs, r1, b2, effective_addr2);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     HFPREG_CHECK(r1, regs);
 
     /* Get the operands */
@@ -4338,7 +4437,7 @@ LONG_FLOAT cmp_fl;
 
 
 /*-------------------------------------------------------------------*/
-/* 6A   AD    - Add Floating Point Long                         [RX] */
+/* 6A   AD    - Add Floating Point Long                       [RX-a] */
 /*-------------------------------------------------------------------*/
 DEF_INST(add_float_long)
 {
@@ -4351,7 +4450,10 @@ LONG_FLOAT add_fl;
 int     pgm_check;
 
     RX(inst, regs, r1, b2, effective_addr2);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     HFPREG_CHECK(r1, regs);
+
     i1 = FPR2I(r1);
 
     /* Get the operands */
@@ -4380,7 +4482,7 @@ int     pgm_check;
 
 
 /*-------------------------------------------------------------------*/
-/* 6B   SD    - Subtract Floating Point Long                    [RX] */
+/* 6B   SD    - Subtract Floating Point Long                  [RX-a] */
 /*-------------------------------------------------------------------*/
 DEF_INST(subtract_float_long)
 {
@@ -4393,7 +4495,10 @@ LONG_FLOAT sub_fl;
 int     pgm_check;
 
     RX(inst, regs, r1, b2, effective_addr2);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     HFPREG_CHECK(r1, regs);
+
     i1 = FPR2I(r1);
 
     /* Get the operands */
@@ -4425,7 +4530,7 @@ int     pgm_check;
 
 
 /*-------------------------------------------------------------------*/
-/* 6C   MD    - Multiply Floating Point Long                    [RX] */
+/* 6C   MD    - Multiply Floating Point Long                  [RX-a] */
 /*-------------------------------------------------------------------*/
 DEF_INST(multiply_float_long)
 {
@@ -4438,7 +4543,10 @@ LONG_FLOAT mul_fl;
 int     pgm_check;
 
     RX(inst, regs, r1, b2, effective_addr2);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     HFPREG_CHECK(r1, regs);
+
     i1 = FPR2I(r1);
 
     /* Get the operands */
@@ -4460,7 +4568,7 @@ int     pgm_check;
 
 
 /*-------------------------------------------------------------------*/
-/* 6D   DD    - Divide Floating Point Long                      [RX] */
+/* 6D   DD    - Divide Floating Point Long                    [RX-a] */
 /*-------------------------------------------------------------------*/
 DEF_INST(divide_float_long)
 {
@@ -4473,7 +4581,10 @@ LONG_FLOAT div_fl;
 int     pgm_check;
 
     RX(inst, regs, r1, b2, effective_addr2);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     HFPREG_CHECK(r1, regs);
+
     i1 = FPR2I(r1);
 
     /* Get the operands */
@@ -4494,7 +4605,7 @@ int     pgm_check;
 
 
 /*-------------------------------------------------------------------*/
-/* 6E   AW    - Add Unnormalized Floating Point Long            [RX] */
+/* 6E   AW    - Add Unnormalized Floating Point Long          [RX-a] */
 /*-------------------------------------------------------------------*/
 DEF_INST(add_unnormal_float_long)
 {
@@ -4507,7 +4618,10 @@ LONG_FLOAT add_fl;
 int     pgm_check;
 
     RX(inst, regs, r1, b2, effective_addr2);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     HFPREG_CHECK(r1, regs);
+
     i1 = FPR2I(r1);
 
     /* Get the operands */
@@ -4536,7 +4650,7 @@ int     pgm_check;
 
 
 /*-------------------------------------------------------------------*/
-/* 6F   SW    - Subtract Unnormalized Floating Point Long       [RX] */
+/* 6F   SW    - Subtract Unnormalized Floating Point Long     [RX-a] */
 /*-------------------------------------------------------------------*/
 DEF_INST(subtract_unnormal_float_long)
 {
@@ -4549,7 +4663,10 @@ LONG_FLOAT sub_fl;
 int     pgm_check;
 
     RX(inst, regs, r1, b2, effective_addr2);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     HFPREG_CHECK(r1, regs);
+
     i1 = FPR2I(r1);
 
     /* Get the operands */
@@ -4581,7 +4698,7 @@ int     pgm_check;
 
 
 /*-------------------------------------------------------------------*/
-/* 70   STE   - Store Floating Point Short                      [RX] */
+/* 70   STE   - Store Floating Point Short                    [RX-a] */
 /*-------------------------------------------------------------------*/
 DEF_INST(store_float_short)
 {
@@ -4590,6 +4707,8 @@ int     b2;                             /* Base of effective addr    */
 VADR    effective_addr2;                /* Effective address         */
 
     RX(inst, regs, r1, b2, effective_addr2);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     HFPREG_CHECK(r1, regs);
 
     /* Store register contents at operand address */
@@ -4598,7 +4717,7 @@ VADR    effective_addr2;                /* Effective address         */
 
 
 /*-------------------------------------------------------------------*/
-/* 78   LE    - Load Floating Point Short                       [RX] */
+/* 78   LE    - Load Floating Point Short                     [RX-a] */
 /*-------------------------------------------------------------------*/
 DEF_INST(load_float_short)
 {
@@ -4607,6 +4726,8 @@ int     b2;                             /* Base of effective addr    */
 VADR    effective_addr2;                /* Effective address         */
 
     RX(inst, regs, r1, b2, effective_addr2);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     HFPREG_CHECK(r1, regs);
 
     /* Update first 32 bits of register from operand address */
@@ -4615,7 +4736,7 @@ VADR    effective_addr2;                /* Effective address         */
 
 
 /*-------------------------------------------------------------------*/
-/* 79   CE    - Compare Floating Point Short                    [RX] */
+/* 79   CE    - Compare Floating Point Short                  [RX-a] */
 /*-------------------------------------------------------------------*/
 DEF_INST(compare_float_short)
 {
@@ -4626,6 +4747,8 @@ SHORT_FLOAT fl;
 SHORT_FLOAT cmp_fl;
 
     RX(inst, regs, r1, b2, effective_addr2);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     HFPREG_CHECK(r1, regs);
 
     /* Get the operands */
@@ -4638,7 +4761,7 @@ SHORT_FLOAT cmp_fl;
 
 
 /*-------------------------------------------------------------------*/
-/* 7A   AE    - Add Floating Point Short                        [RX] */
+/* 7A   AE    - Add Floating Point Short                      [RX-a] */
 /*-------------------------------------------------------------------*/
 DEF_INST(add_float_short)
 {
@@ -4651,7 +4774,10 @@ SHORT_FLOAT add_fl;
 int     pgm_check;
 
     RX(inst, regs, r1, b2, effective_addr2);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     HFPREG_CHECK(r1, regs);
+
     i1 = FPR2I(r1);
 
     /* Get the operands */
@@ -4680,7 +4806,7 @@ int     pgm_check;
 
 
 /*-------------------------------------------------------------------*/
-/* 7B   SE    - Subtract Floating Point Short                   [RX] */
+/* 7B   SE    - Subtract Floating Point Short                 [RX-a] */
 /*-------------------------------------------------------------------*/
 DEF_INST(subtract_float_short)
 {
@@ -4693,7 +4819,10 @@ SHORT_FLOAT sub_fl;
 int     pgm_check;
 
     RX(inst, regs, r1, b2, effective_addr2);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     HFPREG_CHECK(r1, regs);
+
     i1 = FPR2I(r1);
 
     /* Get the operands */
@@ -4725,7 +4854,7 @@ int     pgm_check;
 
 
 /*-------------------------------------------------------------------*/
-/* 7C   MDE   - Multiply Floating Point Short to Long           [RX] */
+/* 7C   MDE   - Multiply Floating Point Short to Long         [RX-a] */
 /*              Older mnemonic of this instruction is ME             */
 /*-------------------------------------------------------------------*/
 DEF_INST(multiply_float_short_to_long)
@@ -4740,7 +4869,10 @@ LONG_FLOAT result_fl;
 int     pgm_check;
 
     RX(inst, regs, r1, b2, effective_addr2);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     HFPREG_CHECK(r1, regs);
+
     i1 = FPR2I(r1);
 
     /* Get the operands */
@@ -4761,7 +4893,7 @@ int     pgm_check;
 
 
 /*-------------------------------------------------------------------*/
-/* 7D   DE    - Divide Floating Point Short                     [RX] */
+/* 7D   DE    - Divide Floating Point Short                   [RX-a] */
 /*-------------------------------------------------------------------*/
 DEF_INST(divide_float_short)
 {
@@ -4774,7 +4906,10 @@ SHORT_FLOAT div_fl;
 int     pgm_check;
 
     RX(inst, regs, r1, b2, effective_addr2);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     HFPREG_CHECK(r1, regs);
+
     i1 = FPR2I(r1);
 
     /* Get the operands */
@@ -4795,7 +4930,7 @@ int     pgm_check;
 
 
 /*-------------------------------------------------------------------*/
-/* 7E   AU    - Add Unnormalized Floating Point Short           [RX] */
+/* 7E   AU    - Add Unnormalized Floating Point Short         [RX-a] */
 /*-------------------------------------------------------------------*/
 DEF_INST(add_unnormal_float_short)
 {
@@ -4808,7 +4943,10 @@ SHORT_FLOAT add_fl;
 int     pgm_check;
 
     RX(inst, regs, r1, b2, effective_addr2);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     HFPREG_CHECK(r1, regs);
+
     i1 = FPR2I(r1);
 
     /* Get the operands */
@@ -4837,7 +4975,7 @@ int     pgm_check;
 
 
 /*-------------------------------------------------------------------*/
-/* 7F   SU    - Subtract Unnormalized Floating Point Short      [RX] */
+/* 7F   SU    - Subtract Unnormalized Floating Point Short    [RX-a] */
 /*-------------------------------------------------------------------*/
 DEF_INST(subtract_unnormal_float_short)
 {
@@ -4850,7 +4988,10 @@ SHORT_FLOAT sub_fl;
 int     pgm_check;
 
     RX(inst, regs, r1, b2, effective_addr2);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     HFPREG_CHECK(r1, regs);
+
     i1 = FPR2I(r1);
 
     /* Get the operands */
@@ -4893,7 +5034,10 @@ EXTENDED_FLOAT div_fl;
 int     pgm_check;
 
     RRE(inst, regs, r1, r2);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     HFPODD2_CHECK(r1, r2, regs);
+
     i1 = FPR2I(r1);
 
     /* Get the operands */
@@ -4924,6 +5068,8 @@ LONG_FLOAT sq_fl = { 0, 0, 0 };
 LONG_FLOAT fl;
 
     RRE(inst, regs, r1, r2);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     HFPREG2_CHECK(r1, r2, regs);
 
     /* Get the 2nd operand */
@@ -4947,6 +5093,8 @@ SHORT_FLOAT sq_fl;
 SHORT_FLOAT fl;
 
     RRE(inst, regs, r1, r2);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     HFPREG2_CHECK(r1, r2, regs);
 
     /* Get the 2nd operand */
@@ -4971,7 +5119,10 @@ int     r1, r2;                         /* Values of R fields        */
 int     i1;
 
     RRE(inst, regs, r1, r2);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     HFPREG2_CHECK(r1, r2, regs);
+
     i1 = FPR2I(r1);
 
     /* Copy register content */
@@ -4992,7 +5143,9 @@ int     i1, i2;
 
     RRE(inst, regs, r1, r2);
 
+    TRAN_FLOAT_INSTR_CHECK( regs );
     HFPODD_CHECK(r1, regs);
+
     i1 = FPR2I(r1);
     HFPREG_CHECK(r2, regs);
     i2 = FPR2I(r2);
@@ -5027,7 +5180,9 @@ int     i1, i2;
 
     RRE(inst, regs, r1, r2);
 
+    TRAN_FLOAT_INSTR_CHECK( regs );
     HFPODD_CHECK(r1, regs);
+
     i1 = FPR2I(r1);
     HFPREG_CHECK(r2, regs);
     i2 = FPR2I(r2);
@@ -5065,6 +5220,8 @@ U64     msi, lsi;
 U64     msj, lsj;
 
     RRE(inst, regs, r1, r2);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     HFPODD2_CHECK(r1, r2, regs);
 
     /* Get the 2nd operand */
@@ -5173,7 +5330,10 @@ SHORT_FLOAT mul_fl;
 int     pgm_check;
 
     RRE(inst, regs, r1, r2);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     HFPREG2_CHECK(r1, r2, regs);
+
     i1 = FPR2I(r1);
 
     /* Get the operands */
@@ -5203,7 +5363,10 @@ int     r1, r2;                         /* Values of R fields        */
 int     i1, i2;
 
     RRE(inst, regs, r1, r2);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     HFPODD2_CHECK(r1, r2, regs);
+
     i1 = FPR2I(r1);
     i2 = FPR2I(r2);
 
@@ -5244,7 +5407,10 @@ int     r1, r2;                         /* Values of R fields        */
 int     i1, i2;
 
     RRE(inst, regs, r1, r2);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     HFPODD2_CHECK(r1, r2, regs);
+
     i1 = FPR2I(r1);
     i2 = FPR2I(r2);
 
@@ -5287,7 +5453,10 @@ int     r1, r2;                         /* Values of R fields        */
 int     i1, i2;
 
     RRE(inst, regs, r1, r2);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     HFPODD2_CHECK(r1, r2, regs);
+
     i1 = FPR2I(r1);
     i2 = FPR2I(r2);
 
@@ -5329,7 +5498,10 @@ int     r1, r2;                         /* Values of R fields        */
 int     i1, i2;
 
     RRE(inst, regs, r1, r2);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     HFPODD2_CHECK(r1, r2, regs);
+
     i1 = FPR2I(r1);
     i2 = FPR2I(r2);
 
@@ -5374,6 +5546,7 @@ int     pgm_check;
 
     RRE(inst, regs, r1, r2);
 
+    TRAN_FLOAT_INSTR_CHECK( regs );
     HFPREG_CHECK(r1, regs);
     HFPODD_CHECK(r2, regs);
 
@@ -5415,7 +5588,10 @@ EXTENDED_FLOAT fl;
 BYTE    shift;
 
     RRE(inst, regs, r1, r2);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     HFPODD2_CHECK(r1, r2, regs);
+
     i1 = FPR2I(r1);
 
     /* Get register content */
@@ -5465,6 +5641,8 @@ EXTENDED_FLOAT cmp_fl;
 BYTE    shift;
 
     RRE(inst, regs, r1, r2);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     HFPODD2_CHECK(r1, r2, regs);
 
     /* Get the operands */
@@ -5639,7 +5817,10 @@ int     i1;
 SHORT_FLOAT fl;
 
     RRE(inst, regs, r1, r2);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     HFPREG2_CHECK(r1, r2, regs);
+
     i1 = FPR2I(r1);
 
     /* Get register content */
@@ -5674,7 +5855,10 @@ int     i1;
 LONG_FLOAT fl;
 
     RRE(inst, regs, r1, r2);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     HFPREG2_CHECK(r1, r2, regs);
+
     i1 = FPR2I(r1);
 
     /* Get register content */
@@ -5711,7 +5895,10 @@ LONG_FLOAT fl;
 S64     fix;
 
     RRE(inst, regs, r1, r2);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     HFPREG_CHECK(r1, regs);
+
     i1 = FPR2I(r1);
 
     /* get fixed value */
@@ -5754,7 +5941,10 @@ LONG_FLOAT fl;
 S64     fix;
 
     RRE(inst, regs, r1, r2);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     HFPREG_CHECK(r1, regs);
+
     i1 = FPR2I(r1);
 
     /* get fixed value */
@@ -5796,7 +5986,10 @@ EXTENDED_FLOAT fl;
 S64     fix;
 
     RRE(inst, regs, r1, r2);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     HFPODD_CHECK(r1, regs);
+
     i1 = FPR2I(r1);
 
     /* get fixed value */
@@ -5842,7 +6035,10 @@ SHORT_FLOAT fl;
 U64     fix;
 
     RRE(inst, regs, r1, r2);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     HFPREG_CHECK(r1, regs);
+
     i1 = FPR2I(r1);
     fix = regs->GR_G(r2);
 
@@ -5889,7 +6085,10 @@ LONG_FLOAT fl;
 U64     fix;
 
     RRE(inst, regs, r1, r2);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     HFPREG_CHECK(r1, regs);
+
     i1 = FPR2I(r1);
     fix = regs->GR_G(r2);
 
@@ -5937,7 +6136,10 @@ EXTENDED_FLOAT fl;
 U64     fix;
 
     RRE(inst, regs, r1, r2);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     HFPODD_CHECK(r1, regs);
+
     i1 = FPR2I(r1);
     fix = regs->GR_G(r2);
 
@@ -5970,7 +6172,7 @@ U64     fix;
 
 
 /*-------------------------------------------------------------------*/
-/* B3B8 CFER  - Convert from Float. Short to Fixed Register    [RRF] */
+/* B3B8 CFER  - Convert from Float. Short to Fixed Register  [RRF-e] */
 /*-------------------------------------------------------------------*/
 DEF_INST(convert_float_short_to_fixed_reg)
 {
@@ -5981,6 +6183,8 @@ BYTE    shift;
 U32     lsfract;
 
     RRF_M(inst, regs, r1, r2, m3);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     HFPM_CHECK(m3, regs);
     HFPREG_CHECK(r2, regs);
 
@@ -6104,7 +6308,7 @@ U32     lsfract;
 
 
 /*-------------------------------------------------------------------*/
-/* B3B9 CFDR  - Convert from Float. Long to Fixed Register     [RRF] */
+/* B3B9 CFDR  - Convert from Float. Long to Fixed Register   [RRF-e] */
 /*-------------------------------------------------------------------*/
 DEF_INST(convert_float_long_to_fixed_reg)
 {
@@ -6115,6 +6319,8 @@ BYTE    shift;
 U64     lsfract;
 
     RRF_M(inst, regs, r1, r2, m3);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     HFPM_CHECK(m3, regs);
     HFPREG_CHECK(r2, regs);
 
@@ -6237,7 +6443,7 @@ U64     lsfract;
 
 
 /*-------------------------------------------------------------------*/
-/* B3BA CFXR  - Convert from Float. Extended to Fixed Register [RRF] */
+/* B3BA CFXR  - Convert from Float. Extended to Fixed Reg.   [RRF-e] */
 /*-------------------------------------------------------------------*/
 DEF_INST(convert_float_ext_to_fixed_reg)
 {
@@ -6248,6 +6454,8 @@ BYTE    shift;
 U64     lsfract;
 
     RRF_M(inst, regs, r1, r2, m3);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     HFPM_CHECK(m3, regs);
     HFPODD_CHECK(r2, regs);
 
@@ -6374,7 +6582,7 @@ U64     lsfract;
 
 #if defined( FEATURE_NEW_ZARCH_ONLY_INSTRUCTIONS )
 /*-------------------------------------------------------------------*/
-/* B3C8 CGER  - Convert from Float. Short to Fix64 Register    [RRF] */
+/* B3C8 CGER  - Convert from Float. Short to Fix64 Register  [RRF-e] */
 /*-------------------------------------------------------------------*/
 DEF_INST(convert_float_short_to_fix64_reg)
 {
@@ -6386,6 +6594,8 @@ U64     intpart;
 U32     lsfract;
 
     RRF_M(inst, regs, r1, r2, m3);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     HFPM_CHECK(m3, regs);
     HFPREG_CHECK(r2, regs);
 
@@ -6517,7 +6727,7 @@ U32     lsfract;
 
 #if defined( FEATURE_NEW_ZARCH_ONLY_INSTRUCTIONS )
 /*-------------------------------------------------------------------*/
-/* B3C9 CGDR  - Convert from Float. Long to Fix64 Register     [RRF] */
+/* B3C9 CGDR  - Convert from Float. Long to Fix64 Register   [RRF-e] */
 /*-------------------------------------------------------------------*/
 DEF_INST(convert_float_long_to_fix64_reg)
 {
@@ -6528,6 +6738,8 @@ BYTE    shift;
 U64     lsfract;
 
     RRF_M(inst, regs, r1, r2, m3);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     HFPM_CHECK(m3, regs);
     HFPREG_CHECK(r2, regs);
 
@@ -6656,7 +6868,7 @@ U64     lsfract;
 
 #if defined( FEATURE_NEW_ZARCH_ONLY_INSTRUCTIONS )
 /*-------------------------------------------------------------------*/
-/* B3CA CGXR  - Convert from Float. Extended to Fix64 Register [RRF] */
+/* B3CA CGXR  - Convert from Float. Extended to Fix64 Reg.   [RRF-e] */
 /*-------------------------------------------------------------------*/
 DEF_INST(convert_float_ext_to_fix64_reg)
 {
@@ -6668,6 +6880,8 @@ U64     intpart;
 U64     lsfract;
 
     RRF_M(inst, regs, r1, r2, m3);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     HFPM_CHECK(m3, regs);
     HFPODD_CHECK(r2, regs);
 
@@ -6808,7 +7022,10 @@ int     b2;                             /* Base of effective addr    */
 VADR    effective_addr2;                /* Effective address         */
 
     RXE(inst, regs, r1, b2, effective_addr2);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     HFPREG_CHECK(r1, regs);
+
     i1 = FPR2I(r1);
 
     /* Update first 32 bits of register from operand address */
@@ -6832,7 +7049,10 @@ U32     wk;
 U64     wkd;
 
     RXE(inst, regs, r1, b2, effective_addr2);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     HFPODD_CHECK(r1, regs);
+
     i1 = FPR2I(r1);
 
     /* Get the 2nd operand */
@@ -6869,7 +7089,10 @@ VADR    effective_addr2;                /* Effective address         */
 U32     wk;
 
     RXE(inst, regs, r1, b2, effective_addr2);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     HFPODD_CHECK(r1, regs);
+
     i1 = FPR2I(r1);
 
     /* Get the 2nd operand */
@@ -6908,6 +7131,8 @@ SHORT_FLOAT sq_fl;
 SHORT_FLOAT fl;
 
     RXE(inst, regs, r1, b2, effective_addr2);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     HFPREG_CHECK(r1, regs);
 
     /* Get the 2nd operand */
@@ -6933,6 +7158,8 @@ LONG_FLOAT sq_fl = { 0, 0, 0 };
 LONG_FLOAT fl;
 
     RXE(inst, regs, r1, b2, effective_addr2);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     HFPREG_CHECK(r1, regs);
 
     /* Get the 2nd operand */
@@ -6960,7 +7187,10 @@ SHORT_FLOAT mul_fl;
 int     pgm_check;
 
     RXE(inst, regs, r1, b2, effective_addr2);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     HFPREG_CHECK(r1, regs);
+
     i1 = FPR2I(r1);
 
     /* Get the operands */
@@ -6992,7 +7222,9 @@ int     i1, i2;                         /* Index into fpr array      */
 
     RRE(inst, regs, r1, r2);
 
+    TRAN_FLOAT_INSTR_CHECK( regs );
     HFPODD2_CHECK(r1, r2, regs);
+
     i1 = FPR2I(r1);
     i2 = FPR2I(r2);
 
@@ -7014,7 +7246,10 @@ int     r1, r2;                         /* Values of R fields        */
 int     i1;                             /* Index of R1 in fpr array  */
 
     RRE(inst, regs, r1, r2);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     HFPREG_CHECK(r1, regs);
+
     i1 = FPR2I(r1);
 
     /* Set all bits of register R1 to zeros */
@@ -7032,7 +7267,10 @@ int     r1, r2;                         /* Values of R fields        */
 int     i1;                             /* Index of R1 in fpr array  */
 
     RRE(inst, regs, r1, r2);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     HFPREG_CHECK(r1, regs);
+
     i1 = FPR2I(r1);
 
     /* Set all bits of register R1 to zeros */
@@ -7052,7 +7290,9 @@ int     i1;                             /* Index of R1 in fpr array  */
 
     RRE(inst, regs, r1, r2);
 
+    TRAN_FLOAT_INSTR_CHECK( regs );
     HFPODD_CHECK(r1, regs);
+
     i1 = FPR2I(r1);
 
     /* Set all bits of register R1 to zeros */
@@ -7067,7 +7307,7 @@ int     i1;                             /* Index of R1 in fpr array  */
 
 #if defined(FEATURE_020_HFP_MULT_ADD_SUB_FACILITY)
 /*-------------------------------------------------------------------*/
-/* B32E MAER  - Multiply and Add Floating Point Short Register [RRF] */
+/* B32E MAER  - Multiply and Add Floating Point Short Register [RRD] */
 /*-------------------------------------------------------------------*/
 DEF_INST(multiply_add_float_short_reg)
 {
@@ -7076,9 +7316,12 @@ int     i1;                             /* Index of R1 in fpr array  */
 SHORT_FLOAT fl1, fl2, fl3;
 int     pgm_check;
 
-    RRF_R(inst, regs, r1, r2, r3);
+    RRD(inst, regs, r1, r2, r3);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     HFPREG2_CHECK(r1, r2, regs);
     HFPREG_CHECK(r3, regs);
+
     i1 = FPR2I(r1);
 
     /* Get the operands */
@@ -7104,7 +7347,7 @@ int     pgm_check;
 
 
 /*-------------------------------------------------------------------*/
-/* B32F MSER  - Multiply and Subtract Floating Point Short Reg [RRF] */
+/* B32F MSER  - Multiply and Subtract Floating Point Short Reg [RRD] */
 /*-------------------------------------------------------------------*/
 DEF_INST(multiply_subtract_float_short_reg)
 {
@@ -7113,9 +7356,12 @@ int     i1;                             /* Index of R1 in fpr array  */
 SHORT_FLOAT fl1, fl2, fl3;
 int     pgm_check;
 
-    RRF_R(inst, regs, r1, r2, r3);
+    RRD(inst, regs, r1, r2, r3);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     HFPREG2_CHECK(r1, r2, regs);
     HFPREG_CHECK(r3, regs);
+
     i1 = FPR2I(r1);
 
     /* Get the operands */
@@ -7144,7 +7390,7 @@ int     pgm_check;
 
 
 /*-------------------------------------------------------------------*/
-/* B33E MADR  - Multiply and Add Floating Point Long Register  [RRF] */
+/* B33E MADR  - Multiply and Add Floating Point Long Register  [RRD] */
 /*-------------------------------------------------------------------*/
 DEF_INST(multiply_add_float_long_reg)
 {
@@ -7153,9 +7399,12 @@ int     i1;                             /* Index of R1 in fpr array  */
 LONG_FLOAT fl1, fl2, fl3;
 int     pgm_check;
 
-    RRF_R(inst, regs, r1, r2, r3);
+    RRD(inst, regs, r1, r2, r3);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     HFPREG2_CHECK(r1, r2, regs);
     HFPREG_CHECK(r3, regs);
+
     i1 = FPR2I(r1);
 
     /* Get the operands */
@@ -7181,7 +7430,7 @@ int     pgm_check;
 
 
 /*-------------------------------------------------------------------*/
-/* B33F MSDR  - Multiply and Subtract Floating Point Long Reg  [RRF] */
+/* B33F MSDR  - Multiply and Subtract Floating Point Long Reg  [RRD] */
 /*-------------------------------------------------------------------*/
 DEF_INST(multiply_subtract_float_long_reg)
 {
@@ -7190,9 +7439,12 @@ int     i1;                             /* Index of R1 in fpr array  */
 LONG_FLOAT fl1, fl2, fl3;
 int     pgm_check;
 
-    RRF_R(inst, regs, r1, r2, r3);
+    RRD(inst, regs, r1, r2, r3);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     HFPREG2_CHECK(r1, r2, regs);
     HFPREG_CHECK(r3, regs);
+
     i1 = FPR2I(r1);
 
     /* Get the operands */
@@ -7233,7 +7485,10 @@ SHORT_FLOAT fl1, fl2, fl3;
 int     pgm_check;
 
     RXF(inst, regs, r1, r3, b2, effective_addr2);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     HFPREG2_CHECK(r1, r3, regs);
+
     i1 = FPR2I(r1);
 
     /* Get the operands */
@@ -7271,7 +7526,10 @@ SHORT_FLOAT fl1, fl2, fl3;
 int     pgm_check;
 
     RXF(inst, regs, r1, r3, b2, effective_addr2);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     HFPREG2_CHECK(r1, r3, regs);
+
     i1 = FPR2I(r1);
 
     /* Get the operands */
@@ -7312,7 +7570,10 @@ LONG_FLOAT fl1, fl2, fl3;
 int     pgm_check;
 
     RXF(inst, regs, r1, r3, b2, effective_addr2);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     HFPREG2_CHECK(r1, r3, regs);
+
     i1 = FPR2I(r1);
 
     /* Get the operands */
@@ -7350,7 +7611,10 @@ LONG_FLOAT fl1, fl2, fl3;
 int     pgm_check;
 
     RXF(inst, regs, r1, r3, b2, effective_addr2);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     HFPREG2_CHECK(r1, r3, regs);
+
     i1 = FPR2I(r1);
 
     /* Get the operands */
@@ -7382,7 +7646,7 @@ int     pgm_check;
 
 #if defined(FEATURE_023_HFP_UNNORM_EXT_FACILITY)
 /*-------------------------------------------------------------------*/
-/* B338 MAYLR - Multiply and Add Unnorm. Long to Ext. Low Reg. [RRF] */
+/* B338 MAYLR - Multiply and Add Unnorm. Long to Ext. Low Reg. [RRD] */
 /*-------------------------------------------------------------------*/
 DEF_INST(multiply_add_unnormal_float_long_to_ext_low_reg)
 {
@@ -7394,9 +7658,12 @@ EXTENDED_FLOAT fxp1;                    /* Intermediate product      */
 EXTENDED_FLOAT fxadd;                   /* Addend in extended format */
 EXTENDED_FLOAT fxres;                   /* Extended result           */
 
-    RRF_R(inst, regs, r1, r2, r3)
+    RRD(inst, regs, r1, r2, r3);
+
     HFPREG2_CHECK(r2, r3, regs);
+    TRAN_FLOAT_INSTR_CHECK( regs );
     HFPREG_CHECK(r1, regs);
+
     i1 = FPR2I(r1);
 
     /* Get the operands */
@@ -7421,7 +7688,7 @@ EXTENDED_FLOAT fxres;                   /* Extended result           */
 
 
 /*-------------------------------------------------------------------*/
-/* B339 MYLR  - Multiply Unnormalized Long to Ext. Low FP Reg. [RRF] */
+/* B339 MYLR  - Multiply Unnormalized Long to Ext. Low FP Reg. [RRD] */
 /*-------------------------------------------------------------------*/
 DEF_INST(multiply_unnormal_float_long_to_ext_low_reg)
 {
@@ -7429,7 +7696,9 @@ int          r1, r2, r3;                /* Values of R fields        */
 LONG_FLOAT   fl2, fl3;                  /* Multiplier/Multiplicand   */
 EXTENDED_FLOAT fx1;                     /* Intermediate result       */
 
-    RRF_R(inst, regs, r1, r2, r3);
+    RRD(inst, regs, r1, r2, r3);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     HFPREG2_CHECK(r2, r3, regs);
     HFPREG_CHECK(r1, regs);
 
@@ -7447,7 +7716,7 @@ EXTENDED_FLOAT fx1;                     /* Intermediate result       */
 
 
 /*-------------------------------------------------------------------*/
-/* B33A MAYR  - Multiply and Add Unnorm. Long to Ext. Reg.     [RRF] */
+/* B33A MAYR  - Multiply and Add Unnorm. Long to Ext. Reg.     [RRD] */
 /*-------------------------------------------------------------------*/
 DEF_INST(multiply_add_unnormal_float_long_to_ext_reg)
 {
@@ -7458,9 +7727,12 @@ EXTENDED_FLOAT fxp1;                    /* Intermediate product      */
 EXTENDED_FLOAT fxadd;                   /* Addend in extended format */
 EXTENDED_FLOAT fxres;                   /* Extended result           */
 
-    RRF_R(inst, regs, r1, r2, r3);
+    RRD(inst, regs, r1, r2, r3);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     HFPREG2_CHECK(r2, r3, regs);
     HFPREG_CHECK(r1, regs);
+
     /* Either the low- or high-numbered register of a pair is valid */
 
     /* Get the operands */
@@ -7485,7 +7757,7 @@ EXTENDED_FLOAT fxres;                   /* Extended result           */
 
 
 /*-------------------------------------------------------------------*/
-/* B33B MYR   - Multiply Unnormalized Long to Extended Reg     [RRF] */
+/* B33B MYR   - Multiply Unnormalized Long to Extended Reg     [RRD] */
 /*-------------------------------------------------------------------*/
 DEF_INST(multiply_unnormal_float_long_to_ext_reg)
 {
@@ -7493,7 +7765,9 @@ int            r1, r2, r3;              /* Values of R fields        */
 LONG_FLOAT     fl2, fl3;                /* Multiplier/Multiplicand   */
 EXTENDED_FLOAT fx1;                     /* Intermediate result       */
 
-    RRF_R(inst, regs, r1, r2, r3);
+    RRD(inst, regs, r1, r2, r3);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     HFPODD_CHECK(r1, regs);
     HFPREG2_CHECK(r2, r3, regs);
 
@@ -7511,7 +7785,7 @@ EXTENDED_FLOAT fx1;                     /* Intermediate result       */
 
 
 /*-------------------------------------------------------------------*/
-/* B33C MAYHR - Multiply and Add Unnorm. Long to Ext. High Reg [RRF] */
+/* B33C MAYHR - Multiply and Add Unnorm. Long to Ext. High Reg [RRD] */
 /*-------------------------------------------------------------------*/
 DEF_INST(multiply_add_unnormal_float_long_to_ext_high_reg)
 {
@@ -7523,9 +7797,12 @@ EXTENDED_FLOAT fxp1;                    /* Intermediate product      */
 EXTENDED_FLOAT fxadd;                   /* Addend in extended format */
 EXTENDED_FLOAT fxres;                   /* Extended result           */
 
-    RRF_R(inst, regs, r1, r2, r3);
+    RRD(inst, regs, r1, r2, r3);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     HFPREG2_CHECK(r2, r3, regs);
     HFPREG_CHECK(r1, regs);
+
     i1 = FPR2I(r1);
 
     /* Get the operands */
@@ -7549,7 +7826,7 @@ EXTENDED_FLOAT fxres;                   /* Extended result           */
 
 
 /*-------------------------------------------------------------------*/
-/* B33D MYHR   - Multiply Unnormalized Long to Ext. High FP Reg[RRF] */
+/* B33D MYHR   - Multiply Unnormalized Long to Ext. High FP Reg[RRD] */
 /*-------------------------------------------------------------------*/
 DEF_INST(multiply_unnormal_float_long_to_ext_high_reg)
 {
@@ -7557,7 +7834,9 @@ int          r1, r2, r3;                /* Values of R fields        */
 LONG_FLOAT   fl2, fl3;                  /* Multiplier/Multiplicand   */
 EXTENDED_FLOAT fx1;                     /* Intermediate result       */
 
-    RRF_R(inst, regs, r1, r2, r3);
+    RRD(inst, regs, r1, r2, r3);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     HFPODD_CHECK(r1, regs);
     HFPREG2_CHECK(r2, r3, regs);
 
@@ -7590,7 +7869,10 @@ EXTENDED_FLOAT fxadd;                   /* Addend in extended format */
 EXTENDED_FLOAT fxres;                   /* Extended result           */
 
     RXF(inst, regs, r1, r3, b2, effective_addr2);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     HFPREG2_CHECK(r1, r3, regs);
+
     i1 = FPR2I(r1);
 
     /* Get the operands */
@@ -7626,6 +7908,8 @@ LONG_FLOAT     fl2, fl3;                /* Multiplier/Multiplicand   */
 EXTENDED_FLOAT fx1;                     /* Intermediate result       */
 
     RXF(inst, regs, r1, r3, b2, effective_addr2);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     HFPREG2_CHECK(r1, r3, regs);
 
     /* Get the operands */
@@ -7656,7 +7940,10 @@ EXTENDED_FLOAT fxadd;                   /* Addend in extended format */
 EXTENDED_FLOAT fxres;                   /* Extended result           */
 
     RXF(inst, regs, r1, r3, b2, effective_addr2);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     HFPREG2_CHECK(r1, r3, regs);
+
     /* Either the low- or high-numbered register of a pair is valid */
 
     /* Get the operands */
@@ -7692,6 +7979,8 @@ LONG_FLOAT     fl2, fl3;                /* Multiplier/Multiplicand   */
 EXTENDED_FLOAT fx1;                     /* Intermediate result       */
 
     RXF(inst, regs, r1, r3, b2, effective_addr2);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     HFPODD_CHECK(r1, regs);
     HFPREG_CHECK(r3, regs);
 
@@ -7724,7 +8013,10 @@ EXTENDED_FLOAT fxadd;                   /* Addend in extended format */
 EXTENDED_FLOAT fxres;                   /* Extended result           */
 
     RXF(inst, regs, r1, r3, b2, effective_addr2);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     HFPREG2_CHECK(r1, r3, regs);
+
     i1 = FPR2I(r1);
 
     /* Get the operands */
@@ -7759,6 +8051,8 @@ LONG_FLOAT   fl2, fl3;                  /* Multiplier/Multiplicand   */
 EXTENDED_FLOAT fx1;                     /* Intermediate result       */
 
     RXF(inst, regs, r1, r3, b2, effective_addr2);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     HFPREG2_CHECK(r1, r3, regs);
 
     /* Get the operands */
@@ -7778,7 +8072,7 @@ EXTENDED_FLOAT fx1;                     /* Intermediate result       */
 
 #if defined(FEATURE_018_LONG_DISPL_INST_FACILITY)
 /*-------------------------------------------------------------------*/
-/* ED64 LEY   - Load Floating Point Short (Long Displacement)  [RXY] */
+/* ED64 LEY   - Load Floating Point Short (Long Disp.)       [RXY-a] */
 /*-------------------------------------------------------------------*/
 DEF_INST(load_float_short_y)
 {
@@ -7787,6 +8081,8 @@ int     b2;                             /* Base of effective addr    */
 VADR    effective_addr2;                /* Effective address         */
 
     RXY(inst, regs, r1, b2, effective_addr2);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     HFPREG_CHECK(r1, regs);
 
     /* Update first 32 bits of register from operand address */
@@ -7795,7 +8091,7 @@ VADR    effective_addr2;                /* Effective address         */
 
 
 /*-------------------------------------------------------------------*/
-/* ED65 LDY   - Load Floating Point Long (Long Displacement)   [RXY] */
+/* ED65 LDY   - Load Floating Point Long (Long Displacement) [RXY-a] */
 /*-------------------------------------------------------------------*/
 DEF_INST(load_float_long_y)
 {
@@ -7806,7 +8102,10 @@ VADR    effective_addr2;                /* Effective address         */
 U64     dreg;                           /* Double word workarea      */
 
     RXY(inst, regs, r1, b2, effective_addr2);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     HFPREG_CHECK(r1, regs);
+
     i1 = FPR2I(r1);
 
     /* Fetch value from operand address */
@@ -7819,7 +8118,7 @@ U64     dreg;                           /* Double word workarea      */
 
 
 /*-------------------------------------------------------------------*/
-/* ED66 STEY  - Store Floating Point Short (Long Displacement) [RXY] */
+/* ED66 STEY  - Store Floating Point Short (Long Disp.)      [RXY-a] */
 /*-------------------------------------------------------------------*/
 DEF_INST(store_float_short_y)
 {
@@ -7828,6 +8127,8 @@ int     b2;                             /* Base of effective addr    */
 VADR    effective_addr2;                /* Effective address         */
 
     RXY(inst, regs, r1, b2, effective_addr2);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     HFPREG_CHECK(r1, regs);
 
     /* Store register contents at operand address */
@@ -7836,7 +8137,7 @@ VADR    effective_addr2;                /* Effective address         */
 
 
 /*-------------------------------------------------------------------*/
-/* ED67 STDY  - Store Floating Point Long (Long Displacement)  [RXY] */
+/* ED67 STDY  - Store Floating Point Long (Long Disp.)       [RXY-a] */
 /*-------------------------------------------------------------------*/
 DEF_INST(store_float_long_y)
 {
@@ -7847,7 +8148,10 @@ VADR    effective_addr2;                /* Effective address         */
 U64     dreg;                           /* Double word workarea      */
 
     RXY(inst, regs, r1, b2, effective_addr2);
+
+    TRAN_FLOAT_INSTR_CHECK( regs );
     HFPREG_CHECK(r1, regs);
+
     i1 = FPR2I(r1);
 
     /* Store register contents at operand address */

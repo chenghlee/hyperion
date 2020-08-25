@@ -27,17 +27,20 @@ DISABLE_GCC_UNUSED_SET_WARNING
 
 #if defined( FEATURE_034_GEN_INST_EXTN_FACILITY )
 
-#if defined( FEATURE_045_INTERLOCKED_ACCESS_FACILITY_1 )        /*810*/
+#if defined( FEATURE_045_INTERLOCKED_ACCESS_FACILITY_1 )
 /*-------------------------------------------------------------------*/
 /* Perform Interlocked Storage Immediate Operation                   */
 /* Subroutine called by ASI and ALSI instructions                    */
 /*-------------------------------------------------------------------*/
-DEF_INST(perform_interlocked_storage_immediate)                 /*810*/
+/* EB6A ASI   - Add Immediate Storage                          [SIY] */
+/* EB6E ALSI  - Add Logical with Signed Immediate              [SIY] */
+/*-------------------------------------------------------------------*/
+DEF_INST(perform_interlocked_storage_immediate)
 {
 BYTE    opcode;                         /* 2nd byte of opcode        */
 BYTE    i2;                             /* Immediate byte            */
 int     b1;                             /* Base of effective addr    */
-VADR    addr1;                          /* Effective address         */
+VADR    effective_addr1;                /* Effective address         */
 BYTE    *m1;                            /* Mainstor address          */
 U32     n;                              /* 32-bit operand value      */
 U32     result;                         /* Result value              */
@@ -45,17 +48,17 @@ U32     old, new;                       /* Values for cmpxchg4       */
 int     cc;                             /* Condition code            */
 int     rc;                             /* Return code               */
 
-    SIY(inst, regs, i2, b1, addr1);
+    SIY(inst, regs, i2, b1, effective_addr1);
 
     /* Extract second byte of instruction opcode */
     opcode = inst[5];
 
     /* Get mainstor address of storage operand */
-    m1 = MADDRL (addr1, 4, b1, regs, ACCTYPE_WRITE, regs->psw.pkey);
+    m1 = MADDRL (effective_addr1, 4, b1, regs, ACCTYPE_WRITE, regs->psw.pkey);
 
     do {
         /* Load 32-bit operand from operand address */
-        n = ARCH_DEP(vfetch4) (addr1, b1, regs);
+        n = ARCH_DEP(vfetch4) (effective_addr1, b1, regs);
 
         switch (opcode) {
         case 0x6A: /* Add Storage Immediate */
@@ -74,15 +77,21 @@ int     rc;                             /* Return code               */
         } /* end switch(opcode) */
 
         /* Regular store if operand is not on a fullword boundary */
-        if ((addr1 & 0x03) != 0) {
-            ARCH_DEP(vstore4) (result, addr1, b1, regs);
+        if ((effective_addr1 & 0x03) != 0) {
+            ARCH_DEP(vstore4) (result, effective_addr1, b1, regs);
             break;
         }
 
         /* Interlocked exchange if operand is on a fullword boundary */
         old = CSWAP32(n);
         new = CSWAP32(result);
-        rc = cmpxchg4(&old, new, m1);
+
+        /* MAINLOCK may be required if cmpxchg assists unavailable */
+        OBTAIN_MAINLOCK( regs );
+        {
+            rc = cmpxchg4( &old, new, m1 );
+        }
+        RELEASE_MAINLOCK( regs );
 
     } while (rc != 0);
 
@@ -95,12 +104,15 @@ int     rc;                             /* Return code               */
 /* Perform Interlocked Long Storage Immediate Operation              */
 /* Subroutine called by AGSI and ALGSI instructions                  */
 /*-------------------------------------------------------------------*/
-DEF_INST(perform_interlocked_long_storage_immediate)            /*810*/
+/* EB7A AGSI  - Add Immediate Long Storage                     [SIY] */
+/* EB7E ALGSI - Add Logical with Signed Immediate Long         [SIY] */
+/*-------------------------------------------------------------------*/
+DEF_INST(perform_interlocked_long_storage_immediate)
 {
 BYTE    opcode;                         /* 2nd byte of opcode        */
 BYTE    i2;                             /* Immediate byte            */
 int     b1;                             /* Base of effective addr    */
-VADR    addr1;                          /* Effective address         */
+VADR    effective_addr1;                /* Effective address         */
 BYTE    *m1;                            /* Mainstor address          */
 U64     n;                              /* 64-bit operand value      */
 U64     result;                         /* Result value              */
@@ -108,17 +120,17 @@ U64     old, new;                       /* Values for cmpxchg4       */
 int     cc;                             /* Condition code            */
 int     rc;                             /* Return code               */
 
-    SIY(inst, regs, i2, b1, addr1);
+    SIY(inst, regs, i2, b1, effective_addr1);
 
     /* Extract second byte of instruction opcode */
     opcode = inst[5];
 
     /* Get mainstor address of storage operand */
-    m1 = MADDRL (addr1, 8, b1, regs, ACCTYPE_WRITE, regs->psw.pkey);
+    m1 = MADDRL (effective_addr1, 8, b1, regs, ACCTYPE_WRITE, regs->psw.pkey);
 
     do {
         /* Load 64-bit operand from operand address */
-        n = ARCH_DEP(vfetch8) (addr1, b1, regs);
+        n = ARCH_DEP(vfetch8) (effective_addr1, b1, regs);
 
         switch (opcode) {
         case 0x7A: /* Add Long Storage Immediate */
@@ -137,15 +149,21 @@ int     rc;                             /* Return code               */
         } /* end switch(opcode) */
 
         /* Regular store if operand is not on a doubleword boundary */
-        if ((addr1 & 0x07) != 0) {
-            ARCH_DEP(vstore8) (result, addr1, b1, regs);
+        if ((effective_addr1 & 0x07) != 0) {
+            ARCH_DEP(vstore8) (result, effective_addr1, b1, regs);
             break;
         }
 
         /* Interlocked exchange if operand is on doubleword boundary */
         old = CSWAP64(n);
         new = CSWAP64(result);
-        rc = cmpxchg8(&old, new, m1);
+
+        /* MAINLOCK may be required if cmpxchg assists unavailable */
+        OBTAIN_MAINLOCK( regs );
+        {
+            rc = cmpxchg8( &old, new, m1 );
+        }
+        RELEASE_MAINLOCK( regs );
 
     } while (rc != 0);
 
@@ -153,14 +171,14 @@ int     rc;                             /* Return code               */
     regs->psw.cc = cc;
 
 } /* end DEF_INST(perform_interlocked_long_storage_immediate) */
-#endif /* defined( FEATURE_045_INTERLOCKED_ACCESS_FACILITY_1 )*//*810*/
+#endif /* defined( FEATURE_045_INTERLOCKED_ACCESS_FACILITY_1 )*/
 
 /*-------------------------------------------------------------------*/
 /* EB6A ASI   - Add Immediate Storage                          [SIY] */
 /*-------------------------------------------------------------------*/
 DEF_INST(add_immediate_storage)
 {
-#if !defined( FEATURE_045_INTERLOCKED_ACCESS_FACILITY_1 )       /*810*/
+#if !defined( FEATURE_045_INTERLOCKED_ACCESS_FACILITY_1 )
 BYTE    i2;                             /* Immediate byte            */
 int     b1;                             /* Base of effective addr    */
 VADR    effective_addr1;                /* Effective address         */
@@ -181,9 +199,9 @@ int     cc;                             /* Condition Code            */
     /* Update Condition Code */
     regs->psw.cc = cc;
 
-#else /* defined( FEATURE_045_INTERLOCKED_ACCESS_FACILITY_1 ) *//*810*/
+#else /* defined( FEATURE_045_INTERLOCKED_ACCESS_FACILITY_1 ) */
     ARCH_DEP(perform_interlocked_storage_immediate) (inst, regs);
-#endif /* defined( FEATURE_045_INTERLOCKED_ACCESS_FACILITY_1 )*//*810*/
+#endif /* defined( FEATURE_045_INTERLOCKED_ACCESS_FACILITY_1 )*/
 
     /* Program check if fixed-point overflow */
     if ( regs->psw.cc == 3 && FOMASK(&regs->psw) )
@@ -197,7 +215,7 @@ int     cc;                             /* Condition Code            */
 /*-------------------------------------------------------------------*/
 DEF_INST(add_immediate_long_storage)
 {
-#if !defined( FEATURE_045_INTERLOCKED_ACCESS_FACILITY_1 )       /*810*/
+#if !defined( FEATURE_045_INTERLOCKED_ACCESS_FACILITY_1 )
 BYTE    i2;                             /* Immediate byte            */
 int     b1;                             /* Base of effective addr    */
 VADR    effective_addr1;                /* Effective address         */
@@ -218,9 +236,9 @@ int     cc;                             /* Condition Code            */
     /* Update Condition Code */
     regs->psw.cc = cc;
 
-#else /* defined( FEATURE_045_INTERLOCKED_ACCESS_FACILITY_1 ) *//*810*/
+#else /* defined( FEATURE_045_INTERLOCKED_ACCESS_FACILITY_1 ) */
     ARCH_DEP(perform_interlocked_long_storage_immediate) (inst, regs);
-#endif /* defined( FEATURE_045_INTERLOCKED_ACCESS_FACILITY_1 )*//*810*/
+#endif /* defined( FEATURE_045_INTERLOCKED_ACCESS_FACILITY_1 )*/
 
     /* Program check if fixed-point overflow */
     if ( regs->psw.cc == 3 && FOMASK(&regs->psw) )
@@ -234,7 +252,7 @@ int     cc;                             /* Condition Code            */
 /*-------------------------------------------------------------------*/
 DEF_INST(add_logical_with_signed_immediate)
 {
-#if !defined( FEATURE_045_INTERLOCKED_ACCESS_FACILITY_1 )       /*810*/
+#if !defined( FEATURE_045_INTERLOCKED_ACCESS_FACILITY_1 )
 BYTE    i2;                             /* Immediate byte            */
 int     b1;                             /* Base of effective addr    */
 VADR    effective_addr1;                /* Effective address         */
@@ -257,9 +275,9 @@ int     cc;                             /* Condition Code            */
     /* Update Condition Code */
     regs->psw.cc = cc;
 
-#else /* defined( FEATURE_045_INTERLOCKED_ACCESS_FACILITY_1 ) *//*810*/
+#else /* defined( FEATURE_045_INTERLOCKED_ACCESS_FACILITY_1 ) */
     ARCH_DEP(perform_interlocked_storage_immediate) (inst, regs);
-#endif /* defined( FEATURE_045_INTERLOCKED_ACCESS_FACILITY_1 )*//*810*/
+#endif /* defined( FEATURE_045_INTERLOCKED_ACCESS_FACILITY_1 )*/
 
 } /* end DEF_INST(add_logical_with_signed_immediate) */
 
@@ -269,7 +287,7 @@ int     cc;                             /* Condition Code            */
 /*-------------------------------------------------------------------*/
 DEF_INST(add_logical_with_signed_immediate_long)
 {
-#if !defined( FEATURE_045_INTERLOCKED_ACCESS_FACILITY_1 )       /*810*/
+#if !defined( FEATURE_045_INTERLOCKED_ACCESS_FACILITY_1 )
 BYTE    i2;                             /* Immediate byte            */
 int     b1;                             /* Base of effective addr    */
 VADR    effective_addr1;                /* Effective address         */
@@ -292,9 +310,9 @@ int     cc;                             /* Condition Code            */
     /* Update Condition Code */
     regs->psw.cc = cc;
 
-#else /* defined( FEATURE_045_INTERLOCKED_ACCESS_FACILITY_1 ) *//*810*/
+#else /* defined( FEATURE_045_INTERLOCKED_ACCESS_FACILITY_1 ) */
     ARCH_DEP(perform_interlocked_long_storage_immediate) (inst, regs);
-#endif /* defined( FEATURE_045_INTERLOCKED_ACCESS_FACILITY_1 )*//*810*/
+#endif /* defined( FEATURE_045_INTERLOCKED_ACCESS_FACILITY_1 )*/
 
 } /* end DEF_INST(add_logical_with_signed_immediate_long) */
 
@@ -312,6 +330,8 @@ int     cc;                             /* Comparison result         */
 
     RRS_B(inst, regs, r1, r2, m3, b4, effective_addr4);
 
+    CONTRAN_INSTR_CHECK( regs );
+
     /* Compare signed operands and set comparison result */
     cc = (S32)regs->GR_L(r1) < (S32)regs->GR_L(r2) ? 1 :
          (S32)regs->GR_L(r1) > (S32)regs->GR_L(r2) ? 2 : 0;
@@ -320,7 +340,7 @@ int     cc;                             /* Comparison result         */
     if ((0x8 >> cc) & m3)
         SUCCESSFUL_BRANCH(regs, effective_addr4, 6);
     else
-        INST_UPDATE_PSW(regs, 6, 0);
+        INST_UPDATE_PSW(regs, 6, 6);
 
 } /* end DEF_INST(compare_and_branch_register) */
 
@@ -339,6 +359,8 @@ int     cc;                             /* Comparison result         */
 
     RRS_B(inst, regs, r1, r2, m3, b4, effective_addr4);
 
+    CONTRAN_INSTR_CHECK( regs );
+
     /* Compare signed operands and set comparison result */
     cc = (S64)regs->GR_G(r1) < (S64)regs->GR_G(r2) ? 1 :
          (S64)regs->GR_G(r1) > (S64)regs->GR_G(r2) ? 2 : 0;
@@ -347,14 +369,14 @@ int     cc;                             /* Comparison result         */
     if ((0x8 >> cc) & m3)
         SUCCESSFUL_BRANCH(regs, effective_addr4, 6);
     else
-        INST_UPDATE_PSW(regs, 6, 0);
+        INST_UPDATE_PSW(regs, 6, 6);
 
 } /* end DEF_INST(compare_and_branch_long_register) */
 #endif /* defined( FEATURE_001_ZARCH_INSTALLED_FACILITY ) */
 
 
 /*-------------------------------------------------------------------*/
-/* EC76 CRJ   - Compare and Branch Relative Register           [RIE] */
+/* EC76 CRJ   - Compare and Branch Relative Register         [RIE-b] */
 /*-------------------------------------------------------------------*/
 DEF_INST(compare_and_branch_relative_register)
 {
@@ -365,6 +387,8 @@ int     cc;                             /* Comparison result         */
 
     RIE_RRIM_B(inst, regs, r1, r2, i4, m3);
 
+    CONTRAN_BRANCH_CHECK( regs, m3, i4 );
+
     /* Compare signed operands and set comparison result */
     cc = (S32)regs->GR_L(r1) < (S32)regs->GR_L(r2) ? 1 :
          (S32)regs->GR_L(r1) > (S32)regs->GR_L(r2) ? 2 : 0;
@@ -373,14 +397,14 @@ int     cc;                             /* Comparison result         */
     if ((0x8 >> cc) & m3)
         SUCCESSFUL_RELATIVE_BRANCH(regs, 2*i4, 6);
     else
-        INST_UPDATE_PSW(regs, 6, 0);
+        INST_UPDATE_PSW(regs, 6, 6);
 
 } /* end DEF_INST(compare_and_branch_relative_register) */
 
 
 #if defined( FEATURE_001_ZARCH_INSTALLED_FACILITY )
 /*-------------------------------------------------------------------*/
-/* EC64 CGRJ  - Compare and Branch Relative Long Register      [RIE] */
+/* EC64 CGRJ  - Compare and Branch Relative Long Register    [RIE-b] */
 /*-------------------------------------------------------------------*/
 DEF_INST(compare_and_branch_relative_long_register)
 {
@@ -391,6 +415,8 @@ int     cc;                             /* Comparison result         */
 
     RIE_RRIM_B(inst, regs, r1, r2, i4, m3);
 
+    CONTRAN_BRANCH_CHECK( regs, m3, i4 );
+
     /* Compare signed operands and set comparison result */
     cc = (S64)regs->GR_G(r1) < (S64)regs->GR_G(r2) ? 1 :
          (S64)regs->GR_G(r1) > (S64)regs->GR_G(r2) ? 2 : 0;
@@ -399,14 +425,14 @@ int     cc;                             /* Comparison result         */
     if ((0x8 >> cc) & m3)
         SUCCESSFUL_RELATIVE_BRANCH(regs, 2*i4, 6);
     else
-        INST_UPDATE_PSW(regs, 6, 0);
+        INST_UPDATE_PSW(regs, 6, 6);
 
 } /* end DEF_INST(compare_and_branch_relative_long_register) */
 #endif /* defined( FEATURE_001_ZARCH_INSTALLED_FACILITY ) */
 
 
 /*-------------------------------------------------------------------*/
-/* B972 CRT   - Compare and Trap Register                      [RRF] */
+/* B972 CRT   - Compare and Trap Register                    [RRF-c] */
 /*-------------------------------------------------------------------*/
 DEF_INST(compare_and_trap_register)
 {
@@ -432,7 +458,7 @@ int     cc;                             /* Comparison result         */
 
 #if defined( FEATURE_001_ZARCH_INSTALLED_FACILITY )
 /*-------------------------------------------------------------------*/
-/* B960 CGRT  - Compare and Trap Long Register                 [RRF] */
+/* B960 CGRT  - Compare and Trap Long Register               [RRF-c] */
 /*-------------------------------------------------------------------*/
 DEF_INST(compare_and_trap_long_register)
 {
@@ -522,7 +548,7 @@ S32     n;                              /* 32-bit storage value      */
 
 #if defined( FEATURE_001_ZARCH_INSTALLED_FACILITY )
 /*-------------------------------------------------------------------*/
-/* E334 CGH   - Compare Halfword Long                          [RXY] */
+/* E334 CGH   - Compare Halfword Long                        [RXY-a] */
 /*-------------------------------------------------------------------*/
 DEF_INST(compare_halfword_long)
 {
@@ -546,18 +572,18 @@ S64     n;                              /* 64-bit operand value      */
 
 
 /*-------------------------------------------------------------------*/
-/* C6x5 CHRL  - Compare Halfword Relative Long                 [RIL] */
+/* C6x5 CHRL  - Compare Halfword Relative Long               [RIL-b] */
 /*-------------------------------------------------------------------*/
 DEF_INST(compare_halfword_relative_long)
 {
 int     r1;                             /* Register number           */
-VADR    addr2;                          /* Relative operand address  */
+VADR    effective_addr2;                /* Relative operand address  */
 U16     n;                              /* Relative operand value    */
 
-    RIL_A(inst, regs, r1, addr2);
+    RIL_A(inst, regs, r1, effective_addr2);
 
     /* Load relative operand from instruction address space */
-    n = ARCH_DEP(vfetch2) ( addr2, USE_INST_SPACE, regs );
+    n = ARCH_DEP(vfetch2) ( effective_addr2, USE_INST_SPACE, regs );
 
     /* Compare signed operands and set condition code */
     regs->psw.cc =
@@ -569,18 +595,18 @@ U16     n;                              /* Relative operand value    */
 
 #if defined( FEATURE_001_ZARCH_INSTALLED_FACILITY )
 /*-------------------------------------------------------------------*/
-/* C6x4 CGHRL - Compare Halfword Relative Long Long            [RIL] */
+/* C6x4 CGHRL - Compare Halfword Relative Long Long          [RIL-b] */
 /*-------------------------------------------------------------------*/
 DEF_INST(compare_halfword_relative_long_long)
 {
 int     r1;                             /* Register number           */
-VADR    addr2;                          /* Relative operand address  */
+VADR    effective_addr2;                /* Relative operand address  */
 U16     n;                              /* Relative operand value    */
 
-    RIL_A(inst, regs, r1, addr2);
+    RIL_A(inst, regs, r1, effective_addr2);
 
     /* Load relative operand from instruction address space */
-    n = ARCH_DEP(vfetch2) ( addr2, USE_INST_SPACE, regs );
+    n = ARCH_DEP(vfetch2) ( effective_addr2, USE_INST_SPACE, regs );
 
     /* Compare signed operands and set condition code */
     regs->psw.cc =
@@ -605,6 +631,8 @@ BYTE    i2;                             /* Immediate value           */
 
     RIS_B(inst, regs, r1, i2, m3, b4, effective_addr4);
 
+    CONTRAN_INSTR_CHECK( regs );
+
     /* Compare signed operands and set comparison result */
     cc = (S32)regs->GR_L(r1) < (S32)(S8)i2 ? 1 :
          (S32)regs->GR_L(r1) > (S32)(S8)i2 ? 2 : 0;
@@ -613,7 +641,7 @@ BYTE    i2;                             /* Immediate value           */
     if ((0x8 >> cc) & m3)
         SUCCESSFUL_BRANCH(regs, effective_addr4, 6);
     else
-        INST_UPDATE_PSW(regs, 6, 0);
+        INST_UPDATE_PSW(regs, 6, 6);
 
 } /* end DEF_INST(compare_immediate_and_branch) */
 
@@ -633,6 +661,8 @@ BYTE    i2;                             /* Immediate value           */
 
     RIS_B(inst, regs, r1, i2, m3, b4, effective_addr4);
 
+    CONTRAN_INSTR_CHECK( regs );
+
     /* Compare signed operands and set comparison result */
     cc = (S64)regs->GR_G(r1) < (S64)(S8)i2 ? 1 :
          (S64)regs->GR_G(r1) > (S64)(S8)i2 ? 2 : 0;
@@ -641,14 +671,14 @@ BYTE    i2;                             /* Immediate value           */
     if ((0x8 >> cc) & m3)
         SUCCESSFUL_BRANCH(regs, effective_addr4, 6);
     else
-        INST_UPDATE_PSW(regs, 6, 0);
+        INST_UPDATE_PSW(regs, 6, 6);
 
 } /* end DEF_INST(compare_immediate_and_branch_long) */
 #endif /* defined( FEATURE_001_ZARCH_INSTALLED_FACILITY ) */
 
 
 /*-------------------------------------------------------------------*/
-/* EC7E CIJ   - Compare Immediate and Branch Relative          [RIE] */
+/* EC7E CIJ   - Compare Immediate and Branch Relative        [RIE-c] */
 /*-------------------------------------------------------------------*/
 DEF_INST(compare_immediate_and_branch_relative)
 {
@@ -660,6 +690,8 @@ int     cc;                             /* Comparison result         */
 
     RIE_RMII_B(inst, regs, r1, i2, m3, i4);
 
+    CONTRAN_BRANCH_CHECK( regs, m3, i4 );
+
     /* Compare signed operands and set comparison result */
     cc = (S32)regs->GR_L(r1) < (S32)(S8)i2 ? 1 :
          (S32)regs->GR_L(r1) > (S32)(S8)i2 ? 2 : 0;
@@ -668,14 +700,14 @@ int     cc;                             /* Comparison result         */
     if ((0x8 >> cc) & m3)
         SUCCESSFUL_RELATIVE_BRANCH(regs, 2*i4, 6);
     else
-        INST_UPDATE_PSW(regs, 6, 0);
+        INST_UPDATE_PSW(regs, 6, 6);
 
 } /* end DEF_INST(compare_immediate_and_branch_relative) */
 
 
 #if defined( FEATURE_001_ZARCH_INSTALLED_FACILITY )
 /*-------------------------------------------------------------------*/
-/* EC7C CGIJ  - Compare Immediate and Branch Relative Long     [RIE] */
+/* EC7C CGIJ  - Compare Immediate and Branch Relative Long   [RIE-c] */
 /*-------------------------------------------------------------------*/
 DEF_INST(compare_immediate_and_branch_relative_long)
 {
@@ -687,6 +719,8 @@ int     cc;                             /* Comparison result         */
 
     RIE_RMII_B(inst, regs, r1, i2, m3, i4);
 
+    CONTRAN_BRANCH_CHECK( regs, m3, i4 );
+
     /* Compare signed operands and set comparison result */
     cc = (S64)regs->GR_G(r1) < (S64)(S8)i2 ? 1 :
          (S64)regs->GR_G(r1) > (S64)(S8)i2 ? 2 : 0;
@@ -695,14 +729,14 @@ int     cc;                             /* Comparison result         */
     if ((0x8 >> cc) & m3)
         SUCCESSFUL_RELATIVE_BRANCH(regs, 2*i4, 6);
     else
-        INST_UPDATE_PSW(regs, 6, 0);
+        INST_UPDATE_PSW(regs, 6, 6);
 
 } /* end DEF_INST(compare_immediate_and_branch_relative_long) */
 #endif /* defined( FEATURE_001_ZARCH_INSTALLED_FACILITY ) */
 
 
 /*-------------------------------------------------------------------*/
-/* EC72 CIT   - Compare Immediate and Trap                     [RIE] */
+/* EC72 CIT   - Compare Immediate and Trap                   [RIE-a] */
 /*-------------------------------------------------------------------*/
 DEF_INST(compare_immediate_and_trap)
 {
@@ -729,7 +763,7 @@ U16     i2;                             /* 16-bit immediate value    */
 
 #if defined( FEATURE_001_ZARCH_INSTALLED_FACILITY )
 /*-------------------------------------------------------------------*/
-/* EC70 CGIT  - Compare Immediate and Trap Long                [RIE] */
+/* EC70 CGIT  - Compare Immediate and Trap Long              [RIE-a] */
 /*-------------------------------------------------------------------*/
 DEF_INST(compare_immediate_and_trap_long)
 {
@@ -768,6 +802,8 @@ int     cc;                             /* Comparison result         */
 
     RRS_B(inst, regs, r1, r2, m3, b4, effective_addr4);
 
+    CONTRAN_INSTR_CHECK( regs );
+
     /* Compare unsigned operands and set comparison result */
     cc = regs->GR_L(r1) < regs->GR_L(r2) ? 1 :
          regs->GR_L(r1) > regs->GR_L(r2) ? 2 : 0;
@@ -776,7 +812,7 @@ int     cc;                             /* Comparison result         */
     if ((0x8 >> cc) & m3)
         SUCCESSFUL_BRANCH(regs, effective_addr4, 6);
     else
-        INST_UPDATE_PSW(regs, 6, 0);
+        INST_UPDATE_PSW(regs, 6, 6);
 
 } /* end DEF_INST(compare_logical_and_branch_register) */
 
@@ -795,6 +831,8 @@ int     cc;                             /* Comparison result         */
 
     RRS_B(inst, regs, r1, r2, m3, b4, effective_addr4);
 
+    CONTRAN_INSTR_CHECK( regs );
+
     /* Compare unsigned operands and set comparison result */
     cc = regs->GR_G(r1) < regs->GR_G(r2) ? 1 :
          regs->GR_G(r1) > regs->GR_G(r2) ? 2 : 0;
@@ -803,14 +841,14 @@ int     cc;                             /* Comparison result         */
     if ((0x8 >> cc) & m3)
         SUCCESSFUL_BRANCH(regs, effective_addr4, 6);
     else
-        INST_UPDATE_PSW(regs, 6, 0);
+        INST_UPDATE_PSW(regs, 6, 6);
 
 } /* end DEF_INST(compare_logical_and_branch_long_register) */
 #endif /* defined( FEATURE_001_ZARCH_INSTALLED_FACILITY ) */
 
 
 /*-------------------------------------------------------------------*/
-/* EC77 CLRJ  - Compare Logical and Branch Relative Register   [RIE] */
+/* EC77 CLRJ  - Compare Logical and Branch Relative Register [RIE-b] */
 /*-------------------------------------------------------------------*/
 DEF_INST(compare_logical_and_branch_relative_register)
 {
@@ -821,6 +859,8 @@ int     cc;                             /* Comparison result         */
 
     RIE_RRIM_B(inst, regs, r1, r2, i4, m3);
 
+    CONTRAN_BRANCH_CHECK( regs, m3, i4 );
+
     /* Compare unsigned operands and set comparison result */
     cc = regs->GR_L(r1) < regs->GR_L(r2) ? 1 :
          regs->GR_L(r1) > regs->GR_L(r2) ? 2 : 0;
@@ -829,14 +869,14 @@ int     cc;                             /* Comparison result         */
     if ((0x8 >> cc) & m3)
         SUCCESSFUL_RELATIVE_BRANCH(regs, 2*i4, 6);
     else
-        INST_UPDATE_PSW(regs, 6, 0);
+        INST_UPDATE_PSW(regs, 6, 6);
 
 } /* end DEF_INST(compare_logical_and_branch_relative_register) */
 
 
 #if defined( FEATURE_001_ZARCH_INSTALLED_FACILITY )
 /*-------------------------------------------------------------------*/
-/* EC65 CLGRJ - Compare Logical and Branch Relative Long Reg   [RIE] */
+/* EC65 CLGRJ - Compare Logical and Branch Relative Long Reg [RIE-b] */
 /*-------------------------------------------------------------------*/
 DEF_INST(compare_logical_and_branch_relative_long_register)
 {
@@ -847,6 +887,8 @@ int     cc;                             /* Comparison result         */
 
     RIE_RRIM_B(inst, regs, r1, r2, i4, m3);
 
+    CONTRAN_BRANCH_CHECK( regs, m3, i4 );
+
     /* Compare unsigned operands and set comparison result */
     cc = regs->GR_G(r1) < regs->GR_G(r2) ? 1 :
          regs->GR_G(r1) > regs->GR_G(r2) ? 2 : 0;
@@ -855,14 +897,14 @@ int     cc;                             /* Comparison result         */
     if ((0x8 >> cc) & m3)
         SUCCESSFUL_RELATIVE_BRANCH(regs, 2*i4, 6);
     else
-        INST_UPDATE_PSW(regs, 6, 0);
+        INST_UPDATE_PSW(regs, 6, 6);
 
 } /* end DEF_INST(compare_logical_and_branch_relative_long_register) */
 #endif /* defined( FEATURE_001_ZARCH_INSTALLED_FACILITY ) */
 
 
 /*-------------------------------------------------------------------*/
-/* B973 CLRT  - Compare Logical and Trap Register              [RRF] */
+/* B973 CLRT  - Compare Logical and Trap Register            [RRF-c] */
 /*-------------------------------------------------------------------*/
 DEF_INST(compare_logical_and_trap_register)
 {
@@ -888,7 +930,7 @@ int     cc;                             /* Comparison result         */
 
 #if defined( FEATURE_001_ZARCH_INSTALLED_FACILITY )
 /*-------------------------------------------------------------------*/
-/* B961 CLGRT - Compare Logical and Trap Long Register         [RRF] */
+/* B961 CLGRT - Compare Logical and Trap Long Register       [RRF-c] */
 /*-------------------------------------------------------------------*/
 DEF_INST(compare_logical_and_trap_long_register)
 {
@@ -927,6 +969,8 @@ BYTE    i2;                             /* Immediate value           */
 
     RIS_B(inst, regs, r1, i2, m3, b4, effective_addr4);
 
+    CONTRAN_INSTR_CHECK( regs );
+
     /* Compare unsigned operands and set comparison result */
     cc = regs->GR_L(r1) < i2 ? 1 :
          regs->GR_L(r1) > i2 ? 2 : 0;
@@ -935,7 +979,7 @@ BYTE    i2;                             /* Immediate value           */
     if ((0x8 >> cc) & m3)
         SUCCESSFUL_BRANCH(regs, effective_addr4, 6);
     else
-        INST_UPDATE_PSW(regs, 6, 0);
+        INST_UPDATE_PSW(regs, 6, 6);
 
 } /* end DEF_INST(compare_logical_immediate_and_branch) */
 
@@ -955,6 +999,8 @@ BYTE    i2;                             /* Immediate value           */
 
     RIS_B(inst, regs, r1, i2, m3, b4, effective_addr4);
 
+    CONTRAN_INSTR_CHECK( regs );
+
     /* Compare unsigned operands and set comparison result */
     cc = regs->GR_G(r1) < i2 ? 1 :
          regs->GR_G(r1) > i2 ? 2 : 0;
@@ -963,14 +1009,14 @@ BYTE    i2;                             /* Immediate value           */
     if ((0x8 >> cc) & m3)
         SUCCESSFUL_BRANCH(regs, effective_addr4, 6);
     else
-        INST_UPDATE_PSW(regs, 6, 0);
+        INST_UPDATE_PSW(regs, 6, 6);
 
 } /* end DEF_INST(compare_logical_immediate_and_branch_long) */
 #endif /* defined( FEATURE_001_ZARCH_INSTALLED_FACILITY ) */
 
 
 /*-------------------------------------------------------------------*/
-/* EC7F CLIJ  - Compare Logical Immediate and Branch Relative  [RIE] */
+/* EC7F CLIJ  - Compare Logical Immediate and Branch Rel.    [RIE-c] */
 /*-------------------------------------------------------------------*/
 DEF_INST(compare_logical_immediate_and_branch_relative)
 {
@@ -982,6 +1028,8 @@ int     cc;                             /* Comparison result         */
 
     RIE_RMII_B(inst, regs, r1, i2, m3, i4);
 
+    CONTRAN_BRANCH_CHECK( regs, m3, i4 );
+
     /* Compare unsigned operands and set comparison result */
     cc = regs->GR_L(r1) < i2 ? 1 :
          regs->GR_L(r1) > i2 ? 2 : 0;
@@ -990,14 +1038,14 @@ int     cc;                             /* Comparison result         */
     if ((0x8 >> cc) & m3)
         SUCCESSFUL_RELATIVE_BRANCH(regs, 2*i4, 6);
     else
-        INST_UPDATE_PSW(regs, 6, 0);
+        INST_UPDATE_PSW(regs, 6, 6);
 
 } /* end DEF_INST(compare_logical_immediate_and_branch_relative) */
 
 
 #if defined( FEATURE_001_ZARCH_INSTALLED_FACILITY )
 /*-------------------------------------------------------------------*/
-/* EC7D CLGIJ - Compare Logical Immed and Branch Relative Long [RIE] */
+/* EC7D CLGIJ - Compare Logical Immed and Branch Rel. Long   [RIE-c] */
 /*-------------------------------------------------------------------*/
 DEF_INST(compare_logical_immediate_and_branch_relative_long)
 {
@@ -1009,6 +1057,8 @@ int     cc;                             /* Comparison result         */
 
     RIE_RMII_B(inst, regs, r1, i2, m3, i4);
 
+    CONTRAN_BRANCH_CHECK( regs, m3, i4 );
+
     /* Compare unsigned operands and set comparison result */
     cc = regs->GR_G(r1) < i2 ? 1 :
          regs->GR_G(r1) > i2 ? 2 : 0;
@@ -1017,14 +1067,14 @@ int     cc;                             /* Comparison result         */
     if ((0x8 >> cc) & m3)
         SUCCESSFUL_RELATIVE_BRANCH(regs, 2*i4, 6);
     else
-        INST_UPDATE_PSW(regs, 6, 0);
+        INST_UPDATE_PSW(regs, 6, 6);
 
 } /* end DEF_INST(compare_logical_immediate_and_branch_relative_long) */
 #endif /* defined( FEATURE_001_ZARCH_INSTALLED_FACILITY ) */
 
 
 /*-------------------------------------------------------------------*/
-/* EC73 CLFIT - Compare Logical Immediate and Trap Fullword    [RIE] */
+/* EC73 CLFIT - Compare Logical Immediate and Trap Fullword  [RIE-a] */
 /*-------------------------------------------------------------------*/
 DEF_INST(compare_logical_immediate_and_trap_fullword)
 {
@@ -1051,7 +1101,7 @@ U16     i2;                             /* 16-bit immediate value    */
 
 #if defined( FEATURE_001_ZARCH_INSTALLED_FACILITY )
 /*-------------------------------------------------------------------*/
-/* EC71 CLGIT - Compare Logical Immediate and Trap Long        [RIE] */
+/* EC71 CLGIT - Compare Logical Immediate and Trap Long      [RIE-a] */
 /*-------------------------------------------------------------------*/
 DEF_INST(compare_logical_immediate_and_trap_long)
 {
@@ -1141,21 +1191,21 @@ U64     n;                              /* 64-bit storage value      */
 
 
 /*-------------------------------------------------------------------*/
-/* C6xF CLRL  - Compare Logical Relative Long                  [RIL] */
+/* C6xF CLRL  - Compare Logical Relative Long                [RIL-b] */
 /*-------------------------------------------------------------------*/
 DEF_INST(compare_logical_relative_long)
 {
 int     r1;                             /* Register number           */
-VADR    addr2;                          /* Relative operand address  */
+VADR    effective_addr2;                /* Relative operand address  */
 U32     n;                              /* Relative operand value    */
 
-    RIL_A(inst, regs, r1, addr2);
+    RIL_A(inst, regs, r1, effective_addr2);
 
     /* Program check if operand not on fullword boundary */
-    FW_CHECK(addr2, regs);
+    FW_CHECK(effective_addr2, regs);
 
     /* Load relative operand from instruction address space */
-    n = ARCH_DEP(vfetch4) ( addr2, USE_INST_SPACE, regs );
+    n = ARCH_DEP(vfetch4) ( effective_addr2, USE_INST_SPACE, regs );
 
     /* Compare signed operands and set condition code */
     regs->psw.cc =
@@ -1167,21 +1217,21 @@ U32     n;                              /* Relative operand value    */
 
 #if defined( FEATURE_001_ZARCH_INSTALLED_FACILITY )
 /*-------------------------------------------------------------------*/
-/* C6xA CLGRL - Compare Logical Relative Long Long             [RIL] */
+/* C6xA CLGRL - Compare Logical Relative Long Long           [RIL-b] */
 /*-------------------------------------------------------------------*/
 DEF_INST(compare_logical_relative_long_long)
 {
 int     r1;                             /* Register number           */
-VADR    addr2;                          /* Relative operand address  */
+VADR    effective_addr2;                /* Relative operand address  */
 U64     n;                              /* Relative operand value    */
 
-    RIL_A(inst, regs, r1, addr2);
+    RIL_A(inst, regs, r1, effective_addr2);
 
     /* Program check if operand not on doubleword boundary */
-    DW_CHECK(addr2, regs);
+    DW_CHECK(effective_addr2, regs);
 
     /* Load relative operand from instruction address space */
-    n = ARCH_DEP(vfetch8) ( addr2, USE_INST_SPACE, regs );
+    n = ARCH_DEP(vfetch8) ( effective_addr2, USE_INST_SPACE, regs );
 
     /* Compare signed operands and set condition code */
     regs->psw.cc =
@@ -1194,21 +1244,21 @@ U64     n;                              /* Relative operand value    */
 
 #if defined( FEATURE_001_ZARCH_INSTALLED_FACILITY )
 /*-------------------------------------------------------------------*/
-/* C6xE CLGFRL - Compare Logical Relative Long Long Fullword   [RIL] */
+/* C6xE CLGFRL - Compare Logical Relative Long Long Fullword [RIL-b] */
 /*-------------------------------------------------------------------*/
 DEF_INST(compare_logical_relative_long_long_fullword)
 {
 int     r1;                             /* Register number           */
-VADR    addr2;                          /* Relative operand address  */
+VADR    effective_addr2;                /* Relative operand address  */
 U32     n;                              /* Relative operand value    */
 
-    RIL_A(inst, regs, r1, addr2);
+    RIL_A(inst, regs, r1, effective_addr2);
 
     /* Program check if operand not on fullword boundary */
-    FW_CHECK(addr2, regs);
+    FW_CHECK(effective_addr2, regs);
 
     /* Load relative operand from instruction address space */
-    n = ARCH_DEP(vfetch4) ( addr2, USE_INST_SPACE, regs );
+    n = ARCH_DEP(vfetch4) ( effective_addr2, USE_INST_SPACE, regs );
 
     /* Compare signed operands and set condition code */
     regs->psw.cc =
@@ -1220,18 +1270,18 @@ U32     n;                              /* Relative operand value    */
 
 
 /*-------------------------------------------------------------------*/
-/* C6x7 CLHRL - Compare Logical Halfword Relative Long         [RIL] */
+/* C6x7 CLHRL - Compare Logical Halfword Relative Long       [RIL-b] */
 /*-------------------------------------------------------------------*/
 DEF_INST(compare_logical_relative_long_halfword)
 {
 int     r1;                             /* Register number           */
-VADR    addr2;                          /* Relative operand address  */
+VADR    effective_addr2;                /* Relative operand address  */
 U16     n;                              /* Relative operand value    */
 
-    RIL_A(inst, regs, r1, addr2);
+    RIL_A(inst, regs, r1, effective_addr2);
 
     /* Load relative operand from instruction address space */
-    n = ARCH_DEP(vfetch2) ( addr2, USE_INST_SPACE, regs );
+    n = ARCH_DEP(vfetch2) ( effective_addr2, USE_INST_SPACE, regs );
 
     /* Compare signed operands and set condition code */
     regs->psw.cc =
@@ -1243,18 +1293,18 @@ U16     n;                              /* Relative operand value    */
 
 #if defined( FEATURE_001_ZARCH_INSTALLED_FACILITY )
 /*-------------------------------------------------------------------*/
-/* C6x6 CLGHRL - Compare Logical Halfword Relative Long Long   [RIL] */
+/* C6x6 CLGHRL - Compare Logical Halfword Relative Long Long [RIL-b] */
 /*-------------------------------------------------------------------*/
 DEF_INST(compare_logical_relative_long_long_halfword)
 {
 int     r1;                             /* Register number           */
-VADR    addr2;                          /* Relative operand address  */
+VADR    effective_addr2;                /* Relative operand address  */
 U16     n;                              /* Relative operand value    */
 
-    RIL_A(inst, regs, r1, addr2);
+    RIL_A(inst, regs, r1, effective_addr2);
 
     /* Load relative operand from instruction address space */
-    n = ARCH_DEP(vfetch2) ( addr2, USE_INST_SPACE, regs );
+    n = ARCH_DEP(vfetch2) ( effective_addr2, USE_INST_SPACE, regs );
 
     /* Compare signed operands and set condition code */
     regs->psw.cc =
@@ -1266,21 +1316,21 @@ U16     n;                              /* Relative operand value    */
 
 
 /*-------------------------------------------------------------------*/
-/* C6xD CRL   - Compare Relative Long                          [RIL] */
+/* C6xD CRL   - Compare Relative Long                        [RIL-b] */
 /*-------------------------------------------------------------------*/
 DEF_INST(compare_relative_long)
 {
 int     r1;                             /* Register number           */
-VADR    addr2;                          /* Relative operand address  */
+VADR    effective_addr2;                /* Relative operand address  */
 U32     n;                              /* Relative operand value    */
 
-    RIL_A(inst, regs, r1, addr2);
+    RIL_A(inst, regs, r1, effective_addr2);
 
     /* Program check if operand not on fullword boundary */
-    FW_CHECK(addr2, regs);
+    FW_CHECK(effective_addr2, regs);
 
     /* Load relative operand from instruction address space */
-    n = ARCH_DEP(vfetch4) ( addr2, USE_INST_SPACE, regs );
+    n = ARCH_DEP(vfetch4) ( effective_addr2, USE_INST_SPACE, regs );
 
     /* Compare signed operands and set condition code */
     regs->psw.cc =
@@ -1292,21 +1342,21 @@ U32     n;                              /* Relative operand value    */
 
 #if defined( FEATURE_001_ZARCH_INSTALLED_FACILITY )
 /*-------------------------------------------------------------------*/
-/* C6x8 CGRL  - Compare Relative Long Long                     [RIL] */
+/* C6x8 CGRL  - Compare Relative Long Long                   [RIL-b] */
 /*-------------------------------------------------------------------*/
 DEF_INST(compare_relative_long_long)
 {
 int     r1;                             /* Register number           */
-VADR    addr2;                          /* Relative operand address  */
+VADR    effective_addr2;                /* Relative operand address  */
 U64     n;                              /* Relative operand value    */
 
-    RIL_A(inst, regs, r1, addr2);
+    RIL_A(inst, regs, r1, effective_addr2);
 
     /* Program check if operand not on doubleword boundary */
-    DW_CHECK(addr2, regs);
+    DW_CHECK(effective_addr2, regs);
 
     /* Load relative operand from instruction address space */
-    n = ARCH_DEP(vfetch8) ( addr2, USE_INST_SPACE, regs );
+    n = ARCH_DEP(vfetch8) ( effective_addr2, USE_INST_SPACE, regs );
 
     /* Compare signed operands and set condition code */
     regs->psw.cc =
@@ -1319,21 +1369,21 @@ U64     n;                              /* Relative operand value    */
 
 #if defined( FEATURE_001_ZARCH_INSTALLED_FACILITY )
 /*-------------------------------------------------------------------*/
-/* C6xC CGFRL - Compare Relative Long Long Fullword            [RIL] */
+/* C6xC CGFRL - Compare Relative Long Long Fullword          [RIL-b] */
 /*-------------------------------------------------------------------*/
 DEF_INST(compare_relative_long_long_fullword)
 {
 int     r1;                             /* Register number           */
-VADR    addr2;                          /* Relative operand address  */
+VADR    effective_addr2;                /* Relative operand address  */
 U32     n;                              /* Relative operand value    */
 
-    RIL_A(inst, regs, r1, addr2);
+    RIL_A(inst, regs, r1, effective_addr2);
 
     /* Program check if operand not on fullword boundary */
-    FW_CHECK(addr2, regs);
+    FW_CHECK(effective_addr2, regs);
 
     /* Load relative operand from instruction address space */
-    n = ARCH_DEP(vfetch4) ( addr2, USE_INST_SPACE, regs );
+    n = ARCH_DEP(vfetch4) ( effective_addr2, USE_INST_SPACE, regs );
 
     /* Compare signed operands and set condition code */
     regs->psw.cc =
@@ -1346,9 +1396,9 @@ U32     n;                              /* Relative operand value    */
 
 #if defined( FEATURE_001_ZARCH_INSTALLED_FACILITY )
 /*-------------------------------------------------------------------*/
-/* EB4C ECAG  - Extract Cache Attribute                        [RSY] */
+/* EB4C ECAG  - Extract CPU Attribute                        [RSY-a] */
 /*-------------------------------------------------------------------*/
-DEF_INST(extract_cache_attribute)
+DEF_INST(extract_cpu_attribute)
 {
 int     r1, r3;                         /* Register numbers          */
 int     b2;                             /* Base of effective addr    */
@@ -1356,6 +1406,8 @@ VADR    effective_addr2;                /* Effective address         */
 int     ai, li, ti;                     /* Operand address subfields */
 
     RSY(inst, regs, r1, r3, b2, effective_addr2);
+
+    CONTRAN_INSTR_CHECK( regs );
 
     /* Address bit 63 contains the Type Indication (TI) */
     ti = effective_addr2 & 0x1;
@@ -1397,7 +1449,7 @@ int     ai, li, ti;                     /* Operand address subfields */
        set register r1 to indicate a fictitious cache line size */
     if (ai == 1 && li == 0)
     {
-        regs->GR(r1) = 256;
+        regs->GR(r1) = ZCACHE_LINE_SIZE;
         return;
     }
 
@@ -1405,7 +1457,7 @@ int     ai, li, ti;                     /* Operand address subfields */
        set register r1 to indicate a fictitious total cache size */
     if (ai == 2 && li == 0)
     {
-        regs->GR(r1) = 256 * 2048;
+        regs->GR(r1) = ZCACHE_LINE_SIZE * 2048;
         return;
     }
 
@@ -1413,13 +1465,13 @@ int     ai, li, ti;                     /* Operand address subfields */
        attribute indication is reserved */
     regs->GR(r1) = 0xFFFFFFFFFFFFFFFFULL;
 
-} /* end DEF_INST(extract_cache_attribute) */
+} /* end DEF_INST(extract_cpu_attribute) */
 #endif /* defined( FEATURE_001_ZARCH_INSTALLED_FACILITY ) */
 
 
 #if defined( FEATURE_ACCESS_REGISTERS )
 /*-------------------------------------------------------------------*/
-/* E375 LAEY  - Load Address Extended (Long Displacement)      [RXY] */
+/* E375 LAEY  - Load Address Extended (Long Displacement)    [RXY-a] */
 /*-------------------------------------------------------------------*/
 DEF_INST(load_address_extended_y)
 {
@@ -1427,7 +1479,7 @@ int     r1;                             /* Value of R field          */
 int     b2;                             /* Base of effective addr    */
 VADR    effective_addr2;                /* Effective address         */
 
-    RXY0(inst, regs, r1, b2, effective_addr2);
+    RXY(inst, regs, r1, b2, effective_addr2);
 
     /* Load operand address into register */
     SET_GR_A(r1, regs,effective_addr2);
@@ -1449,7 +1501,7 @@ VADR    effective_addr2;                /* Effective address         */
 
 #if defined( FEATURE_001_ZARCH_INSTALLED_FACILITY )
 /*-------------------------------------------------------------------*/
-/* E332 LTGF  - Load and Test Long Fullword                    [RXY] */
+/* E332 LTGF  - Load and Test Long Fullword                  [RXY-a] */
 /*-------------------------------------------------------------------*/
 DEF_INST(load_and_test_long_fullword)
 {
@@ -1473,18 +1525,18 @@ U32     n;                              /* Second operand value      */
 
 
 /*-------------------------------------------------------------------*/
-/* C4x5 LHRL  - Load Halfword Relative Long                    [RIL] */
+/* C4x5 LHRL  - Load Halfword Relative Long                  [RIL-b] */
 /*-------------------------------------------------------------------*/
 DEF_INST(load_halfword_relative_long)
 {
 int     r1;                             /* Register number           */
-VADR    addr2;                          /* Relative operand address  */
+VADR    effective_addr2;                /* Relative operand address  */
 U16     n;                              /* Relative operand value    */
 
-    RIL_A(inst, regs, r1, addr2);
+    RIL_A(inst, regs, r1, effective_addr2);
 
     /* Load relative operand from instruction address space */
-    n = ARCH_DEP(vfetch2) ( addr2, USE_INST_SPACE, regs );
+    n = ARCH_DEP(vfetch2) ( effective_addr2, USE_INST_SPACE, regs );
 
     /* Sign-extend operand value and load into R1 register */
     regs->GR_L(r1) = (S32)(S16)n;
@@ -1494,18 +1546,18 @@ U16     n;                              /* Relative operand value    */
 
 #if defined( FEATURE_001_ZARCH_INSTALLED_FACILITY )
 /*-------------------------------------------------------------------*/
-/* C4x4 LGHRL - Load Halfword Relative Long Long               [RIL] */
+/* C4x4 LGHRL - Load Halfword Relative Long Long             [RIL-b] */
 /*-------------------------------------------------------------------*/
 DEF_INST(load_halfword_relative_long_long)
 {
 int     r1;                             /* Register number           */
-VADR    addr2;                          /* Relative operand address  */
+VADR    effective_addr2;                /* Relative operand address  */
 U16     n;                              /* Relative operand value    */
 
-    RIL_A(inst, regs, r1, addr2);
+    RIL_A(inst, regs, r1, effective_addr2);
 
     /* Load relative operand from instruction address space */
-    n = ARCH_DEP(vfetch2) ( addr2, USE_INST_SPACE, regs );
+    n = ARCH_DEP(vfetch2) ( effective_addr2, USE_INST_SPACE, regs );
 
     /* Sign-extend operand value and load into R1 register */
     regs->GR_G(r1) = (S64)(S16)n;
@@ -1515,18 +1567,18 @@ U16     n;                              /* Relative operand value    */
 
 
 /*-------------------------------------------------------------------*/
-/* C4x2 LLHRL - Load Logical Halfword Relative Long            [RIL] */
+/* C4x2 LLHRL - Load Logical Halfword Relative Long          [RIL-b] */
 /*-------------------------------------------------------------------*/
 DEF_INST(load_logical_halfword_relative_long)
 {
 int     r1;                             /* Register number           */
-VADR    addr2;                          /* Relative operand address  */
+VADR    effective_addr2;                /* Relative operand address  */
 U16     n;                              /* Relative operand value    */
 
-    RIL_A(inst, regs, r1, addr2);
+    RIL_A(inst, regs, r1, effective_addr2);
 
     /* Load relative operand from instruction address space */
-    n = ARCH_DEP(vfetch2) ( addr2, USE_INST_SPACE, regs );
+    n = ARCH_DEP(vfetch2) ( effective_addr2, USE_INST_SPACE, regs );
 
     /* Zero-extend operand value and load into R1 register */
     regs->GR_L(r1) = n;
@@ -1536,18 +1588,18 @@ U16     n;                              /* Relative operand value    */
 
 #if defined( FEATURE_001_ZARCH_INSTALLED_FACILITY )
 /*-------------------------------------------------------------------*/
-/* C4x6 LLGHRL - Load Logical Halfword Relative Long Long      [RIL] */
+/* C4x6 LLGHRL - Load Logical Halfword Relative Long Long    [RIL-b] */
 /*-------------------------------------------------------------------*/
 DEF_INST(load_logical_halfword_relative_long_long)
 {
 int     r1;                             /* Register number           */
-VADR    addr2;                          /* Relative operand address  */
+VADR    effective_addr2;                /* Relative operand address  */
 U16     n;                              /* Relative operand value    */
 
-    RIL_A(inst, regs, r1, addr2);
+    RIL_A(inst, regs, r1, effective_addr2);
 
     /* Load relative operand from instruction address space */
-    n = ARCH_DEP(vfetch2) ( addr2, USE_INST_SPACE, regs );
+    n = ARCH_DEP(vfetch2) ( effective_addr2, USE_INST_SPACE, regs );
 
     /* Zero-extend operand value and load into R1 register */
     regs->GR_G(r1) = n;
@@ -1558,21 +1610,21 @@ U16     n;                              /* Relative operand value    */
 
 #if defined( FEATURE_001_ZARCH_INSTALLED_FACILITY )
 /*-------------------------------------------------------------------*/
-/* C4xE LLGFRL - Load Logical Relative Long Long Fullword      [RIL] */
+/* C4xE LLGFRL - Load Logical Relative Long Long Fullword    [RIL-b] */
 /*-------------------------------------------------------------------*/
 DEF_INST(load_logical_relative_long_long_fullword)
 {
 int     r1;                             /* Register number           */
-VADR    addr2;                          /* Relative operand address  */
+VADR    effective_addr2;                /* Relative operand address  */
 U32     n;                              /* Relative operand value    */
 
-    RIL_A(inst, regs, r1, addr2);
+    RIL_A(inst, regs, r1, effective_addr2);
 
     /* Program check if operand not on fullword boundary */
-    FW_CHECK(addr2, regs);
+    FW_CHECK(effective_addr2, regs);
 
     /* Load relative operand from instruction address space */
-    n = ARCH_DEP(vfetch4) ( addr2, USE_INST_SPACE, regs );
+    n = ARCH_DEP(vfetch4) ( effective_addr2, USE_INST_SPACE, regs );
 
     /* Zero-extend operand value and load into R1 register */
     regs->GR_G(r1) = n;
@@ -1582,21 +1634,21 @@ U32     n;                              /* Relative operand value    */
 
 
 /*-------------------------------------------------------------------*/
-/* C4xD LRL   - Load Relative Long                             [RIL] */
+/* C4xD LRL   - Load Relative Long                           [RIL-b] */
 /*-------------------------------------------------------------------*/
 DEF_INST(load_relative_long)
 {
 int     r1;                             /* Register number           */
-VADR    addr2;                          /* Relative operand address  */
+VADR    effective_addr2;                /* Relative operand address  */
 U32     n;                              /* Relative operand value    */
 
-    RIL_A(inst, regs, r1, addr2);
+    RIL_A(inst, regs, r1, effective_addr2);
 
     /* Program check if operand not on fullword boundary */
-    FW_CHECK(addr2, regs);
+    FW_CHECK(effective_addr2, regs);
 
     /* Load relative operand from instruction address space */
-    n = ARCH_DEP(vfetch4) ( addr2, USE_INST_SPACE, regs );
+    n = ARCH_DEP(vfetch4) ( effective_addr2, USE_INST_SPACE, regs );
 
     /* Load operand value into R1 register */
     regs->GR_L(r1) = n;
@@ -1606,21 +1658,21 @@ U32     n;                              /* Relative operand value    */
 
 #if defined( FEATURE_001_ZARCH_INSTALLED_FACILITY )
 /*-------------------------------------------------------------------*/
-/* C4x8 LGRL  - Load Relative Long Long                        [RIL] */
+/* C4x8 LGRL  - Load Relative Long Long                      [RIL-b] */
 /*-------------------------------------------------------------------*/
 DEF_INST(load_relative_long_long)
 {
 int     r1;                             /* Register number           */
-VADR    addr2;                          /* Relative operand address  */
+VADR    effective_addr2;                /* Relative operand address  */
 U64     n;                              /* Relative operand value    */
 
-    RIL_A(inst, regs, r1, addr2);
+    RIL_A(inst, regs, r1, effective_addr2);
 
     /* Program check if operand not on doubleword boundary */
-    DW_CHECK(addr2, regs);
+    DW_CHECK(effective_addr2, regs);
 
     /* Load relative operand from instruction address space */
-    n = ARCH_DEP(vfetch8) ( addr2, USE_INST_SPACE, regs );
+    n = ARCH_DEP(vfetch8) ( effective_addr2, USE_INST_SPACE, regs );
 
     /* Load operand value into R1 register */
     regs->GR_G(r1) = n;
@@ -1631,21 +1683,21 @@ U64     n;                              /* Relative operand value    */
 
 #if defined( FEATURE_001_ZARCH_INSTALLED_FACILITY )
 /*-------------------------------------------------------------------*/
-/* C4xC LGFRL - Load Relative Long Long Fullword               [RIL] */
+/* C4xC LGFRL - Load Relative Long Long Fullword             [RIL-b] */
 /*-------------------------------------------------------------------*/
 DEF_INST(load_relative_long_long_fullword)
 {
 int     r1;                             /* Register number           */
-VADR    addr2;                          /* Relative operand address  */
+VADR    effective_addr2;                /* Relative operand address  */
 U32     n;                              /* Relative operand value    */
 
-    RIL_A(inst, regs, r1, addr2);
+    RIL_A(inst, regs, r1, effective_addr2);
 
     /* Program check if operand not on fullword boundary */
-    FW_CHECK(addr2, regs);
+    FW_CHECK(effective_addr2, regs);
 
     /* Load relative operand from instruction address space */
-    n = ARCH_DEP(vfetch4) ( addr2, USE_INST_SPACE, regs );
+    n = ARCH_DEP(vfetch4) ( effective_addr2, USE_INST_SPACE, regs );
 
     /* Sign-extend operand value and load into R1 register */
     regs->GR_G(r1) = (S64)(S32)n;
@@ -1714,7 +1766,7 @@ S64     n;                              /* Sign-extended value of i2 */
 
 
 /*-------------------------------------------------------------------*/
-/* E37C MHY   - Multiply Halfword (Long Displacement)          [RXY] */
+/* E37C MHY   - Multiply Halfword (Long Displacement)        [RXY-a] */
 /*-------------------------------------------------------------------*/
 DEF_INST(multiply_halfword_y)
 {
@@ -1736,7 +1788,7 @@ S32     n;                              /* 32-bit operand values     */
 
 
 /*-------------------------------------------------------------------*/
-/* C2x1 MSFI  - Multiply Single Immediate Fullword             [RIL] */
+/* C2x1 MSFI  - Multiply Single Immediate Fullword           [RIL-a] */
 /*-------------------------------------------------------------------*/
 DEF_INST(multiply_single_immediate_fullword)
 {
@@ -1754,7 +1806,7 @@ U32     i2;                             /* 32-bit operand value      */
 
 #if defined( FEATURE_001_ZARCH_INSTALLED_FACILITY )
 /*-------------------------------------------------------------------*/
-/* C2x0 MSGFI - Multiply Single Immediate Long Fullword        [RIL] */
+/* C2x0 MSGFI - Multiply Single Immediate Long Fullword      [RIL-a] */
 /*-------------------------------------------------------------------*/
 DEF_INST(multiply_single_immediate_long_fullword)
 {
@@ -1772,7 +1824,7 @@ U32     i2;                             /* 32-bit operand value      */
 
 
 /*-------------------------------------------------------------------*/
-/* E35C MFY   - Multiply (Long Displacement)                   [RXY] */
+/* E35C MFY   - Multiply (Long Displacement)                 [RXY-a] */
 /*-------------------------------------------------------------------*/
 DEF_INST(multiply_y)
 {
@@ -1797,7 +1849,7 @@ U32     n;                              /* 32-bit operand values     */
 
 
 /*-------------------------------------------------------------------*/
-/* E336 PFD   - Prefetch Data                                  [RXY] */
+/* E336 PFD   - Prefetch Data                                [RXY-b] */
 /*-------------------------------------------------------------------*/
 DEF_INST(prefetch_data)
 {
@@ -1813,16 +1865,25 @@ VADR    effective_addr2;                /* Effective address         */
 
 
 /*-------------------------------------------------------------------*/
-/* C6x2 PFDRL - Prefetch Data Relative Long                    [RIL] */
+/* C6x2 PFDRL - Prefetch Data Relative Long                  [RIL-c] */
 /*-------------------------------------------------------------------*/
 DEF_INST(prefetch_data_relative_long)
 {
 int     m1;                             /* Mask value                */
-VADR    addr2;                          /* Relative operand address  */
+VADR    effective_addr2;                /* Effective address         */
 
-    RIL_A(inst, regs, m1, addr2);
+    RIL_A(inst, regs, m1, effective_addr2);
 
-    /* The Prefetch Data instruction acts as a no-op */
+    CONTRAN_INSTR_CHECK( regs );
+
+#if defined( FEATURE_073_TRANSACT_EXEC_FACILITY )
+    /* This instruction is restricted in transaction execution
+       mode when the m1 field is either 6 or 7. */
+    if (m1 == 6 || m1 == 7)
+        TRAN_INSTR_CHECK( regs );
+#endif
+
+    /* On Hercules the Prefetch Data instruction acts as a no-op */
 
 } /* end DEF_INST(prefetch_data_relative_long) */
 
@@ -1836,6 +1897,14 @@ VADR    addr2;                          /* Relative operand address  */
 /*-------------------------------------------------------------------*/
 /* Subroutine is called by RNSBG, RISBG, ROSBG, RXSBG instructions   */
 /* as well as by the RISBHG, RISBLG and RISBGN instructions.         */
+/*-------------------------------------------------------------------*/
+/* EC54 RNSBG - Rotate Then And Selected Bits                [RIE-f] */
+/* EC55 RISBG - Rotate Then Insert Selected Bits             [RIE-f] */
+/* EC56 ROSBG - Rotate Then Or Selected Bits                 [RIE-f] */
+/* EC57 RXSBG - Rotate Then Exclusive Or Selected Bits       [RIE-f] */
+/* EC5D RISBHG - Rotate Then Insert Selected Bits High       [RIE-f] */
+/* EC51 RISBLG - Rotate Then Insert Selected Bits Low        [RIE-f] */
+/* EC59 RISBGN - Rotate Then Insert Selected Bits No CC      [RIE-f] */
 /*-------------------------------------------------------------------*/
 DEF_INST( rotate_then_xxx_selected_bits_long_reg )
 {
@@ -1993,28 +2062,28 @@ BYTE    opcode;                         /* 2nd byte of opcode        */
 
 #if defined( FEATURE_001_ZARCH_INSTALLED_FACILITY )
 /*-------------------------------------------------------------------*/
-/* EC54 RNSBG - Rotate Then And Selected Bits                  [RIE] */
+/* EC54 RNSBG - Rotate Then And Selected Bits                [RIE-f] */
 /*-------------------------------------------------------------------*/
 DEF_INST(rotate_then_and_selected_bits_long_reg)
 {
     ARCH_DEP( rotate_then_xxx_selected_bits_long_reg )( inst, regs );
 }
 /*-------------------------------------------------------------------*/
-/* EC55 RISBG - Rotate Then Insert Selected Bits               [RIE] */
+/* EC55 RISBG - Rotate Then Insert Selected Bits             [RIE-f] */
 /*-------------------------------------------------------------------*/
 DEF_INST( rotate_then_insert_selected_bits_long_reg )
 {
     ARCH_DEP( rotate_then_xxx_selected_bits_long_reg )( inst, regs );
 }
 /*-------------------------------------------------------------------*/
-/* EC56 ROSBG - Rotate Then Or Selected Bits                   [RIE] */
+/* EC56 ROSBG - Rotate Then Or Selected Bits                 [RIE-f] */
 /*-------------------------------------------------------------------*/
 DEF_INST( rotate_then_or_selected_bits_long_reg )
 {
     ARCH_DEP( rotate_then_xxx_selected_bits_long_reg )( inst, regs );
 }
 /*-------------------------------------------------------------------*/
-/* EC57 RXSBG - Rotate Then Exclusive Or Selected Bits         [RIE] */
+/* EC57 RXSBG - Rotate Then Exclusive Or Selected Bits       [RIE-f] */
 /*-------------------------------------------------------------------*/
 DEF_INST( rotate_then_exclusive_or_selected_bits_long_reg )
 {
@@ -2024,67 +2093,67 @@ DEF_INST( rotate_then_exclusive_or_selected_bits_long_reg )
 
 
 /*-------------------------------------------------------------------*/
-/* C4x7 STHRL - Store Halfword Relative Long                   [RIL] */
+/* C4x7 STHRL - Store Halfword Relative Long                 [RIL-b] */
 /*-------------------------------------------------------------------*/
 DEF_INST(store_halfword_relative_long)
 {
 int     r1;                             /* Register number           */
-VADR    addr2;                          /* Relative operand address  */
+VADR    effective_addr2;                /* Relative operand address  */
 
-    RIL_A(inst, regs, r1, addr2);
+    RIL_A(inst, regs, r1, effective_addr2);
 
     /* Store low 2 bytes of R1 register in instruction address space */
-    ARCH_DEP(vstore2) ( regs->GR_LHL(r1), addr2, USE_INST_SPACE, regs );
+    ARCH_DEP(vstore2) ( regs->GR_LHL(r1), effective_addr2, USE_INST_SPACE, regs );
 
 } /* end DEF_INST(store_halfword_relative_long) */
 
 
 /*-------------------------------------------------------------------*/
-/* C4xF STRL  - Store Relative Long                            [RIL] */
+/* C4xF STRL  - Store Relative Long                          [RIL-b] */
 /*-------------------------------------------------------------------*/
 DEF_INST(store_relative_long)
 {
 int     r1;                             /* Register number           */
-VADR    addr2;                          /* Relative operand address  */
+VADR    effective_addr2;                /* Relative operand address  */
 
-    RIL_A(inst, regs, r1, addr2);
+    RIL_A(inst, regs, r1, effective_addr2);
 
     /* Program check if operand not on fullword boundary */
-    FW_CHECK(addr2, regs);
+    FW_CHECK(effective_addr2, regs);
 
     /* Store low 4 bytes of R1 register in instruction address space */
-    ARCH_DEP(vstore4) ( regs->GR_L(r1), addr2, USE_INST_SPACE, regs );
+    ARCH_DEP(vstore4) ( regs->GR_L(r1), effective_addr2, USE_INST_SPACE, regs );
 
 } /* end DEF_INST(store_relative_long) */
 
 
 /*-------------------------------------------------------------------*/
-/* C4xB STGRL - Store Relative Long Long                       [RIL] */
+/* C4xB STGRL - Store Relative Long Long                     [RIL-b] */
 /*-------------------------------------------------------------------*/
 DEF_INST(store_relative_long_long)
 {
 int     r1;                             /* Register number           */
-VADR    addr2;                          /* Relative operand address  */
+VADR    effective_addr2;                /* Relative operand address  */
 
-    RIL_A(inst, regs, r1, addr2);
+    RIL_A(inst, regs, r1, effective_addr2);
 
     /* Program check if operand not on doubleword boundary */
-    DW_CHECK(addr2, regs);
+    DW_CHECK(effective_addr2, regs);
 
     /* Store R1 register in instruction address space */
-    ARCH_DEP(vstore8) ( regs->GR_G(r1), addr2, USE_INST_SPACE, regs );
+    ARCH_DEP(vstore8) ( regs->GR_G(r1), effective_addr2, USE_INST_SPACE, regs );
 
 } /* end DEF_INST(store_relative_long_long) */
 
 #endif /* defined( FEATURE_034_GEN_INST_EXTN_FACILITY ) */
 
 
-#if defined( FEATURE_045_HIGH_WORD_FACILITY )                   /*810*/
+#if defined( FEATURE_045_HIGH_WORD_FACILITY )
 
 /*-------------------------------------------------------------------*/
-/* B9C8 AHHHR - Add High High High Register                    [RRR] */
+/* B9C8 AHHHR - Add High High High Register                  [RRF-a] */
 /*-------------------------------------------------------------------*/
-DEF_INST(add_high_high_high_register)                           /*810*/
+DEF_INST(add_high_high_high_register)
 {
 int     r1, r2, r3;                     /* Values of R fields        */
 
@@ -2104,9 +2173,9 @@ int     r1, r2, r3;                     /* Values of R fields        */
 
 
 /*-------------------------------------------------------------------*/
-/* B9D8 AHHLR - Add High High Low Register                     [RRR] */
+/* B9D8 AHHLR - Add High High Low Register                   [RRF-a] */
 /*-------------------------------------------------------------------*/
-DEF_INST(add_high_high_low_register)                            /*810*/
+DEF_INST(add_high_high_low_register)
 {
 int     r1, r2, r3;                     /* Values of R fields        */
 
@@ -2125,9 +2194,9 @@ int     r1, r2, r3;                     /* Values of R fields        */
 } /* end DEF_INST(add_high_high_low_register) */
 
 /*-------------------------------------------------------------------*/
-/* CCx8 AIH   - Add High Immediate                             [RIL] */
+/* CCx8 AIH   - Add High Immediate                           [RIL-a] */
 /*-------------------------------------------------------------------*/
-DEF_INST(add_high_immediate)                                    /*810*/
+DEF_INST(add_high_immediate)
 {
 int     r1;                             /* Register number           */
 int     opcd;                           /* Opcode                    */
@@ -2148,13 +2217,13 @@ U32     i2;                             /* 32-bit operand value      */
 
 
 /*-------------------------------------------------------------------*/
-/* B9CA ALHHHR - Add Logical High High High Register           [RRR] */
+/* B9CA ALHHHR - Add Logical High High High Register         [RRF-a] */
 /*-------------------------------------------------------------------*/
-DEF_INST(add_logical_high_high_high_register)                   /*810*/
+DEF_INST(add_logical_high_high_high_register)
 {
 int     r1, r2, r3;                     /* Values of R fields        */
 
-    RRR0(inst, regs, r1, r2, r3);
+    RRR(inst, regs, r1, r2, r3);
 
     /* Add signed operands and set condition code */
     regs->psw.cc = add_logical (&(regs->GR_H(r1)),
@@ -2165,13 +2234,13 @@ int     r1, r2, r3;                     /* Values of R fields        */
 
 
 /*-------------------------------------------------------------------*/
-/* B9DA ALHHLR - Add Logical High High Low Register            [RRR] */
+/* B9DA ALHHLR - Add Logical High High Low Register          [RRF-a] */
 /*-------------------------------------------------------------------*/
-DEF_INST(add_logical_high_high_low_register)                    /*810*/
+DEF_INST(add_logical_high_high_low_register)
 {
 int     r1, r2, r3;                     /* Values of R fields        */
 
-    RRR0(inst, regs, r1, r2, r3);
+    RRR(inst, regs, r1, r2, r3);
 
     /* Add signed operands and set condition code */
     regs->psw.cc = add_logical (&(regs->GR_H(r1)),
@@ -2182,15 +2251,15 @@ int     r1, r2, r3;                     /* Values of R fields        */
 
 
 /*-------------------------------------------------------------------*/
-/* CCxA ALSIH - Add Logical with Signed Immediate High         [RIL] */
+/* CCxA ALSIH - Add Logical with Signed Immediate High       [RIL-a] */
 /*-------------------------------------------------------------------*/
-DEF_INST(add_logical_with_signed_immediate_high)                /*810*/
+DEF_INST(add_logical_with_signed_immediate_high)
 {
 int     r1;                             /* Register number           */
 int     opcd;                           /* Opcode                    */
 U32     i2;                             /* 32-bit operand value      */
 
-    RIL0(inst, regs, r1, opcd, i2);
+    RIL(inst, regs, r1, opcd, i2);
 
     /* Add operands and set condition code */
     regs->psw.cc = (S32)i2 < 0 ?
@@ -2201,15 +2270,15 @@ U32     i2;                             /* 32-bit operand value      */
 
 
 /*-------------------------------------------------------------------*/
-/* CCxB ALSIHN - Add Logical with Signed Immediate High No CC  [RIL] */
+/* CCxB ALSIHN - Add Logical with Signed Imm. High No CC     [RIL-a] */
 /*-------------------------------------------------------------------*/
-DEF_INST(add_logical_with_signed_immediate_high_n)              /*810*/
+DEF_INST(add_logical_with_signed_immediate_high_n)
 {
 int     r1;                             /* Register number           */
 int     opcd;                           /* Opcode                    */
 U32     i2;                             /* 32-bit operand value      */
 
-    RIL0(inst, regs, r1, opcd, i2);
+    RIL(inst, regs, r1, opcd, i2);
 
     /* Add operands without setting condition code */
     if ((S32)i2 < 0) {
@@ -2222,9 +2291,9 @@ U32     i2;                             /* 32-bit operand value      */
 
 
 /*-------------------------------------------------------------------*/
-/* CCx6 BRCTH - Branch Relative on Count High                  [RIL] */
+/* CCx6 BRCTH - Branch Relative on Count High                [RIL-b] */
 /*-------------------------------------------------------------------*/
-DEF_INST(branch_relative_on_count_high)                         /*810*/
+DEF_INST(branch_relative_on_count_high)
 {
 int     r1;                             /* Register number           */
 int     opcd;                           /* Opcode                    */
@@ -2232,11 +2301,13 @@ S32     i2;                             /* 32-bit operand value      */
 
     RIL_B(inst, regs, r1, opcd, i2);
 
+    CONTRAN_INSTR_CHECK( regs );
+
     /* Subtract 1 from the R1 operand and branch if non-zero */
     if ( --(regs->GR_H(r1)) )
         SUCCESSFUL_RELATIVE_BRANCH_LONG(regs, 2LL*i2);
     else
-        INST_UPDATE_PSW(regs, 6, 0);
+        INST_UPDATE_PSW(regs, 6, 6);
 
 } /* end DEF_INST(branch_relative_on_count_high) */
 
@@ -2244,11 +2315,11 @@ S32     i2;                             /* 32-bit operand value      */
 /*-------------------------------------------------------------------*/
 /* B9CD CHHR  - Compare High High Register                     [RRE] */
 /*-------------------------------------------------------------------*/
-DEF_INST(compare_high_high_register)                            /*810*/
+DEF_INST(compare_high_high_register)
 {
 int     r1, r2;                         /* Values of R fields        */
 
-    RRE0(inst, regs, r1, r2);
+    RRE(inst, regs, r1, r2);
 
     /* Compare signed operands and set condition code */
     regs->psw.cc =
@@ -2261,11 +2332,11 @@ int     r1, r2;                         /* Values of R fields        */
 /*-------------------------------------------------------------------*/
 /* B9DD CHLR  - Compare High Low Register                      [RRE] */
 /*-------------------------------------------------------------------*/
-DEF_INST(compare_high_low_register)                             /*810*/
+DEF_INST(compare_high_low_register)
 {
 int     r1, r2;                         /* Values of R fields        */
 
-    RRE0(inst, regs, r1, r2);
+    RRE(inst, regs, r1, r2);
 
     /* Compare signed operands and set condition code */
     regs->psw.cc =
@@ -2276,9 +2347,9 @@ int     r1, r2;                         /* Values of R fields        */
 
 
 /*-------------------------------------------------------------------*/
-/* E3CD CHF   - Compare High Fullword                          [RXY] */
+/* E3CD CHF   - Compare High Fullword                        [RXY-a] */
 /*-------------------------------------------------------------------*/
-DEF_INST(compare_high_fullword)                                 /*810*/
+DEF_INST(compare_high_fullword)
 {
 int     r1;                             /* Values of R fields        */
 int     b2;                             /* Base of effective addr    */
@@ -2299,15 +2370,15 @@ U32     n;                              /* 32-bit operand values     */
 
 
 /*-------------------------------------------------------------------*/
-/* CCxD CIH   - Compare High Immediate                         [RIL] */
+/* CCxD CIH   - Compare High Immediate                       [RIL-a] */
 /*-------------------------------------------------------------------*/
-DEF_INST(compare_high_immediate)                                /*810*/
+DEF_INST(compare_high_immediate)
 {
 int     r1;                             /* Register number           */
 int     opcd;                           /* Opcode                    */
 U32     i2;                             /* 32-bit operand value      */
 
-    RIL0(inst, regs, r1, opcd, i2);
+    RIL(inst, regs, r1, opcd, i2);
 
     /* Compare signed operands and set condition code */
     regs->psw.cc = (S32)regs->GR_H(r1) < (S32)i2 ? 1 :
@@ -2319,11 +2390,11 @@ U32     i2;                             /* 32-bit operand value      */
 /*-------------------------------------------------------------------*/
 /* B9CF CLHHR - Compare Logical High High Register             [RRE] */
 /*-------------------------------------------------------------------*/
-DEF_INST(compare_logical_high_high_register)                    /*810*/
+DEF_INST(compare_logical_high_high_register)
 {
 int     r1, r2;                         /* Values of R fields        */
 
-    RRE0(inst, regs, r1, r2);
+    RRE(inst, regs, r1, r2);
 
     /* Compare unsigned operands and set condition code */
     regs->psw.cc = regs->GR_H(r1) < regs->GR_H(r2) ? 1 :
@@ -2335,11 +2406,11 @@ int     r1, r2;                         /* Values of R fields        */
 /*-------------------------------------------------------------------*/
 /* B9DF CLHLR - Compare Logical High Low Register              [RRE] */
 /*-------------------------------------------------------------------*/
-DEF_INST(compare_logical_high_low_register)                     /*810*/
+DEF_INST(compare_logical_high_low_register)
 {
 int     r1, r2;                         /* Values of R fields        */
 
-    RRE0(inst, regs, r1, r2);
+    RRE(inst, regs, r1, r2);
 
     /* Compare unsigned operands and set condition code */
     regs->psw.cc = regs->GR_H(r1) < regs->GR_L(r2) ? 1 :
@@ -2349,9 +2420,9 @@ int     r1, r2;                         /* Values of R fields        */
 
 
 /*-------------------------------------------------------------------*/
-/* E3CF CLHF  - Compare Logical High Fullword                  [RXY] */
+/* E3CF CLHF  - Compare Logical High Fullword                [RXY-a] */
 /*-------------------------------------------------------------------*/
-DEF_INST(compare_logical_high_fullword)                         /*810*/
+DEF_INST(compare_logical_high_fullword)
 {
 int     r1;                             /* Values of R fields        */
 int     b2;                             /* Base of effective addr    */
@@ -2371,15 +2442,15 @@ U32     n;                              /* 32-bit operand values     */
 
 
 /*-------------------------------------------------------------------*/
-/* CCxF CLIH  - Compare Logical High Immediate                 [RIL] */
+/* CCxF CLIH  - Compare Logical High Immediate               [RIL-a] */
 /*-------------------------------------------------------------------*/
-DEF_INST(compare_logical_high_immediate)                        /*810*/
+DEF_INST(compare_logical_high_immediate)
 {
 int     r1;                             /* Register number           */
 int     opcd;                           /* Opcode                    */
 U32     i2;                             /* 32-bit operand value      */
 
-    RIL0(inst, regs, r1, opcd, i2);
+    RIL(inst, regs, r1, opcd, i2);
 
     /* Compare unsigned operands and set condition code */
     regs->psw.cc = regs->GR_H(r1) < i2 ? 1 :
@@ -2389,9 +2460,9 @@ U32     i2;                             /* 32-bit operand value      */
 
 
 /*-------------------------------------------------------------------*/
-/* E3C0 LBH   - Load Byte High                                 [RXY] */
+/* E3C0 LBH   - Load Byte High                               [RXY-a] */
 /*-------------------------------------------------------------------*/
-DEF_INST(load_byte_high)                                        /*810*/
+DEF_INST(load_byte_high)
 {
 int     r1;                             /* Value of R field          */
 int     b2;                             /* Base of effective addr    */
@@ -2406,9 +2477,9 @@ VADR    effective_addr2;                /* Effective address         */
 
 
 /*-------------------------------------------------------------------*/
-/* E3CA LFH   - Load Fullword High                             [RXY] */
+/* E3CA LFH   - Load Fullword High                           [RXY-a] */
 /*-------------------------------------------------------------------*/
-DEF_INST(load_fullword_high)                                    /*810*/
+DEF_INST(load_fullword_high)
 {
 int     r1;                             /* Value of R field          */
 int     b2;                             /* Base of effective addr    */
@@ -2423,9 +2494,9 @@ VADR    effective_addr2;                /* Effective address         */
 
 
 /*-------------------------------------------------------------------*/
-/* E3C4 LHH   - Load Halfword High                             [RXY] */
+/* E3C4 LHH   - Load Halfword High                           [RXY-a] */
 /*-------------------------------------------------------------------*/
-DEF_INST(load_halfword_high)                                    /*810*/
+DEF_INST(load_halfword_high)
 {
 int     r1;                             /* Value of R field          */
 int     b2;                             /* Base of effective addr    */
@@ -2440,9 +2511,9 @@ VADR    effective_addr2;                /* Effective address         */
 
 
 /*-------------------------------------------------------------------*/
-/* E3C2 LLCH  - Load Logical Character High                    [RXY] */
+/* E3C2 LLCH  - Load Logical Character High                  [RXY-a] */
 /*-------------------------------------------------------------------*/
-DEF_INST(load_logical_character_high)                           /*810*/
+DEF_INST(load_logical_character_high)
 {
 int     r1;                             /* Value of R field          */
 int     b2;                             /* Base of effective addr    */
@@ -2457,9 +2528,9 @@ VADR    effective_addr2;                /* Effective address         */
 
 
 /*-------------------------------------------------------------------*/
-/* E3C6 LLHH  - Load Logical Halfword High                     [RXY] */
+/* E3C6 LLHH  - Load Logical Halfword High                   [RXY-a] */
 /*-------------------------------------------------------------------*/
-DEF_INST(load_logical_halfword_high)                            /*810*/
+DEF_INST(load_logical_halfword_high)
 {
 int     r1;                             /* Value of R field          */
 int     b2;                             /* Base of effective addr    */
@@ -2474,27 +2545,27 @@ VADR    effective_addr2;                /* Effective address         */
 
 
 /*-------------------------------------------------------------------*/
-/* EC5D RISBHG - Rotate Then Insert Selected Bits High         [RIE] */
+/* EC5D RISBHG - Rotate Then Insert Selected Bits High       [RIE-f] */
 /*-------------------------------------------------------------------*/
-DEF_INST(rotate_then_insert_selected_bits_high_long_reg)        /*810*/
+DEF_INST(rotate_then_insert_selected_bits_high_long_reg)
 {
     ARCH_DEP(rotate_then_xxx_selected_bits_long_reg) (inst, regs);
 } /* end DEF_INST(rotate_then_insert_selected_bits_high_long_reg) */
 
 
 /*-------------------------------------------------------------------*/
-/* EC51 RISBLG - Rotate Then Insert Selected Bits Low          [RIE] */
+/* EC51 RISBLG - Rotate Then Insert Selected Bits Low        [RIE-f] */
 /*-------------------------------------------------------------------*/
-DEF_INST(rotate_then_insert_selected_bits_low_long_reg)         /*810*/
+DEF_INST(rotate_then_insert_selected_bits_low_long_reg)
 {
     ARCH_DEP(rotate_then_xxx_selected_bits_long_reg) (inst, regs);
 } /* end DEF_INST(rotate_then_insert_selected_bits_low_long_reg) */
 
 
 /*-------------------------------------------------------------------*/
-/* E3C3 STCH  - Store Character High                           [RXY] */
+/* E3C3 STCH  - Store Character High                         [RXY-a] */
 /*-------------------------------------------------------------------*/
-DEF_INST(store_character_high)                                  /*810*/
+DEF_INST(store_character_high)
 {
 int     r1;                             /* Value of R field          */
 int     b2;                             /* Base of effective addr    */
@@ -2509,9 +2580,9 @@ VADR    effective_addr2;                /* Effective address         */
 
 
 /*-------------------------------------------------------------------*/
-/* E3CB STFH  - Store Fullword High                            [RXY] */
+/* E3CB STFH  - Store Fullword High                          [RXY-a] */
 /*-------------------------------------------------------------------*/
-DEF_INST(store_fullword_high)                                   /*810*/
+DEF_INST(store_fullword_high)
 {
 int     r1;                             /* Values of R fields        */
 int     b2;                             /* Base of effective addr    */
@@ -2526,9 +2597,9 @@ VADR    effective_addr2;                /* Effective address         */
 
 
 /*-------------------------------------------------------------------*/
-/* E3C7 STHH  - Store Halfword High                            [RXY] */
+/* E3C7 STHH  - Store Halfword High                          [RXY-a] */
 /*-------------------------------------------------------------------*/
-DEF_INST(store_halfword_high)                                   /*810*/
+DEF_INST(store_halfword_high)
 {
 int     r1;                             /* Value of R field          */
 int     b2;                             /* Base of effective addr    */
@@ -2543,9 +2614,9 @@ VADR    effective_addr2;                /* Effective address         */
 
 
 /*-------------------------------------------------------------------*/
-/* B9C9 SHHHR - Subtract High High High Register               [RRR] */
+/* B9C9 SHHHR - Subtract High High High Register             [RRF-a] */
 /*-------------------------------------------------------------------*/
-DEF_INST(subtract_high_high_high_register)                      /*810*/
+DEF_INST(subtract_high_high_high_register)
 {
 int     r1, r2, r3;                     /* Values of R fields        */
 
@@ -2564,9 +2635,9 @@ int     r1, r2, r3;                     /* Values of R fields        */
 
 
 /*-------------------------------------------------------------------*/
-/* B9D9 SHHLR - Subtract High High Low Register                [RRR] */
+/* B9D9 SHHLR - Subtract High High Low Register              [RRF-a] */
 /*-------------------------------------------------------------------*/
-DEF_INST(subtract_high_high_low_register)                       /*810*/
+DEF_INST(subtract_high_high_low_register)
 {
 int     r1, r2, r3;                     /* Values of R fields        */
 
@@ -2585,13 +2656,13 @@ int     r1, r2, r3;                     /* Values of R fields        */
 
 
 /*-------------------------------------------------------------------*/
-/* B9CB SLHHHR - Subtract Logical High High High Register      [RRR] */
+/* B9CB SLHHHR - Subtract Logical High High High Register    [RRF-a] */
 /*-------------------------------------------------------------------*/
-DEF_INST(subtract_logical_high_high_high_register)              /*810*/
+DEF_INST(subtract_logical_high_high_high_register)
 {
 int     r1, r2, r3;                     /* Values of R fields        */
 
-    RRR0(inst, regs, r1, r2, r3);
+    RRR(inst, regs, r1, r2, r3);
 
     /* Subtract unsigned operands and set condition code */
     regs->psw.cc = sub_logical (&(regs->GR_H(r1)),
@@ -2602,13 +2673,13 @@ int     r1, r2, r3;                     /* Values of R fields        */
 
 
 /*-------------------------------------------------------------------*/
-/* B9DB SLHHLR - Subtract Logical High High Low Register       [RRR] */
+/* B9DB SLHHLR - Subtract Logical High High Low Register     [RRF-a] */
 /*-------------------------------------------------------------------*/
-DEF_INST(subtract_logical_high_high_low_register)               /*810*/
+DEF_INST(subtract_logical_high_high_low_register)
 {
 int     r1, r2, r3;                     /* Values of R fields        */
 
-    RRR0(inst, regs, r1, r2, r3);
+    RRR(inst, regs, r1, r2, r3);
 
     /* Subtract unsigned operands and set condition code */
     regs->psw.cc = sub_logical (&(regs->GR_H(r1)),
@@ -2617,20 +2688,26 @@ int     r1, r2, r3;                     /* Values of R fields        */
 
 } /* end DEF_INST(subtract_logical_high_high_low_register) */
 
-#endif /* defined( FEATURE_045_HIGH_WORD_FACILITY ) */          /*810*/
+#endif /* defined( FEATURE_045_HIGH_WORD_FACILITY ) */
 
 
-#if defined( FEATURE_045_INTERLOCKED_ACCESS_FACILITY_1 )        /*810*/
+#if defined( FEATURE_045_INTERLOCKED_ACCESS_FACILITY_1 )
 
 /*-------------------------------------------------------------------*/
 /* Load and Perform Interlocked Access Operation                     */
 /* Subroutine called by LAA,LAAL,LAN,LAX,LAO instructions            */
 /*-------------------------------------------------------------------*/
-DEF_INST(load_and_perform_interlocked_access)                   /*810*/
+/* EBF8 LAA   - Load and Add                                 [RSY-a] */
+/* EBFA LAAL  - Load and Add Logical                         [RSY-a] */
+/* EBF4 LAN   - Load and And                                 [RSY-a] */
+/* EBF7 LAX   - Load and Exclusive Or                        [RSY-a] */
+/* EBF6 LAO   - Load and Or                                  [RSY-a] */
+/*-------------------------------------------------------------------*/
+DEF_INST(load_and_perform_interlocked_access)
 {
 int     r1, r3;                         /* Register numbers          */
 int     b2;                             /* Base of effective addr    */
-VADR    addr2;                          /* Effective address         */
+VADR    effective_addr2;                /* Effective address         */
 BYTE    *m2;                            /* Mainstor address          */
 U32     v2, v3;                         /* Operand values            */
 U32     result;                         /* Result value              */
@@ -2639,7 +2716,7 @@ int     cc;                             /* Condition code            */
 int     rc;                             /* Return code               */
 BYTE    opcode;                         /* 2nd byte of opcode        */
 
-    RSY(inst, regs, r1, r3, b2, addr2);
+    RSY(inst, regs, r1, r3, b2, effective_addr2);
 
     /* Extract second byte of instruction opcode */
     opcode = inst[5];
@@ -2648,11 +2725,11 @@ BYTE    opcode;                         /* 2nd byte of opcode        */
     v3 = regs->GR_L(r3);
 
     /* Get mainstor address of storage operand */
-    m2 = MADDRL (addr2, 4, b2, regs, ACCTYPE_WRITE, regs->psw.pkey);
+    m2 = MADDRL (effective_addr2, 4, b2, regs, ACCTYPE_WRITE, regs->psw.pkey);
 
     do {
         /* Load storage operand value from operand address */
-        v2 = ARCH_DEP(vfetch4) ( addr2, b2, regs );
+        v2 = ARCH_DEP(vfetch4) ( effective_addr2, b2, regs );
 
         switch (opcode) {
         case 0xF4: /* Load and And */
@@ -2686,7 +2763,13 @@ BYTE    opcode;                         /* 2nd byte of opcode        */
         /* Interlocked exchange to storage location */
         old = CSWAP32(v2);
         new = CSWAP32(result);
-        rc = cmpxchg4 (&old, new, m2);
+
+        /* MAINLOCK may be required if cmpxchg assists unavailable */
+        OBTAIN_MAINLOCK( regs );
+        {
+            rc = cmpxchg4( &old, new, m2 );
+        }
+        RELEASE_MAINLOCK( regs );
 
     } while (rc != 0);
 
@@ -2702,11 +2785,17 @@ BYTE    opcode;                         /* 2nd byte of opcode        */
 /* Load and Perform Interlocked Access Operation Long                */
 /* Subroutine called by LAAG,LAALG,LANG,LAXG,LAOG instructions       */
 /*-------------------------------------------------------------------*/
-DEF_INST(load_and_perform_interlocked_access_long)              /*810*/
+/* EBE8 LAAG  - Load and Add Long                            [RSY-a] */
+/* EBEA LAALG - Load and Add Logical Long                    [RSY-a] */
+/* EBE4 LANG  - Load and And Long                            [RSY-a] */
+/* EBE7 LAXG  - Load and Exclusive Or Long                   [RSY-a] */
+/* EBE6 LAOG  - Load and Or Long                             [RSY-a] */
+/*-------------------------------------------------------------------*/
+DEF_INST(load_and_perform_interlocked_access_long)
 {
 int     r1, r3;                         /* Register numbers          */
 int     b2;                             /* Base of effective addr    */
-VADR    addr2;                          /* Effective address         */
+VADR    effective_addr2;                /* Effective address         */
 BYTE    *m2;                            /* Mainstor address          */
 U64     v2, v3;                         /* Operand values            */
 U64     result;                         /* Result value              */
@@ -2715,7 +2804,7 @@ int     cc;                             /* Condition code            */
 int     rc;                             /* Return code               */
 BYTE    opcode;                         /* 2nd byte of opcode        */
 
-    RSY(inst, regs, r1, r3, b2, addr2);
+    RSY(inst, regs, r1, r3, b2, effective_addr2);
 
     /* Extract second byte of instruction opcode */
     opcode = inst[5];
@@ -2724,11 +2813,11 @@ BYTE    opcode;                         /* 2nd byte of opcode        */
     v3 = regs->GR_G(r3);
 
     /* Get mainstor address of storage operand */
-    m2 = MADDRL (addr2, 8, b2, regs, ACCTYPE_WRITE, regs->psw.pkey);
+    m2 = MADDRL (effective_addr2, 8, b2, regs, ACCTYPE_WRITE, regs->psw.pkey);
 
     do {
         /* Load storage operand value from operand address */
-        v2 = ARCH_DEP(vfetch8) ( addr2, b2, regs );
+        v2 = ARCH_DEP(vfetch8) ( effective_addr2, b2, regs );
 
         switch (opcode) {
         case 0xE4: /* Load and And Long */
@@ -2762,7 +2851,13 @@ BYTE    opcode;                         /* 2nd byte of opcode        */
         /* Interlocked exchange to storage location */
         old = CSWAP64(v2);
         new = CSWAP64(result);
-        rc = cmpxchg8 (&old, new, m2);
+
+        /* MAINLOCK may be required if cmpxchg assists unavailable */
+        OBTAIN_MAINLOCK( regs );
+        {
+            rc = cmpxchg8( &old, new, m2 );
+        }
+        RELEASE_MAINLOCK( regs );
 
     } while (rc != 0);
 
@@ -2776,10 +2871,12 @@ BYTE    opcode;                         /* 2nd byte of opcode        */
 
 
 /*-------------------------------------------------------------------*/
-/* EBF8 LAA   - Load and Add                                   [RSY] */
+/* EBF8 LAA   - Load and Add                                 [RSY-a] */
 /*-------------------------------------------------------------------*/
-DEF_INST(load_and_add)                                          /*810*/
+DEF_INST(load_and_add)
 {
+    CONTRAN_INSTR_CHECK( regs );
+
     ARCH_DEP(load_and_perform_interlocked_access) (inst, regs);
 
     /* Program check if fixed-point overflow */
@@ -2790,10 +2887,12 @@ DEF_INST(load_and_add)                                          /*810*/
 
 
 /*-------------------------------------------------------------------*/
-/* EBE8 LAAG  - Load and Add Long                              [RSY] */
+/* EBE8 LAAG  - Load and Add Long                            [RSY-a] */
 /*-------------------------------------------------------------------*/
-DEF_INST(load_and_add_long)                                     /*810*/
+DEF_INST(load_and_add_long)
 {
+    CONTRAN_INSTR_CHECK( regs );
+
     ARCH_DEP(load_and_perform_interlocked_access_long) (inst, regs);
 
     /* Program check if fixed-point overflow */
@@ -2804,73 +2903,89 @@ DEF_INST(load_and_add_long)                                     /*810*/
 
 
 /*-------------------------------------------------------------------*/
-/* EBFA LAAL  - Load and Add Logical                           [RSY] */
+/* EBFA LAAL  - Load and Add Logical                         [RSY-a] */
 /*-------------------------------------------------------------------*/
-DEF_INST(load_and_add_logical)                                  /*810*/
+DEF_INST(load_and_add_logical)
 {
+    CONTRAN_INSTR_CHECK( regs );
+
     ARCH_DEP(load_and_perform_interlocked_access) (inst, regs);
 } /* end DEF_INST(load_and_add_logical) */
 
 
 /*-------------------------------------------------------------------*/
-/* EBEA LAALG - Load and Add Logical Long                      [RSY] */
+/* EBEA LAALG - Load and Add Logical Long                    [RSY-a] */
 /*-------------------------------------------------------------------*/
-DEF_INST(load_and_add_logical_long)                             /*810*/
+DEF_INST(load_and_add_logical_long)
 {
+    CONTRAN_INSTR_CHECK( regs );
+
     ARCH_DEP(load_and_perform_interlocked_access_long) (inst, regs);
 } /* end DEF_INST(load_and_add_logical_long) */
 
 
 /*-------------------------------------------------------------------*/
-/* EBF4 LAN   - Load and And                                   [RSY] */
+/* EBF4 LAN   - Load and And                                 [RSY-a] */
 /*-------------------------------------------------------------------*/
-DEF_INST(load_and_and)                                          /*810*/
+DEF_INST(load_and_and)
 {
+    CONTRAN_INSTR_CHECK( regs );
+
     ARCH_DEP(load_and_perform_interlocked_access) (inst, regs);
 } /* end DEF_INST(load_and_and) */
 
 
 /*-------------------------------------------------------------------*/
-/* EBE4 LANG  - Load and And Long                              [RSY] */
+/* EBE4 LANG  - Load and And Long                            [RSY-a] */
 /*-------------------------------------------------------------------*/
-DEF_INST(load_and_and_long)                                     /*810*/
+DEF_INST(load_and_and_long)
 {
+    CONTRAN_INSTR_CHECK( regs );
+
     ARCH_DEP(load_and_perform_interlocked_access_long) (inst, regs);
 } /* end DEF_INST(load_and_and_long) */
 
 
 /*-------------------------------------------------------------------*/
-/* EBF7 LAX   - Load and Exclusive Or                          [RSY] */
+/* EBF7 LAX   - Load and Exclusive Or                        [RSY-a] */
 /*-------------------------------------------------------------------*/
-DEF_INST(load_and_exclusive_or)                                 /*810*/
+DEF_INST(load_and_exclusive_or)
 {
+    CONTRAN_INSTR_CHECK( regs );
+
     ARCH_DEP(load_and_perform_interlocked_access) (inst, regs);
 } /* end DEF_INST(load_and_exclusive_or) */
 
 
 /*-------------------------------------------------------------------*/
-/* EBE7 LAXG  - Load and Exclusive Or Long                     [RSY] */
+/* EBE7 LAXG  - Load and Exclusive Or Long                   [RSY-a] */
 /*-------------------------------------------------------------------*/
-DEF_INST(load_and_exclusive_or_long)                            /*810*/
+DEF_INST(load_and_exclusive_or_long)
 {
+    CONTRAN_INSTR_CHECK( regs );
+
     ARCH_DEP(load_and_perform_interlocked_access_long) (inst, regs);
 } /* end DEF_INST(load_and_exclusive_or_long) */
 
 
 /*-------------------------------------------------------------------*/
-/* EBF6 LAO   - Load and Or                                    [RSY] */
+/* EBF6 LAO   - Load and Or                                  [RSY-a] */
 /*-------------------------------------------------------------------*/
-DEF_INST(load_and_or)                                           /*810*/
+DEF_INST(load_and_or)
 {
+    CONTRAN_INSTR_CHECK( regs );
+
     ARCH_DEP(load_and_perform_interlocked_access) (inst, regs);
 } /* end DEF_INST(load_and_or) */
 
 
 /*-------------------------------------------------------------------*/
-/* EBE6 LAOG  - Load and Or Long                               [RSY] */
+/* EBE6 LAOG  - Load and Or Long                             [RSY-a] */
 /*-------------------------------------------------------------------*/
-DEF_INST(load_and_or_long)                                      /*810*/
+DEF_INST(load_and_or_long)
 {
+    CONTRAN_INSTR_CHECK( regs );
+
     ARCH_DEP(load_and_perform_interlocked_access_long) (inst, regs);
 } /* end DEF_INST(load_and_or_long) */
 
@@ -2878,7 +2993,7 @@ DEF_INST(load_and_or_long)                                      /*810*/
 /*-------------------------------------------------------------------*/
 /* C8x4 LPD   - Load Pair Disjoint                             [SSF] */
 /*-------------------------------------------------------------------*/
-DEF_INST(load_pair_disjoint)                                    /*810*/
+DEF_INST(load_pair_disjoint)
 {
 int     r3;                             /* Register number           */
 int     b1, b2;                         /* Base register numbers     */
@@ -2889,6 +3004,7 @@ U32     w1, w2;                         /* Refetched values          */
 
     SSF(inst, regs, b1, effective_addr1, b2, effective_addr2, r3);
 
+    CONTRAN_INSTR_CHECK( regs );
     ODD_CHECK(r3, regs);
 
     /* Fetch the values of the storage operands */
@@ -2914,7 +3030,7 @@ U32     w1, w2;                         /* Refetched values          */
 /*-------------------------------------------------------------------*/
 /* C8x5 LPDG  - Load Pair Disjoint Long                        [SSF] */
 /*-------------------------------------------------------------------*/
-DEF_INST(load_pair_disjoint_long)                               /*810*/
+DEF_INST(load_pair_disjoint_long)
 {
 int     r3;                             /* Register number           */
 int     b1, b2;                         /* Base register numbers     */
@@ -2925,6 +3041,7 @@ U64     w1, w2;                         /* Refetched values          */
 
     SSF(inst, regs, b1, effective_addr1, b2, effective_addr2, r3);
 
+    CONTRAN_INSTR_CHECK( regs );
     ODD_CHECK(r3, regs);
 
     /* Fetch the values of the storage operands */
@@ -2946,15 +3063,15 @@ U64     w1, w2;                         /* Refetched values          */
 
 } /* end DEF_INST(load_pair_disjoint_long) */
 
-#endif /* defined( FEATURE_045_INTERLOCKED_ACCESS_FACILITY_1 )*//*810*/
+#endif /* defined( FEATURE_045_INTERLOCKED_ACCESS_FACILITY_1 )*/
 
 
-#if defined( FEATURE_045_LOAD_STORE_ON_COND_FACILITY_1 )        /*810*/
+#if defined( FEATURE_045_LOAD_STORE_ON_COND_FACILITY_1 )
 
 /*-------------------------------------------------------------------*/
-/* B9F2 LOCR  - Load on Condition Register                     [RRF] */
+/* B9F2 LOCR  - Load on Condition Register                   [RRF-c] */
 /*-------------------------------------------------------------------*/
-DEF_INST(load_on_condition_register)                            /*810*/
+DEF_INST(load_on_condition_register)
 {
 int     r1, r2;                         /* Values of R fields        */
 int     m3;                             /* Value of M field          */
@@ -2973,9 +3090,9 @@ int     m3;                             /* Value of M field          */
 
 #if defined( FEATURE_001_ZARCH_INSTALLED_FACILITY )
 /*-------------------------------------------------------------------*/
-/* B9E2 LOCGR - Load on Condition Long Register                [RRF] */
+/* B9E2 LOCGR - Load on Condition Long Register              [RRF-c] */
 /*-------------------------------------------------------------------*/
-DEF_INST(load_on_condition_long_register)                       /*810*/
+DEF_INST(load_on_condition_long_register)
 {
 int     r1, r2;                         /* Values of R fields        */
 int     m3;                             /* Value of M field          */
@@ -2994,9 +3111,9 @@ int     m3;                             /* Value of M field          */
 
 
 /*-------------------------------------------------------------------*/
-/* EBF2 LOC   - Load on Condition                              [RSY] */
+/* EBF2 LOC   - Load on Condition                            [RSY-b] */
 /*-------------------------------------------------------------------*/
-DEF_INST(load_on_condition)                                     /*810*/
+DEF_INST(load_on_condition)
 {
 int     r1;                             /* Value of R field          */
 int     m3;                             /* Value of M field          */
@@ -3017,9 +3134,9 @@ VADR    effective_addr2;                /* Effective address         */
 
 #if defined( FEATURE_001_ZARCH_INSTALLED_FACILITY )
 /*-------------------------------------------------------------------*/
-/* EBE2 LOCG  - Load on Condition Long                         [RSY] */
+/* EBE2 LOCG  - Load on Condition Long                       [RSY-b] */
 /*-------------------------------------------------------------------*/
-DEF_INST(load_on_condition_long)                                /*810*/
+DEF_INST(load_on_condition_long)
 {
 int     r1;                             /* Value of R field          */
 int     m3;                             /* Value of M field          */
@@ -3040,9 +3157,9 @@ VADR    effective_addr2;                /* Effective address         */
 
 
 /*-------------------------------------------------------------------*/
-/* EBF3 STOC  - Store on Condition                             [RSY] */
+/* EBF3 STOC  - Store on Condition                           [RSY-b] */
 /*-------------------------------------------------------------------*/
-DEF_INST(store_on_condition)                                    /*810*/
+DEF_INST(store_on_condition)
 {
 int     r1;                             /* Value of R field          */
 int     m3;                             /* Value of M field          */
@@ -3063,9 +3180,9 @@ VADR    effective_addr2;                /* Effective address         */
 
 #if defined( FEATURE_001_ZARCH_INSTALLED_FACILITY )
 /*-------------------------------------------------------------------*/
-/* EBE3 STOCG - Store on Condition Long                        [RSY] */
+/* EBE3 STOCG - Store on Condition Long                      [RSY-b] */
 /*-------------------------------------------------------------------*/
-DEF_INST(store_on_condition_long)                               /*810*/
+DEF_INST(store_on_condition_long)
 {
 int     r1;                             /* Value of R field          */
 int     m3;                             /* Value of M field          */
@@ -3084,15 +3201,15 @@ VADR    effective_addr2;                /* Effective address         */
 } /* end DEF_INST(store_on_condition_long) */
 #endif /* defined( FEATURE_001_ZARCH_INSTALLED_FACILITY ) */
 
-#endif /* defined( FEATURE_045_LOAD_STORE_ON_COND_FACILITY_1 )*//*810*/
+#endif /* defined( FEATURE_045_LOAD_STORE_ON_COND_FACILITY_1 )*/
 
 
-#if defined( FEATURE_045_DISTINCT_OPERANDS_FACILITY )           /*810*/
+#if defined( FEATURE_045_DISTINCT_OPERANDS_FACILITY )
 
 /*-------------------------------------------------------------------*/
-/* B9F8 ARK   - Add Distinct Register                          [RRR] */
+/* B9F8 ARK   - Add Distinct Register                        [RRF-a] */
 /*-------------------------------------------------------------------*/
-DEF_INST(add_distinct_register)                                 /*810*/
+DEF_INST(add_distinct_register)
 {
 int     r1, r2, r3;                     /* Values of R fields        */
 
@@ -3113,9 +3230,9 @@ int     r1, r2, r3;                     /* Values of R fields        */
 
 #if defined( FEATURE_001_ZARCH_INSTALLED_FACILITY )
 /*-------------------------------------------------------------------*/
-/* B9E8 AGRK  - Add Distinct Long Register                     [RRR] */
+/* B9E8 AGRK  - Add Distinct Long Register                   [RRF-a] */
 /*-------------------------------------------------------------------*/
-DEF_INST(add_distinct_long_register)                            /*810*/
+DEF_INST(add_distinct_long_register)
 {
 int     r1, r2, r3;                     /* Values of R fields        */
 
@@ -3135,9 +3252,9 @@ int     r1, r2, r3;                     /* Values of R fields        */
 
 
 /*-------------------------------------------------------------------*/
-/* ECD8 AHIK  - Add Distinct Halfword Immediate                [RIE] */
+/* ECD8 AHIK  - Add Distinct Halfword Immediate              [RIE-d] */
 /*-------------------------------------------------------------------*/
-DEF_INST(add_distinct_halfword_immediate)                       /*810*/
+DEF_INST(add_distinct_halfword_immediate)
 {
 int     r1, r3;                         /* Values of R fields        */
 U16     i2;                             /* 16-bit immediate operand  */
@@ -3158,9 +3275,9 @@ U16     i2;                             /* 16-bit immediate operand  */
 
 #if defined( FEATURE_001_ZARCH_INSTALLED_FACILITY )
 /*-------------------------------------------------------------------*/
-/* ECD9 AGHIK - Add Distinct Long Halfword Immediate           [RIE] */
+/* ECD9 AGHIK - Add Distinct Long Halfword Immediate         [RIE-d] */
 /*-------------------------------------------------------------------*/
-DEF_INST(add_distinct_long_halfword_immediate)                  /*810*/
+DEF_INST(add_distinct_long_halfword_immediate)
 {
 int     r1, r3;                         /* Values of R fields        */
 U16     i2;                             /* 16-bit immediate operand  */
@@ -3181,13 +3298,13 @@ U16     i2;                             /* 16-bit immediate operand  */
 
 
 /*-------------------------------------------------------------------*/
-/* B9FA ALRK  - Add Logical Distinct Register                  [RRR] */
+/* B9FA ALRK  - Add Logical Distinct Register                [RRF-a] */
 /*-------------------------------------------------------------------*/
-DEF_INST(add_logical_distinct_register)                         /*810*/
+DEF_INST(add_logical_distinct_register)
 {
 int     r1, r2, r3;                     /* Values of R fields        */
 
-    RRR0(inst, regs, r1, r2, r3);
+    RRR(inst, regs, r1, r2, r3);
 
     /* Add signed operands and set condition code */
     regs->psw.cc = add_logical (&(regs->GR_L(r1)),
@@ -3199,13 +3316,13 @@ int     r1, r2, r3;                     /* Values of R fields        */
 
 #if defined( FEATURE_001_ZARCH_INSTALLED_FACILITY )
 /*-------------------------------------------------------------------*/
-/* B9EA ALGRK - Add Logical Distinct Long Register             [RRR] */
+/* B9EA ALGRK - Add Logical Distinct Long Register           [RRF-a] */
 /*-------------------------------------------------------------------*/
-DEF_INST(add_logical_distinct_long_register)                    /*810*/
+DEF_INST(add_logical_distinct_long_register)
 {
 int     r1, r2, r3;                     /* Values of R fields        */
 
-    RRR0(inst, regs, r1, r2, r3);
+    RRR(inst, regs, r1, r2, r3);
 
     /* Add unsigned operands and set condition code */
     regs->psw.cc = add_logical_long(&(regs->GR_G(r1)),
@@ -3217,14 +3334,14 @@ int     r1, r2, r3;                     /* Values of R fields        */
 
 
 /*-------------------------------------------------------------------*/
-/* ECDA ALHSIK - Add Logical Distinct with Signed Halfword Imm [RIE] */
+/* ECDA ALHSIK - Add Log. Distinct with Signed Halfword Imm. [RIE-d] */
 /*-------------------------------------------------------------------*/
-DEF_INST(add_logical_distinct_signed_halfword_immediate)        /*810*/
+DEF_INST(add_logical_distinct_signed_halfword_immediate)
 {
 int     r1, r3;                         /* Values of R fields        */
 U16     i2;                             /* 16-bit immediate operand  */
 
-    RIE0(inst, regs, r1, r3, i2);
+    RIE(inst, regs, r1, r3, i2);
 
     /* Add operands and set condition code */
     regs->psw.cc = (S16)i2 < 0 ?
@@ -3236,14 +3353,14 @@ U16     i2;                             /* 16-bit immediate operand  */
 
 #if defined( FEATURE_001_ZARCH_INSTALLED_FACILITY )
 /*-------------------------------------------------------------------*/
-/* ECDB ALGHSIK - Add Logical Distinct Long with Signed Hw Imm [RIE] */
+/* ECDB ALGHSIK - Add Log. Distinct Long with Signed Hw Imm. [RIE-d] */
 /*-------------------------------------------------------------------*/
-DEF_INST(add_logical_distinct_long_signed_halfword_immediate)   /*810*/
+DEF_INST(add_logical_distinct_long_signed_halfword_immediate)
 {
 int     r1, r3;                         /* Values of R fields        */
 U16     i2;                             /* 16-bit immediate operand  */
 
-    RIE0(inst, regs, r1, r3, i2);
+    RIE(inst, regs, r1, r3, i2);
 
     /* Add operands and set condition code */
     regs->psw.cc = (S16)i2 < 0 ?
@@ -3255,13 +3372,13 @@ U16     i2;                             /* 16-bit immediate operand  */
 
 
 /*-------------------------------------------------------------------*/
-/* B9F4 NRK   - And Distinct Register                          [RRR] */
+/* B9F4 NRK   - And Distinct Register                        [RRF-a] */
 /*-------------------------------------------------------------------*/
-DEF_INST(and_distinct_register)                                 /*810*/
+DEF_INST(and_distinct_register)
 {
 int     r1, r2, r3;                     /* Values of R fields        */
 
-    RRR0(inst, regs, r1, r2, r3);
+    RRR(inst, regs, r1, r2, r3);
 
     /* AND second and third operands and put result in first operand */
     regs->GR_L(r1) = regs->GR_L(r2) & regs->GR_L(r3);
@@ -3274,13 +3391,13 @@ int     r1, r2, r3;                     /* Values of R fields        */
 
 #if defined( FEATURE_001_ZARCH_INSTALLED_FACILITY )
 /*-------------------------------------------------------------------*/
-/* B9E4 NGRK  - And Distinct Long Register                     [RRR] */
+/* B9E4 NGRK  - And Distinct Long Register                   [RRF-a] */
 /*-------------------------------------------------------------------*/
-DEF_INST(and_distinct_long_register)                            /*810*/
+DEF_INST(and_distinct_long_register)
 {
 int     r1, r2, r3;                     /* Values of R fields        */
 
-    RRR0(inst, regs, r1, r2, r3);
+    RRR(inst, regs, r1, r2, r3);
 
     /* AND second and third operands and put result in first operand */
     regs->GR_G(r1) = regs->GR_G(r2) & regs->GR_G(r3);
@@ -3293,13 +3410,13 @@ int     r1, r2, r3;                     /* Values of R fields        */
 
 
 /*-------------------------------------------------------------------*/
-/* B9F7 XRK   - Exclusive Or Distinct Register                 [RRR] */
+/* B9F7 XRK   - Exclusive Or Distinct Register               [RRF-a] */
 /*-------------------------------------------------------------------*/
-DEF_INST(exclusive_or_distinct_register)                        /*810*/
+DEF_INST(exclusive_or_distinct_register)
 {
 int     r1, r2, r3;                     /* Values of R fields        */
 
-    RRR0(inst, regs, r1, r2, r3);
+    RRR(inst, regs, r1, r2, r3);
 
     /* XOR second and third operands and put result in first operand */
     regs->GR_L(r1) = regs->GR_L(r2) ^ regs->GR_L(r3);
@@ -3312,13 +3429,13 @@ int     r1, r2, r3;                     /* Values of R fields        */
 
 #if defined( FEATURE_001_ZARCH_INSTALLED_FACILITY )
 /*-------------------------------------------------------------------*/
-/* B9E7 XGRK  - Exclusive Or Distinct Long Register            [RRR] */
+/* B9E7 XGRK  - Exclusive Or Distinct Long Register          [RRF-a] */
 /*-------------------------------------------------------------------*/
-DEF_INST(exclusive_or_distinct_long_register)                   /*810*/
+DEF_INST(exclusive_or_distinct_long_register)
 {
 int     r1, r2, r3;                     /* Values of R fields        */
 
-    RRR0(inst, regs, r1, r2, r3);
+    RRR(inst, regs, r1, r2, r3);
 
     /* XOR second and third operands and put result in first operand */
     regs->GR_G(r1) = regs->GR_G(r2) ^ regs->GR_G(r3);
@@ -3331,13 +3448,13 @@ int     r1, r2, r3;                     /* Values of R fields        */
 
 
 /*-------------------------------------------------------------------*/
-/* B9F6 ORK   - Or Distinct Register                           [RRR] */
+/* B9F6 ORK   - Or Distinct Register                         [RRF-a] */
 /*-------------------------------------------------------------------*/
-DEF_INST(or_distinct_register)                                  /*810*/
+DEF_INST(or_distinct_register)
 {
 int     r1, r2, r3;                     /* Values of R fields        */
 
-    RRR0(inst, regs, r1, r2, r3);
+    RRR(inst, regs, r1, r2, r3);
 
     /* OR second and third operands and put result in first operand */
     regs->GR_L(r1) = regs->GR_L(r2) | regs->GR_L(r3);
@@ -3350,13 +3467,13 @@ int     r1, r2, r3;                     /* Values of R fields        */
 
 #if defined( FEATURE_001_ZARCH_INSTALLED_FACILITY )
 /*-------------------------------------------------------------------*/
-/* B9E6 OGRK  - Or Distinct Long Register                      [RRR] */
+/* B9E6 OGRK  - Or Distinct Long Register                    [RRF-a] */
 /*-------------------------------------------------------------------*/
-DEF_INST(or_distinct_long_register)                             /*810*/
+DEF_INST(or_distinct_long_register)
 {
 int     r1, r2, r3;                     /* Values of R fields        */
 
-    RRR0(inst, regs, r1, r2, r3);
+    RRR(inst, regs, r1, r2, r3);
 
     /* OR second and third operands and put result in first operand */
     regs->GR_G(r1) = regs->GR_G(r2) | regs->GR_G(r3);
@@ -3369,16 +3486,16 @@ int     r1, r2, r3;                     /* Values of R fields        */
 
 
 /*-------------------------------------------------------------------*/
-/* EBDC SRAK  - Shift Right Single Distinct                    [RSY] */
+/* EBDC SRAK  - Shift Right Single Distinct                  [RSY-a] */
 /*-------------------------------------------------------------------*/
-DEF_INST(shift_right_single_distinct)                           /*810*/
+DEF_INST(shift_right_single_distinct)
 {
 int     r1, r3;                         /* Register numbers          */
 int     b2;                             /* Base of effective addr    */
 VADR    effective_addr2;                /* Effective address         */
 U32     n;                              /* Integer work area         */
 
-    RSY0(inst, regs, r1, r3, b2, effective_addr2);
+    RSY(inst, regs, r1, r3, b2, effective_addr2);
 
     /* Use rightmost six bits of operand address as shift count */
     n = effective_addr2 & 0x3F;
@@ -3396,9 +3513,9 @@ U32     n;                              /* Integer work area         */
 
 
 /*-------------------------------------------------------------------*/
-/* EBDD SLAK  - Shift Left Single Distinct                     [RSY] */
+/* EBDD SLAK  - Shift Left Single Distinct                   [RSY-a] */
 /*-------------------------------------------------------------------*/
-DEF_INST(shift_left_single_distinct)                            /*810*/
+DEF_INST(shift_left_single_distinct)
 {
 int     r1, r3;                         /* Register numbers          */
 int     b2;                             /* Base of effective addr    */
@@ -3454,16 +3571,16 @@ U32     i, j;                           /* Integer work areas        */
 
 
 /*-------------------------------------------------------------------*/
-/* EBDE SRLK  - Shift Right Single Logical Distinct            [RSY] */
+/* EBDE SRLK  - Shift Right Single Logical Distinct          [RSY-a] */
 /*-------------------------------------------------------------------*/
-DEF_INST(shift_right_single_logical_distinct)                   /*810*/
+DEF_INST(shift_right_single_logical_distinct)
 {
 int     r1, r3;                         /* Register numbers          */
 int     b2;                             /* Base of effective addr    */
 VADR    effective_addr2;                /* Effective address         */
 U32     n;                              /* Integer work area         */
 
-    RSY0(inst, regs, r1, r3, b2, effective_addr2);
+    RSY(inst, regs, r1, r3, b2, effective_addr2);
 
     /* Use rightmost six bits of operand address as shift count */
     n = effective_addr2 & 0x3F;
@@ -3475,16 +3592,16 @@ U32     n;                              /* Integer work area         */
 
 
 /*-------------------------------------------------------------------*/
-/* EBDF SLLK  - Shift Left Single Logical Distinct             [RSY] */
+/* EBDF SLLK  - Shift Left Single Logical Distinct           [RSY-a] */
 /*-------------------------------------------------------------------*/
-DEF_INST(shift_left_single_logical_distinct)                    /*810*/
+DEF_INST(shift_left_single_logical_distinct)
 {
 int     r1, r3;                         /* Register numbers          */
 int     b2;                             /* Base of effective addr    */
 VADR    effective_addr2;                /* Effective address         */
 U32     n;                              /* Integer work area         */
 
-    RSY0(inst, regs, r1, r3, b2, effective_addr2);
+    RSY(inst, regs, r1, r3, b2, effective_addr2);
 
     /* Use rightmost six bits of operand address as shift count */
     n = effective_addr2 & 0x3F;
@@ -3496,9 +3613,9 @@ U32     n;                              /* Integer work area         */
 
 
 /*-------------------------------------------------------------------*/
-/* B9F9 SRK   - Subtract Distinct Register                     [RRR] */
+/* B9F9 SRK   - Subtract Distinct Register                   [RRF-a] */
 /*-------------------------------------------------------------------*/
-DEF_INST(subtract_distinct_register)                            /*810*/
+DEF_INST(subtract_distinct_register)
 {
 int     r1, r2, r3;                     /* Values of R fields        */
 
@@ -3519,9 +3636,9 @@ int     r1, r2, r3;                     /* Values of R fields        */
 
 #if defined( FEATURE_001_ZARCH_INSTALLED_FACILITY )
 /*-------------------------------------------------------------------*/
-/* B9E9 SGRK  - Subtract Distinct Long Register                [RRR] */
+/* B9E9 SGRK  - Subtract Distinct Long Register              [RRF-a] */
 /*-------------------------------------------------------------------*/
-DEF_INST(subtract_distinct_long_register)                       /*810*/
+DEF_INST(subtract_distinct_long_register)
 {
 int     r1, r2, r3;                     /* Values of R fields        */
 
@@ -3541,13 +3658,13 @@ int     r1, r2, r3;                     /* Values of R fields        */
 
 
 /*-------------------------------------------------------------------*/
-/* B9FB SLRK  - Subtract Logical Distinct Register             [RRR] */
+/* B9FB SLRK  - Subtract Logical Distinct Register           [RRF-a] */
 /*-------------------------------------------------------------------*/
-DEF_INST(subtract_logical_distinct_register)                    /*810*/
+DEF_INST(subtract_logical_distinct_register)
 {
 int     r1, r2, r3;                     /* Values of R fields        */
 
-    RRR0(inst, regs, r1, r2, r3);
+    RRR(inst, regs, r1, r2, r3);
 
     /* Subtract unsigned operands and set condition code */
     regs->psw.cc = sub_logical (&(regs->GR_L(r1)),
@@ -3559,13 +3676,13 @@ int     r1, r2, r3;                     /* Values of R fields        */
 
 #if defined( FEATURE_001_ZARCH_INSTALLED_FACILITY )
 /*-------------------------------------------------------------------*/
-/* B9EB SLGRK - Subtract Logical Distinct Long Register        [RRR] */
+/* B9EB SLGRK - Subtract Logical Distinct Long Register      [RRF-a] */
 /*-------------------------------------------------------------------*/
-DEF_INST(subtract_logical_distinct_long_register)               /*810*/
+DEF_INST(subtract_logical_distinct_long_register)
 {
 int     r1, r2, r3;                     /* Values of R fields        */
 
-    RRR0(inst, regs, r1, r2, r3);
+    RRR(inst, regs, r1, r2, r3);
 
     /* Subtract unsigned operands and set condition code */
     regs->psw.cc = sub_logical_long(&(regs->GR_G(r1)),
@@ -3575,14 +3692,14 @@ int     r1, r2, r3;                     /* Values of R fields        */
 } /* end DEF_INST(subtract_logical_distinct_long_register) */
 #endif /* defined( FEATURE_001_ZARCH_INSTALLED_FACILITY ) */
 
-#endif /* defined( FEATURE_045_DISTINCT_OPERANDS_FACILITY ) */  /*810*/
+#endif /* defined( FEATURE_045_DISTINCT_OPERANDS_FACILITY ) */
 
 
-#if defined( FEATURE_045_POPULATION_COUNT_FACILITY )            /*810*/
+#if defined( FEATURE_045_POPULATION_COUNT_FACILITY )
 /*-------------------------------------------------------------------*/
-/* B9E1 POPCNT - Population Count                              [RRE] */
+/* B9E1 POPCNT - Population Count                            [RRF-c] */
 /*-------------------------------------------------------------------*/
-DEF_INST(population_count)                                      /*810*/
+DEF_INST(population_count)
 {
 int     r1, r2;                         /* Values of R fields        */
 int     i;                              /* Loop counter              */
@@ -3590,7 +3707,7 @@ U64     n;                              /* Contents of R2 register   */
 U64     result;                         /* Result counter            */
 U64     mask = 0x0101010101010101ULL;   /* Bit mask                  */
 
-    RRE0(inst, regs, r1, r2);
+    RRE(inst, regs, r1, r2);
 
     /* Load the value to be counted from the R2 register */
     n = regs->GR_G(r2);
@@ -3608,13 +3725,13 @@ U64     mask = 0x0101010101010101ULL;   /* Bit mask                  */
     regs->psw.cc = (result == 0) ? 0 : 1;
 
 } /* end DEF_INST(population_count) */
-#endif /* defined( FEATURE_045_POPULATION_COUNT_FACILITY ) */   /*810*/
+#endif /* defined( FEATURE_045_POPULATION_COUNT_FACILITY ) */
 
 
-#if defined( FEATURE_049_LOAD_AND_TRAP_FACILITY )               /*912*/
+#if defined( FEATURE_049_LOAD_AND_TRAP_FACILITY )
 
 /*-------------------------------------------------------------------*/
-/* E39F LAT   - Load and Trap                                  [RXY] */
+/* E39F LAT   - Load and Trap                                [RXY-a] */
 /*-------------------------------------------------------------------*/
 DEF_INST(load_and_trap)
 {
@@ -3639,9 +3756,9 @@ VADR    effective_addr2;                /* Effective address         */
 
 #if defined( FEATURE_001_ZARCH_INSTALLED_FACILITY )
 /*-------------------------------------------------------------------*/
-/* E385 LGAT  - Load Long and Trap                             [RXY] */
+/* E385 LGAT  - Load Long and Trap                           [RXY-a] */
 /*-------------------------------------------------------------------*/
-DEF_INST(load_long_and_trap)                                    /*912*/
+DEF_INST(load_long_and_trap)
 {
 int     r1;                             /* Value of R field          */
 int     b2;                             /* Base of effective addr    */
@@ -3665,9 +3782,9 @@ VADR    effective_addr2;                /* Effective address         */
 
 #if defined( FEATURE_001_ZARCH_INSTALLED_FACILITY )
 /*-------------------------------------------------------------------*/
-/* E3C8 LFHAT - Load Fullword High and Trap                    [RXY] */
+/* E3C8 LFHAT - Load Fullword High and Trap                  [RXY-a] */
 /*-------------------------------------------------------------------*/
-DEF_INST(load_fullword_high_and_trap)                           /*912*/
+DEF_INST(load_fullword_high_and_trap)
 {
 int     r1;                             /* Value of R field          */
 int     b2;                             /* Base of effective addr    */
@@ -3691,9 +3808,9 @@ VADR    effective_addr2;                /* Effective address         */
 
 #if defined( FEATURE_001_ZARCH_INSTALLED_FACILITY )
 /*-------------------------------------------------------------------*/
-/* E39D LLGFAT - Load Logical Long Fullword and Trap           [RXY] */
+/* E39D LLGFAT - Load Logical Long Fullword and Trap         [RXY-a] */
 /*-------------------------------------------------------------------*/
-DEF_INST(load_logical_long_fullword_and_trap)                   /*912*/
+DEF_INST(load_logical_long_fullword_and_trap)
 {
 int     r1;                             /* Value of R field          */
 int     b2;                             /* Base of effective addr    */
@@ -3717,9 +3834,9 @@ VADR    effective_addr2;                /* Effective address         */
 
 #if defined( FEATURE_001_ZARCH_INSTALLED_FACILITY )
 /*-------------------------------------------------------------------*/
-/* E39C LLGTAT - Load Logical Long Thirtyone and Trap          [RXY] */
+/* E39C LLGTAT - Load Logical Long Thirtyone and Trap        [RXY-a] */
 /*-------------------------------------------------------------------*/
-DEF_INST(load_logical_long_thirtyone_and_trap)                  /*912*/
+DEF_INST(load_logical_long_thirtyone_and_trap)
 {
 int     r1;                             /* Value of R field          */
 int     b2;                             /* Base of effective addr    */
@@ -3741,15 +3858,15 @@ VADR    effective_addr2;                /* Effective address         */
 } /* end DEF_INST(load_logical_long_thirtyone_and_trap) */
 #endif /* defined( FEATURE_001_ZARCH_INSTALLED_FACILITY ) */
 
-#endif /* defined( FEATURE_049_LOAD_AND_TRAP_FACILITY ) */      /*912*/
+#endif /* defined( FEATURE_049_LOAD_AND_TRAP_FACILITY ) */
 
 
-#if defined( FEATURE_049_MISC_INSTR_EXT_FACILITY_1 )            /*912*/
+#if defined( FEATURE_049_MISC_INSTR_EXT_FACILITY_1 )
 
 /*-------------------------------------------------------------------*/
-/* EB23 CLT   - Compare Logical and Trap                       [RSY] */
+/* EB23 CLT   - Compare Logical and Trap                     [RSY-b] */
 /*-------------------------------------------------------------------*/
-DEF_INST(compare_logical_and_trap)                              /*912*/
+DEF_INST(compare_logical_and_trap)
 {
 int     r1;                             /* Register number           */
 int     b2;                             /* Base of effective addr    */
@@ -3779,9 +3896,9 @@ int     cc;                             /* Comparison result         */
 
 #if defined( FEATURE_001_ZARCH_INSTALLED_FACILITY )
 /*-------------------------------------------------------------------*/
-/* EB2B CLGT  - Compare Logical and Trap Long                  [RSY] */
+/* EB2B CLGT  - Compare Logical and Trap Long                [RSY-b] */
 /*-------------------------------------------------------------------*/
-DEF_INST(compare_logical_and_trap_long)                         /*912*/
+DEF_INST(compare_logical_and_trap_long)
 {
 int     r1;                             /* Register number           */
 int     b2;                             /* Base of effective addr    */
@@ -3812,7 +3929,7 @@ int     cc;                             /* Comparison result         */
 
 #if defined( FEATURE_001_ZARCH_INSTALLED_FACILITY )
 /*-------------------------------------------------------------------*/
-/* EC59 RISBGN - Rotate Then Insert Selected Bits No CC        [RIE] */
+/* EC59 RISBGN - Rotate Then Insert Selected Bits No CC      [RIE-f] */
 /*-------------------------------------------------------------------*/
 DEF_INST(rotate_then_insert_selected_bits_long_reg_n)
 {
@@ -3823,17 +3940,20 @@ DEF_INST(rotate_then_insert_selected_bits_long_reg_n)
 
 #endif /* defined( FEATURE_049_MISC_INSTR_EXT_FACILITY_1 ) */
 
-#if defined( FEATURE_049_EXECUTION_HINT_FACILITY )              /*912*/
+#if defined( FEATURE_049_EXECUTION_HINT_FACILITY )
 /*-------------------------------------------------------------------*/
 /* C7   BPP   - Branch Prediction Preload                      [SMI] */
 /*-------------------------------------------------------------------*/
-DEF_INST(branch_prediction_preload)                             /*912*/
+DEF_INST(branch_prediction_preload)
 {
-VADR    addr2, addr3;                   /* Effective addresses       */
+VADR    effective_addr2;                /* Effective address         */
+VADR    effective_addr3;                /* Effective address         */
 int     b3;                             /* Base of effective address */
 int     m1;                             /* Mask value                */
 
-    SMI_A0(inst, regs, m1, addr2, b3, addr3);
+    SMI_A(inst, regs, m1, effective_addr2, b3, effective_addr3);
+
+    CONTRAN_INSTR_CHECK( regs );
 
     /* Depending on the model, the CPU may not implement
        all of the branch-attribute codes. For codes that
@@ -3846,12 +3966,15 @@ int     m1;                             /* Mask value                */
 /*-------------------------------------------------------------------*/
 /* C5   BPRP  - Branch Prediction Relative Preload             [MII] */
 /*-------------------------------------------------------------------*/
-DEF_INST(branch_prediction_relative_preload)                    /*912*/
+DEF_INST(branch_prediction_relative_preload)
 {
-VADR    addr2, addr3;                   /* Effective addresses       */
+VADR    effective_addr2;                /* Effective address         */
+VADR    effective_addr3;                /* Effective address         */
 int     m1;                             /* Mask value                */
 
-    MII_A0(inst, regs, m1, addr2, addr3);
+    MII_A(inst, regs, m1, effective_addr2, effective_addr3);
+
+    CONTRAN_INSTR_CHECK( regs );
 
     /* Depending on the model, the CPU may not implement
        all of the branch-attribute codes. For codes that
@@ -3864,11 +3987,11 @@ int     m1;                             /* Mask value                */
 /*-------------------------------------------------------------------*/
 /* B2FA NIAI  - Next Instruction Access Intent                  [IE] */
 /*-------------------------------------------------------------------*/
-DEF_INST(next_instruction_access_intent)                        /*912*/
+DEF_INST(next_instruction_access_intent)
 {
 BYTE    i1, i2;                         /* Immediate fields          */
 
-    IE0(inst, regs, i1, i2);
+    IE(inst, regs, i1, i2);
 
     /* Depending on the model, the CPU may not recognize all of the
        access intents. For access intents that are not recognized by
@@ -3876,14 +3999,14 @@ BYTE    i1, i2;                         /* Immediate fields          */
 
 } /* end DEF_INST(next_instruction_access_intent) */
 
-#endif /* defined( FEATURE_049_EXECUTION_HINT_FACILITY ) */     /*912*/
+#endif /* defined( FEATURE_049_EXECUTION_HINT_FACILITY ) */
 
 
 #if defined( FEATURE_053_LOAD_STORE_ON_COND_FACILITY_2 )
 #if defined( FEATURE_001_ZARCH_INSTALLED_FACILITY )
 
 /*-------------------------------------------------------------------*/
-/* B9E0 LOCFHR - Load High On Condition Register               [RRF] */
+/* B9E0 LOCFHR - Load High On Condition Register             [RRF-c] */
 /*-------------------------------------------------------------------*/
 DEF_INST( load_high_on_condition_register)
 {
@@ -3902,7 +4025,7 @@ int     r1, r2, m3;                     /* Register numbers, mask    */
 
 
 /*-------------------------------------------------------------------*/
-/* EC4E LOCHHI - Load Halfword High Immediate On Condition     [RIE] */
+/* EC4E LOCHHI - Load Halfword High Immediate On Condition   [RIE-g] */
 /*-------------------------------------------------------------------*/
 DEF_INST( load_halfword_high_immediate_on_condition)
 {
@@ -3922,7 +4045,7 @@ U16     i2;                             /* 16-bit immediate operand  */
 
 
 /*-------------------------------------------------------------------*/
-/* EC42 LOCHI - Load Halfword Immediate On Condition           [RIE] */
+/* EC42 LOCHI - Load Halfword Immediate On Condition         [RIE-g] */
 /*-------------------------------------------------------------------*/
 DEF_INST( load_halfword_immediate_on_condition)
 {
@@ -3942,7 +4065,7 @@ U16     i2;                             /* 16-bit immediate operand  */
 
 
 /*-------------------------------------------------------------------*/
-/* EC46 LOCGHI - Load Halfword Immediate On Condition Grande   [RIE] */
+/* EC46 LOCGHI - Load Halfword Immediate On Condition Grande [RIE-g] */
 /*-------------------------------------------------------------------*/
 DEF_INST( load_halfword_immediate_on_condition_grande)
 {
@@ -3962,7 +4085,7 @@ U16     i2;                             /* 16-bit immediate operand  */
 
 
 /*-------------------------------------------------------------------*/
-/* EBE0 LOCFH - Load High On Condition                         [RSY] */
+/* EBE0 LOCFH - Load High On Condition                       [RSY-b] */
 /*-------------------------------------------------------------------*/
 DEF_INST( load_high_on_condition)
 {
@@ -3983,7 +4106,7 @@ VADR    effective_addr2;                /* Effective address         */
 
 
 /*-------------------------------------------------------------------*/
-/* EBE1 STOCFH - Store High On Condition                       [RSY] */
+/* EBE1 STOCFH - Store High On Condition                     [RSY-b] */
 /*-------------------------------------------------------------------*/
 DEF_INST( store_high_on_condition)
 {
@@ -4008,7 +4131,7 @@ VADR    effective_addr2;                /* Effective address         */
 #if defined( FEATURE_053_LOAD_ZERO_RIGHTMOST_FACILITY )
 #if defined( FEATURE_001_ZARCH_INSTALLED_FACILITY )
 /*-------------------------------------------------------------------*/
-/* E32A LZRG  - Load and Zero Rightmost Byte Grande            [RXY] */
+/* E32A LZRG  - Load and Zero Rightmost Byte Grande          [RXY-a] */
 /*-------------------------------------------------------------------*/
 DEF_INST( load_and_zero_rightmost_byte_grande )
 {
@@ -4032,7 +4155,7 @@ U64     u64;                            /* Second operand value      */
 
 
 /*-------------------------------------------------------------------*/
-/* E33A LLZRGF - Load Logical and Zero Rightmost Byte          [RXY] */
+/* E33A LLZRGF - Load Logical and Zero Rightmost Byte        [RXY-a] */
 /*-------------------------------------------------------------------*/
 DEF_INST( load_logical_and_zero_rightmost_byte )
 {
@@ -4058,7 +4181,7 @@ U32     u32;                            /* Second operand value      */
 
 
 /*-------------------------------------------------------------------*/
-/* E33B LZRF  - Load and Zero Rightmost Byte                   [RXY] */
+/* E33B LZRF  - Load and Zero Rightmost Byte                 [RXY-a] */
 /*-------------------------------------------------------------------*/
 DEF_INST( load_and_zero_rightmost_byte )
 {

@@ -40,9 +40,9 @@
 #endif
 
 /*-------------------------------------------------------------------*/
-/*             Round a value up to the next boundary                 */
+/*         Round a value 'x' up to the next 'b' boundary             */
 /*-------------------------------------------------------------------*/
-#define ROUND_UP(x,y)       ((x)?((((x)+((y)-1))/(y))*(y)):(y))
+#define ROUND_UP(x,b)       ((x)?((((x)+((b)-1))/(b))*(b)):(b))
 
 /*-------------------------------------------------------------------*/
 /*      Define min/max macros                                        */
@@ -389,30 +389,39 @@ typedef int CMPFUNC(const void*, const void*);
 #define IS_CPU_ONLINE(_cpu) \
   (sysblk.regs[(_cpu)] != NULL)
 
+#define HOST(  _regs )  (_regs)->hostregs
+#define GUEST( _regs )  (_regs)->guestregs
+
+#define HOSTREGS        HOST(  regs )   // 'regs' presumed
+#define GUESTREGS       GUEST( regs )   // 'regs' presumed
+
 /* Instruction count for a CPU */
 #define INSTCOUNT(_regs) \
- ((_regs)->hostregs->prevcount + (_regs)->hostregs->instcount)
+ (HOST(_regs)->prevcount + HOST(_regs)->instcount)
 
 /*-------------------------------------------------------------------*/
 /*      Obtain/Release mainlock                                      */
 /*      mainlock is only obtained by a CPU thread                    */
 /*-------------------------------------------------------------------*/
 
-#define OBTAIN_MAINLOCK(_regs) \
+#define OBTAIN_MAINLOCK_UNCONDITIONAL(_regs) \
  do { \
-  if ((_regs)->hostregs->cpubit != (_regs)->sysblk->started_mask) { \
+  if (HOST(_regs)->cpubit != (_regs)->sysblk->started_mask) { \
    obtain_lock(&(_regs)->sysblk->mainlock); \
-   (_regs)->sysblk->mainowner = regs->hostregs->cpuad; \
+   (_regs)->sysblk->mainowner = HOST(_regs)->cpuad; \
   } \
  } while (0)
 
-#define RELEASE_MAINLOCK(_regs) \
+#define RELEASE_MAINLOCK_UNCONDITIONAL(_regs) \
  do { \
-   if ((_regs)->sysblk->mainowner == (_regs)->hostregs->cpuad) { \
+   if ((_regs)->sysblk->mainowner == HOST(_regs)->cpuad) { \
      (_regs)->sysblk->mainowner = LOCK_OWNER_NONE; \
      release_lock(&(_regs)->sysblk->mainlock); \
    } \
  } while (0)
+
+#define  OBTAIN_MAINLOCK(_regs)  OBTAIN_MAINLOCK_UNCONDITIONAL((_regs))
+#define RELEASE_MAINLOCK(_regs) RELEASE_MAINLOCK_UNCONDITIONAL((_regs))
 
 /*-------------------------------------------------------------------*/
 /*      Obtain/Release crwlock                                       */
@@ -423,9 +432,9 @@ typedef int CMPFUNC(const void*, const void*);
 #define RELEASE_CRWLOCK()   release_lock( &sysblk.crwlock )
 
 /*-------------------------------------------------------------------*/
-/* Returns when all other CPU threads are blocked on intlock         */
+/* Return whether specified CPU is waiting to acquire intlock or not */
 /*-------------------------------------------------------------------*/
-#define AT_SYNCPOINT(_regs) ((_regs)->intwait)
+#define AT_SYNCPOINT(_regs) (HOST(_regs)->intwait)
 
 /*-------------------------------------------------------------------*/
 /*      Macro to check if DEVBLK is for an existing device           */
@@ -485,14 +494,31 @@ typedef int CMPFUNC(const void*, const void*);
 /*-------------------------------------------------------------------*/
 
 #if defined( _MSVC_ )
-  #define  SET_THREAD_NAME_ID(t,n)  w32_set_thread_name((t),(n))
+  #define  SET_THREAD_NAME_ID(t,n)          \
+    do                                      \
+    {                                       \
+      w32_set_thread_name((t),(n));         \
+      set_thread_name((t),(n));             \
+    }                                       \
+    while (0)
   #define  SET_THREAD_NAME(n)       SET_THREAD_NAME_ID(GetCurrentThreadId(),(n))
 #elif defined( HAVE_PTHREAD_SETNAME_NP )
-  #define  SET_THREAD_NAME_ID(t,n)  nix_set_thread_name((t),(n))
+  #define  SET_THREAD_NAME_ID(t,n)          \
+    do                                      \
+    {                                       \
+      nix_set_thread_name((t),(n));         \
+      set_thread_name((t),(n));             \
+    }                                       \
+    while (0)
   #define  SET_THREAD_NAME(n)       SET_THREAD_NAME_ID(pthread_self(),(n))
 #else
-  #define  SET_THREAD_NAME_ID(t,n)  /* nothing */
-  #define  SET_THREAD_NAME(n)       /* nothing */
+  #define  SET_THREAD_NAME_ID(t,n)          \
+    do                                      \
+    {                                       \
+      set_thread_name((t),(n));             \
+    }                                       \
+    while (0)
+  #define  SET_THREAD_NAME(n)       SET_THREAD_NAME_ID(pthread_self(),(n))
 #endif
 
 /*-------------------------------------------------------------------*/

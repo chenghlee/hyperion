@@ -28,7 +28,7 @@ struct PTT_TRACE
     const void*     data2;              /* Data 2                    */
     const char*     loc;                /* File name:line number     */
     struct timeval  tv;                 /* Time of day               */
-    int             rc;                 /* Return code               */
+    S64             rc;                 /* Return code               */
 };
 typedef struct PTT_TRACE PTT_TRACE;
 
@@ -74,7 +74,10 @@ PTTCL      pttcltab[] =                 /* trace class names table   */
     { "csf"     , PTT_CL_CSF  , 0 },    /* Compare & Swap Failure    */
     { "sie"     , PTT_CL_SIE  , 0 },    /* Interpretive Execution    */
     { "sig"     , PTT_CL_SIG  , 0 },    /* SIGP signalling           */
-    { "io"      , PTT_CL_IO   , 0 },    /* IO                        */
+    { "io"      , PTT_CL_IO   , 0 },    /* I/O                       */
+#if defined( _FEATURE_073_TRANSACT_EXEC_FACILITY )
+    { "txf"     , PTT_CL_TXF  , 0 },    /* Transact. Exec. Facility  */
+#endif
     { "lcs1"    , PTT_CL_LCS1 , 0 },    /* LCS Timing Debug          */
     { "lcs2"    , PTT_CL_LCS2 , 0 },    /* LCS General Debugging     */
     { "qeth"    , PTT_CL_QETH , 0 },    /* QETH General Debugging    */
@@ -445,7 +448,7 @@ DLL_EXPORT void ptt_trace_init( int nTableSize, BOOL init )
 /*-------------------------------------------------------------------*/
 DLL_EXPORT void ptt_pthread_trace (U64 trclass, const char *msg,
                                    const void *data1, const void *data2,
-                                   const char *loc, int rc, TIMEVAL* pTV)
+                                   const char *loc, S64 rc, TIMEVAL* pTV)
 {
 int i, n;
 
@@ -517,35 +520,61 @@ char  tod[27];     // "YYYY-MM-DD HH:MM:SS.uuuuuu"
         {
             if (pttrace[i].tid)
             {
-                FormatTIMEVAL( &pttrace[i].tv, tod, sizeof( tod ));
+                char threadname[16];
+                char lockname[32];
+                const char* lname;
 
-                /* If this is the thread class, an 'rc' of PTT_MAGIC
-                   indicates its value is uninteresting to us, so we
-                   don't show it by formatting it as an empty string.
-                */
-                if (pttrace[i].rc == PTT_MAGIC && (pttrace[i].trclass & PTT_CL_THR))
-                    retcode[0] = '\0';
+                FormatTIMEVAL( &pttrace[i].tv, tod, sizeof( tod ));
+                get_thread_name( pttrace[i].tid, threadname );
+
+                if (pttrace[i].trclass & PTT_CL_THR)
+                {
+                    /* For the thread class, an 'rc' of PTT_MAGIC
+                       indicates its value is uninteresting to us,
+                       so we don't bother showing it. Otherwise we
+                       format it as a +/- decimal value.
+                    */
+                    if (pttrace[i].rc == PTT_MAGIC)
+                        retcode[0] = 0;
+                    else
+                        MSGBUF( retcode, "%"PRId64, pttrace[i].rc );
+                }
                 else
                 {
-                    /* If not thread class, format return code as just
-                       another 32-bit hex value. Otherwise if it is the
-                       thread class, format it as a +/- decimal value.
+                    /* Not thread class: format return code
+                       as just another 64-bit hex value.
                     */
-                    if((pttrace[i].trclass & ~PTT_CL_THR))
-                        MSGBUF(retcode, "%8.8"PRIx32, pttrace[i].rc);
-                    else
-                        MSGBUF(retcode, "%d", pttrace[i].rc);
+                    MSGBUF( retcode, "%16.16"PRIx64, pttrace[i].rc );
                 }
-                // "%-18s %s "TIDPAT" %-18s "PTR_FMTx" "PTR_FMTx" %s"
+
+                /* If this is the thread class we know the data1 value
+                   is USUALLY the address of the lock identifying which
+                   lock was being obtained/released, so as a courtesy
+                   we display its name after the message.  This might
+                   not always work as the data1 value for SOME thread
+                   trace entries might be NULL or be some other value.
+                */
+                lname = (pttrace[i].trclass & PTT_CL_THR) ?
+                    get_lock_name( (LOCK*) pttrace[i].data1 ) : "";
+
+                MSGBUF( lockname, "%s%s", lname[0] ? " " : "", lname );
+
+                if (lockname[0] && !retcode[0])
+                    retcode[0] = ' ', retcode[1] = 0;
+
+                // "%s "TIDPAT" %-15.15s %-18.18s %-18.18s"PTR_FMTx" "PTR_FMTx" %s%s"
                 WRMSG( HHC90021, "I"
-                    , pttrace[i].loc                    // File name (string; 18 chars)
                     , &tod[11]                          // Time of day (HH:MM:SS.usecs)
                     , TID_CAST( pttrace[i].tid )        // Thread id
+                    , threadname                        // Thread name
+                    , pttrace[i].loc                    // File name (string; 18 chars)
                     , pttrace[i].msg                    // Trace message (string; 18 chars)
                     , PTR_CAST( pttrace[i].data1 )      // Data value 1
                     , PTR_CAST( pttrace[i].data2 )      // Data value 2
                     , retcode                           // Return code (or empty string)
+                    , lockname                          // Lock name   (or empty string)
                 );
+
                 count++;
             }
             if (++i >= n) i = 0;

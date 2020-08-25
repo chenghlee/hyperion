@@ -691,7 +691,7 @@ BYTE    pack[MAX_DECIMAL_LENGTH];       /* Packed decimal work area  */
 
 
 /*-------------------------------------------------------------------*/
-/* FA   AP    - Add Decimal                                     [SS] */
+/* FA   AP    - Add Decimal                                   [SS-b] */
 /*-------------------------------------------------------------------*/
 DEF_INST(add_decimal)
 {
@@ -708,6 +708,7 @@ int     sign1, sign2, sign3;            /* Sign of operands & result */
 
     SS(inst, regs, l1, l2, b1, effective_addr1,
                                      b2, effective_addr2);
+    CONTRAN_INSTR_CHECK( regs );
 
     /* Load operands into work areas */
     ARCH_DEP(load_decimal) (effective_addr1, l1, b1, regs, dec1, &count1, &sign1);
@@ -766,7 +767,7 @@ int     sign1, sign2, sign3;            /* Sign of operands & result */
 
 
 /*-------------------------------------------------------------------*/
-/* F9   CP    - Compare Decimal                                 [SS] */
+/* F9   CP    - Compare Decimal                               [SS-b] */
 /*-------------------------------------------------------------------*/
 DEF_INST(compare_decimal)
 {
@@ -782,6 +783,7 @@ int     rc;                             /* Return code               */
 
     SS(inst, regs, l1, l2, b1, effective_addr1,
                                      b2, effective_addr2);
+    CONTRAN_INSTR_CHECK( regs );
 
     /* Load operands into work areas */
     ARCH_DEP(load_decimal) (effective_addr1, l1, b1, regs, dec1, &count1, &sign1);
@@ -824,7 +826,7 @@ int     rc;                             /* Return code               */
 
 
 /*-------------------------------------------------------------------*/
-/* FD   DP    - Divide Decimal                                  [SS] */
+/* FD   DP    - Divide Decimal                                [SS-b] */
 /*-------------------------------------------------------------------*/
 DEF_INST(divide_decimal)
 {
@@ -842,6 +844,7 @@ int     signq, signr;                   /* Sign of quotient/remainder*/
 
     SS(inst, regs, l1, l2, b1, effective_addr1,
                                      b2, effective_addr2);
+    CONTRAN_INSTR_CHECK( regs );
 
     /* Program check if the second operand length exceeds 15 digits
        or is equal to or greater than the first operand length */
@@ -891,8 +894,8 @@ int     signq, signr;                   /* Sign of quotient/remainder*/
 
 
 /*-------------------------------------------------------------------*/
-/* DE   ED    - Edit                                            [SS] */
-/* DF   EDMK  - Edit and Mark                                   [SS] */
+/* DE   ED    - Edit                                          [SS-a] */
+/* DF   EDMK  - Edit and Mark                                 [SS-a] */
 /*-------------------------------------------------------------------*/
 DEF_INST(edit_x_edit_and_mark)
 {
@@ -915,6 +918,7 @@ BYTE    rbyte;                          /* Result byte               */
 
     SS_L(inst, regs, l, b1, effective_addr1,
                                   b2, effective_addr2);
+    CONTRAN_INSTR_CHECK( regs );
 
     /* If addr1 crosses page, make sure both pages are accessible */
     if((effective_addr1 & PAGEFRAME_PAGEMASK) !=
@@ -1078,7 +1082,7 @@ BYTE    rbyte;                          /* Result byte               */
 
 
 /*-------------------------------------------------------------------*/
-/* FC   MP    - Multiply Decimal                                [SS] */
+/* FC   MP    - Multiply Decimal                              [SS-b] */
 /*-------------------------------------------------------------------*/
 DEF_INST(multiply_decimal)
 {
@@ -1097,6 +1101,7 @@ int     carry;                          /* Carry indicator           */
 
     SS(inst, regs, l1, l2, b1, effective_addr1,
                                      b2, effective_addr2);
+    CONTRAN_INSTR_CHECK( regs );
 
     /* Program check if the second operand length exceeds 15 digits
        or is equal to or greater than the first operand length */
@@ -1149,7 +1154,7 @@ int     carry;                          /* Carry indicator           */
 #endif
 
 /*-------------------------------------------------------------------*/
-/* F0   SRP   - Shift and Round Decimal                         [SS] */
+/* F0   SRP   - Shift and Round Decimal                       [SS-c] */
 /*-------------------------------------------------------------------*/
 DEF_INST(shift_and_round_decimal)
 {
@@ -1167,6 +1172,7 @@ int     carry;                          /* Carry indicator           */
 
     SS(inst, regs, l1, i3, b1, effective_addr1,
                                      b2, effective_addr2);
+    CONTRAN_INSTR_CHECK( regs );
 
     /* Load operand into work area */
     ARCH_DEP(load_decimal) (effective_addr1, l1, b1, regs, dec, &count, &sign);
@@ -1245,7 +1251,7 @@ int     carry;                          /* Carry indicator           */
 
 
 /*-------------------------------------------------------------------*/
-/* FB   SP    - Subtract Decimal                                [SS] */
+/* FB   SP    - Subtract Decimal                              [SS-b] */
 /*-------------------------------------------------------------------*/
 DEF_INST(subtract_decimal)
 {
@@ -1262,6 +1268,7 @@ int     sign1, sign2, sign3;            /* Sign of operands & result */
 
     SS(inst, regs, l1, l2, b1, effective_addr1,
                                      b2, effective_addr2);
+    CONTRAN_INSTR_CHECK( regs );
 
     /* Load operands into work areas */
     ARCH_DEP(load_decimal) (effective_addr1, l1, b1, regs, dec1, &count1, &sign1);
@@ -1320,7 +1327,7 @@ int     sign1, sign2, sign3;            /* Sign of operands & result */
 
 
 /*-------------------------------------------------------------------*/
-/* F8   ZAP   - Zero and Add                                    [SS] */
+/* F8   ZAP   - Zero and Add                                  [SS-b] */
 /*-------------------------------------------------------------------*/
 DEF_INST(zero_and_add)
 {
@@ -1335,6 +1342,7 @@ int     sign;                           /* Sign                      */
 
     SS(inst, regs, l1, l2, b1, effective_addr1,
                                      b2, effective_addr2);
+    CONTRAN_INSTR_CHECK( regs );
 
     /* Load second operand into work area */
     ARCH_DEP(load_decimal) (effective_addr2, l2, b2, regs, dec, &count, &sign);
@@ -1365,7 +1373,7 @@ int     sign;                           /* Sign                      */
 
 #if defined(FEATURE_016_EXT_TRANSL_FACILITY_2)
 /*-------------------------------------------------------------------*/
-/* EBC0 TP    - Test Decimal                                   [RSL] */
+/* EBC0 TP    - Test Decimal                                 [RSL-a] */
 /*-------------------------------------------------------------------*/
 DEF_INST(test_decimal)
 {
@@ -1377,6 +1385,8 @@ int     cc = 0;                         /* Condition code            */
 BYTE    pack[MAX_DECIMAL_LENGTH];       /* Packed decimal work area  */
 
     RSL(inst, regs, l1, b1, effective_addr1);
+
+    CONTRAN_INSTR_CHECK( regs );
 
     /* Fetch the packed decimal operand into the work area */
     ARCH_DEP(vfetchc) (pack, l1, effective_addr1, b1, regs);

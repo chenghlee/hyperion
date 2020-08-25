@@ -40,12 +40,12 @@ size_t  xoffs;                          /* Byte offset into xpndstor */
 
     PRIV_CHECK(regs);
 
-    if(SIE_STATB(regs, IC3, PGX))
+    if(SIE_STATE_BIT_ON(regs, IC3, PGX))
         longjmp(regs->progjmp, SIE_INTERCEPT_INST);
 
 #if defined(FEATURE_MULTIPLE_CONTROLLED_DATA_SPACE)
     /* Cannot perform xstore page movement in XC mode */
-    if(SIE_STATB(regs, MX, XC))
+    if(SIE_STATE_BIT_ON(regs, MX, XC))
         longjmp(regs->progjmp, SIE_INTERCEPT_INST);
 #endif /*defined(FEATURE_MULTIPLE_CONTROLLED_DATA_SPACE)*/
 
@@ -105,12 +105,12 @@ size_t  xoffs;                          /* Byte offset into xpndstor */
 
     PRIV_CHECK(regs);
 
-    if(SIE_STATB(regs, IC3, PGX))
+    if(SIE_STATE_BIT_ON(regs, IC3, PGX))
         longjmp(regs->progjmp, SIE_INTERCEPT_INST);
 
 #if defined(FEATURE_MULTIPLE_CONTROLLED_DATA_SPACE)
     /* Cannot perform xstore page movement in XC mode */
-    if(SIE_STATB(regs, MX, XC))
+    if(SIE_STATE_BIT_ON(regs, MX, XC))
         longjmp(regs->progjmp, SIE_INTERCEPT_INST);
 #endif /*defined(FEATURE_MULTIPLE_CONTROLLED_DATA_SPACE)*/
 
@@ -167,7 +167,7 @@ int     r1, r2;                         /* Values of R fields        */
     PRIV_CHECK(regs);
 
 #if defined(_FEATURE_SIE)
-    if(SIE_STATNB(regs, EC0, MVPG))
+    if(SIE_STATE_BIT_OFF(regs, EC0, MVPG))
         longjmp(regs->progjmp, SIE_INTERCEPT_INST);
 #endif /*defined(_FEATURE_SIE)*/
 
@@ -218,7 +218,7 @@ BYTE    xpkey1 = 0, xpkey2 = 0;         /* Expanded storage keys     */
     RRE(inst, regs, r1, r2);
 
 #if defined(_FEATURE_SIE)
-    if(SIE_STATNB(regs, EC0, MVPG))
+    if(SIE_STATE_BIT_OFF(regs, EC0, MVPG))
         longjmp(regs->progjmp, SIE_INTERCEPT_INST);
 #endif /*defined(_FEATURE_SIE)*/
 
@@ -286,16 +286,16 @@ BYTE    xpkey1 = 0, xpkey2 = 0;         /* Expanded storage keys     */
 
 #if defined(FEATURE_MULTIPLE_CONTROLLED_DATA_SPACE)
             if (SIE_TRANSLATE_ADDR (regs->sie_mso + raddr2,
-                (SIE_STATB(regs, MX, XC) && AR_BIT(&regs->psw) && r2 > 0)
-                ? r2 : USE_PRIMARY_SPACE, regs->hostregs, ACCTYPE_SIE))
+                (SIE_STATE_BIT_ON(regs, MX, XC) && AR_BIT(&regs->psw) && r2 > 0)
+                ? r2 : USE_PRIMARY_SPACE, HOSTREGS, ACCTYPE_SIE))
 #else /*!defined(FEATURE_MULTIPLE_CONTROLLED_DATA_SPACE)*/
             if (SIE_TRANSLATE_ADDR (regs->sie_mso + raddr2,
-                    USE_PRIMARY_SPACE, regs->hostregs, ACCTYPE_SIE))
+                    USE_PRIMARY_SPACE, HOSTREGS, ACCTYPE_SIE))
 #endif /*!defined(FEATURE_MULTIPLE_CONTROLLED_DATA_SPACE)*/
-                (regs->hostregs->program_interrupt) (regs->hostregs, regs->hostregs->dat.xcode);
+                (HOSTREGS->program_interrupt) (HOSTREGS, HOSTREGS->dat.xcode);
 
             /* Convert host real address to host absolute address */
-            raddr2 = APPLY_PREFIXING (regs->hostregs->dat.raddr, regs->hostregs->PX);
+            raddr2 = APPLY_PREFIXING (HOSTREGS->dat.raddr, HOSTREGS->PX);
         }
 #endif /*defined(_FEATURE_SIE)*/
 
@@ -382,16 +382,16 @@ BYTE    xpkey1 = 0, xpkey2 = 0;         /* Expanded storage keys     */
         {
 #if defined(FEATURE_MULTIPLE_CONTROLLED_DATA_SPACE)
             if (SIE_TRANSLATE_ADDR (regs->sie_mso + raddr1,
-                (SIE_STATB(regs, MX, XC) && AR_BIT(&regs->psw) && r1 > 0)
-                ? r1 : USE_PRIMARY_SPACE, regs->hostregs, ACCTYPE_SIE))
+                (SIE_STATE_BIT_ON(regs, MX, XC) && AR_BIT(&regs->psw) && r1 > 0)
+                ? r1 : USE_PRIMARY_SPACE, HOSTREGS, ACCTYPE_SIE))
 #else /*!defined(FEATURE_MULTIPLE_CONTROLLED_DATA_SPACE)*/
             if (SIE_TRANSLATE_ADDR (regs->sie_mso + raddr1,
-                    USE_PRIMARY_SPACE, regs->hostregs, ACCTYPE_SIE))
+                    USE_PRIMARY_SPACE, HOSTREGS, ACCTYPE_SIE))
 #endif /*!defined(FEATURE_MULTIPLE_CONTROLLED_DATA_SPACE)*/
-                (regs->hostregs->program_interrupt) (regs->hostregs, regs->hostregs->dat.xcode);
+                (HOSTREGS->program_interrupt) (HOSTREGS, HOSTREGS->dat.xcode);
 
             /* Convert host real address to host absolute address */
-            raddr1 = APPLY_PREFIXING (regs->hostregs->dat.raddr, regs->hostregs->PX);
+            raddr1 = APPLY_PREFIXING (HOSTREGS->dat.raddr, HOSTREGS->PX);
         }
 #endif /*defined(_FEATURE_SIE)*/
 

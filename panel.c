@@ -114,7 +114,7 @@ static U32    NPdata;
 static U32    NPmips;
 static U32    NPsios;
 static int    NPcpugraph;
-static int    NPcpugraphpct[MAX_CPU_ENGINES];
+static int    NPcpugraphpct[ MAX_CPU_ENGS ];
 
 /* Current device states */
 #define       NP_MAX_DEVICES (PANEL_MAX_ROWS - 3)
@@ -670,7 +670,7 @@ static void NP_screen_redraw (REGS *regs)
 
 #if defined(_FEATURE_SIE)
     if(regs->sie_active)
-        regs = regs->guestregs;
+        regs = GUESTREGS;
 #endif /*defined(_FEATURE_SIE)*/
 
     /*
@@ -728,7 +728,7 @@ static void NP_screen_redraw (REGS *regs)
         NPpswmode = (regs->arch_mode == ARCH_900_IDX);
         NPpswzhost =
 #if defined(_FEATURE_SIE)
-                     !NPpswmode && SIE_MODE(regs) && regs->hostregs->arch_mode == ARCH_900_IDX;
+                     !NPpswmode && SIE_MODE(regs) && HOSTREGS->arch_mode == ARCH_900_IDX;
 #else
                      0;
 #endif /*defined(_FEATURE_SIE)*/
@@ -741,7 +741,7 @@ static void NP_screen_redraw (REGS *regs)
         NPregzhost =
 #if defined(_FEATURE_SIE)
                      (regs->arch_mode != ARCH_900_IDX
-                   && SIE_MODE(regs) && regs->hostregs->arch_mode == ARCH_900_IDX
+                   && SIE_MODE(regs) && HOSTREGS->arch_mode == ARCH_900_IDX
                    && (NPregdisp == 0 || NPregdisp == 1));
 #else
                      0;
@@ -979,7 +979,7 @@ static void NP_update(REGS *regs)
 
 #if defined(_FEATURE_SIE)
     if(SIE_MODE(regs))
-        regs = regs->hostregs;
+        regs = HOSTREGS;
 #endif /*defined(_FEATURE_SIE)*/
 
     /* percent CPU busy */
@@ -1004,13 +1004,13 @@ static void NP_update(REGS *regs)
     {
 #if defined(_FEATURE_SIE)
         if(regs->sie_active)
-            regs = regs->guestregs;
+            regs = GUESTREGS;
 #endif /*defined(_FEATURE_SIE)*/
 
         mode = (regs->arch_mode == ARCH_900_IDX);
         zhost =
 #if defined(_FEATURE_SIE)
-                !mode && SIE_MODE(regs) && regs->hostregs->arch_mode == ARCH_900_IDX;
+                !mode && SIE_MODE(regs) && HOSTREGS->arch_mode == ARCH_900_IDX;
 #else // !defined(_FEATURE_SIE)
                 0;
 #endif // defined(_FEATURE_SIE)
@@ -1086,7 +1086,7 @@ static void NP_update(REGS *regs)
         zhost =
 #if defined(_FEATURE_SIE)
                 (regs->arch_mode != ARCH_900_IDX
-              && SIE_MODE(regs) && regs->hostregs->arch_mode == ARCH_900_IDX
+              && SIE_MODE(regs) && HOSTREGS->arch_mode == ARCH_900_IDX
               && (NPregdisp == 0 || NPregdisp == 1));
 #else // !defined(_FEATURE_SIE)
                      0;
@@ -1553,7 +1553,7 @@ DLL_EXPORT void update_maxrates_hwm()       // (update high-water-mark values)
 
 ///////////////////////////////////////////////////////////////////////
 
-REGS *copy_regs(int cpu)
+static REGS *my_copy_regs(int cpu)
 {
     REGS *regs;
 
@@ -1579,7 +1579,7 @@ REGS *copy_regs(int cpu)
 #if defined(_FEATURE_SIE)
     if (regs->sie_active)
     {
-        memcpy (&copysieregs, regs->guestregs, sysblk.regs_copy_len);
+        memcpy (&copysieregs, GUESTREGS, sysblk.regs_copy_len);
         copyregs.guestregs = &copysieregs;
         copysieregs.hostregs = &copyregs;
         regs = &copysieregs;
@@ -1594,6 +1594,85 @@ REGS *copy_regs(int cpu)
     return regs;
 }
 
+DLL_EXPORT void set_panel_colors()
+{
+    if (sysblk.pan_colors)
+    {
+        sysblk.pan_color[ PANC_X_IDX ][ PANC_BG_IDX ] = COLOR_DEFAULT_BG;
+        sysblk.pan_color[ PANC_X_IDX ][ PANC_FG_IDX ] = COLOR_WHITE;
+
+        sysblk.pan_color[ PANC_I_IDX ][ PANC_BG_IDX ] = COLOR_DEFAULT_BG;
+        sysblk.pan_color[ PANC_I_IDX ][ PANC_FG_IDX ] = COLOR_DEFAULT_FG;
+
+        sysblk.pan_color[ PANC_E_IDX ][ PANC_BG_IDX ] = COLOR_LIGHT_RED;
+        sysblk.pan_color[ PANC_E_IDX ][ PANC_FG_IDX ] = COLOR_WHITE;
+
+        sysblk.pan_color[ PANC_W_IDX ][ PANC_BG_IDX ] = COLOR_RED;
+        sysblk.pan_color[ PANC_W_IDX ][ PANC_FG_IDX ] = COLOR_LIGHT_GREY;
+
+        sysblk.pan_color[ PANC_D_IDX ][ PANC_BG_IDX ] = COLOR_LIGHT_BLUE;
+        sysblk.pan_color[ PANC_D_IDX ][ PANC_FG_IDX ] = COLOR_DEFAULT_FG;
+    }
+    else // no colors: use default
+    {
+        sysblk.pan_color[ PANC_X_IDX ][ PANC_FG_IDX ] = COLOR_DEFAULT_FG;
+        sysblk.pan_color[ PANC_I_IDX ][ PANC_FG_IDX ] = COLOR_DEFAULT_FG;
+        sysblk.pan_color[ PANC_E_IDX ][ PANC_FG_IDX ] = COLOR_DEFAULT_FG;
+        sysblk.pan_color[ PANC_W_IDX ][ PANC_FG_IDX ] = COLOR_DEFAULT_FG;
+        sysblk.pan_color[ PANC_D_IDX ][ PANC_FG_IDX ] = COLOR_DEFAULT_FG;
+
+        sysblk.pan_color[ PANC_X_IDX ][ PANC_BG_IDX ] = COLOR_DEFAULT_BG;
+        sysblk.pan_color[ PANC_I_IDX ][ PANC_BG_IDX ] = COLOR_DEFAULT_BG;
+        sysblk.pan_color[ PANC_E_IDX ][ PANC_BG_IDX ] = COLOR_DEFAULT_BG;
+        sysblk.pan_color[ PANC_W_IDX ][ PANC_BG_IDX ] = COLOR_DEFAULT_BG;
+        sysblk.pan_color[ PANC_D_IDX ][ PANC_BG_IDX ] = COLOR_DEFAULT_BG;
+    }
+}
+
+static int msgcolor( int sev, int fgbg )
+{
+    switch (sev) {
+    case 'I': return sysblk.pan_color[ PANC_I_IDX ][ fgbg ];
+    case 'E': return sysblk.pan_color[ PANC_E_IDX ][ fgbg ];
+    case 'W': return sysblk.pan_color[ PANC_W_IDX ][ fgbg ];
+    case 'D': return sysblk.pan_color[ PANC_D_IDX ][ fgbg ]; default: break; }
+              return sysblk.pan_color[ PANC_X_IDX ][ fgbg ];
+}
+static int fg_msgcolor( int sev ) { return msgcolor( sev, PANC_FG_IDX ); }
+static int bg_msgcolor( int sev ) { return msgcolor( sev, PANC_BG_IDX ); }
+
+static bool have_regexp = false;
+
+#if defined(HAVE_REGEX_H) || defined(HAVE_PCRE)
+
+static regex_t     regex;
+static regmatch_t  regmatch;
+
+static void init_HHC_regexp()
+{
+    // "HHC99999S"
+    have_regexp = (0 == regcomp( &regex, "(HHC\\d\\d\\d\\d\\d\\S)", REG_EXTENDED ))
+        ? true : false;
+}
+#endif // defined(HAVE_REGEX_H) || defined(HAVE_PCRE)
+
+static int msg_sev( const char* msg )
+{
+#if defined(HAVE_REGEX_H) || defined(HAVE_PCRE)
+    if (have_regexp)
+    {
+        if (regexec( &regex, msg, 1, &regmatch, 0 ) == 0)
+            return (int)(msg[ regmatch.rm_so + 8 ]);
+    }
+    else
+#endif // defined(HAVE_REGEX_H) || defined(HAVE_PCRE)
+    {
+        int sevidx = MLVL( DEBUG ) ? MLVL_DEBUG_PFXIDX + 8 : 8;
+        if ((int)strlen( msg ) > sevidx)
+            return (int)(msg[ sevidx ]);
+    }
+    return (int)' ';
+}
 
 /*-------------------------------------------------------------------*/
 /* Panel display thread                                              */
@@ -1607,7 +1686,6 @@ DLL_EXPORT void the_real_panel_display()
 {
 #ifndef _MSVC_
   int     rc;                           /* Return code               */
-  int     maxfd;                        /* Highest file descriptor   */
   fd_set  readset;                      /* Select file descriptors   */
   struct  timeval tv;                   /* Select timeout structure  */
 #endif // _MSVC_
@@ -1640,6 +1718,10 @@ size_t  loopcount;                      /* Number of iterations done */
     SET_THREAD_NAME( PANEL_THREAD_NAME );
     hdl_addshut( "panel_cleanup", panel_cleanup, NULL );
     history_init();
+
+#if defined(HAVE_REGEX_H) || defined(HAVE_PCRE)
+    init_HHC_regexp();
+#endif
 
     /* Set Some Function Key Defaults */
     {
@@ -1756,18 +1838,12 @@ size_t  loopcount;                      /* Number of iterations done */
         /* Set the file descriptors for select */
         FD_ZERO (&readset);
         FD_SET (keybfd, &readset);
-        FD_SET (logger_syslogfd[LOG_READ], &readset);
-        FD_SET (0, &readset);
-        if(keybfd > logger_syslogfd[LOG_READ])
-          maxfd = keybfd;
-        else
-          maxfd = logger_syslogfd[LOG_READ];
 
-        /* Wait for a message to arrive, a key to be pressed,
+        /* Wait for a key to be pressed,
            or the inactivity interval to expire */
         tv.tv_sec  =  sysblk.panrate / 1000;
         tv.tv_usec = (sysblk.panrate * 1000) % 1000000;
-        rc = select (maxfd + 1, &readset, NULL, NULL, &tv);
+        rc = select (keybfd + 1, &readset, NULL, NULL, &tv);
         if (rc < 0 )
         {
             if (errno == EINTR) continue;
@@ -1850,7 +1926,7 @@ size_t  loopcount;                      /* Number of iterations done */
                         case 'o':
                             if (!sysblk.hicpu)
                               break;
-                            regs = copy_regs(sysblk.pcpu);
+                            regs = my_copy_regs(sysblk.pcpu);
                             aaddr = APPLY_PREFIXING (NPaddress, regs->PX);
                             if (aaddr > regs->mainlim)
                                 break;
@@ -2188,7 +2264,7 @@ size_t  loopcount;                      /* Number of iterations done */
 
                             while (*p && ncmd_tok < 10 )
                             {
-                                while (*p && isspace(*p)) 
+                                while (*p && isspace(*p))
                                 {
                                     p++;
                                 }
@@ -2201,14 +2277,14 @@ size_t  loopcount;                      /* Number of iterations done */
 
                                 cmd_tok[ncmd_tok] = p; ++ncmd_tok; // count new arg
 
-                                while ( *p 
+                                while ( *p
                                         && !isspace(*p)
                                         && *p != '\"'
                                         && *p != '\'' )
-                                { 
+                                {
                                     p++;
                                 }
-                                if (!*p) 
+                                if (!*p)
                                 {
                                     break; /* find end of arg */
                                 }
@@ -2844,7 +2920,7 @@ FinishShutdown:
         /* =END= */
 
         /* Obtain the PSW for target CPU */
-        regs = copy_regs( sysblk.pcpu );
+        regs = my_copy_regs( sysblk.pcpu );
         memset( curr_psw, 0, sizeof( curr_psw ));
         copy_psw( regs, curr_psw );
 
@@ -2887,6 +2963,7 @@ FinishShutdown:
         /*        the NP display as an else after those ifs */
 
         if (NPDup == 0) {
+            int sev, fg_color, bg_color;
             /* Rewrite the screen if display update indicators are set */
             if (redraw_msgs && !npquiet)
             {
@@ -2901,9 +2978,14 @@ FinishShutdown:
                 /* Then draw current screen */
                 for (p=topmsg; i < (SCROLL_LINES + numkept) && (p != curmsg->next || p == topmsg); i++, p = p->next)
                 {
-                    set_pos (i+1, 1);
-                    set_color (COLOR_DEFAULT_FG, COLOR_DEFAULT_BG);
-                    write_text (p->msg, MSG_SIZE);
+                    sev = msg_sev( p->msg );
+
+                    fg_color = fg_msgcolor( sev );
+                    bg_color = bg_msgcolor( sev );
+
+                    set_pos( i+1, 1 );
+                    set_color( fg_color, bg_color );
+                    write_text( p->msg, MSG_SIZE );
                 }
 
                 /* Pad remainder of screen with blank lines */

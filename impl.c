@@ -401,6 +401,197 @@ static void* WinMsgThread( void* arg )
 }
 #endif /* defined( _MSVC_ ) */
 
+#if defined( OPTION_WATCHDOG )
+/*-------------------------------------------------------------------*/
+/*  watchdog_thread - monitor system for deadlocks                   */
+/*-------------------------------------------------------------------*/
+static void* watchdog_thread( void* arg )
+{
+    REGS* regs;
+    S64   savecount[ MAX_CPU_ENGS ];
+    int   cpu;
+    int   sleep_seconds  = WATCHDOG_SECS;
+    int   sleep_secs2nd  = 3;
+
+    bool  deadlock_reported = false;
+    bool  hung_cpu_reported = false;
+
+    CPU_BITMAP  hung_cpus_mask  = 0;
+
+    UNREFERENCED( arg );
+
+    for (cpu=0; cpu < sysblk.maxcpu; cpu++)
+        savecount[ cpu ] = -1;
+
+    /* Set watchdog priority LOWER than the CPU thread priority
+       such that it will not invalidly detect an inoperable CPU
+    */
+    set_thread_priority( MAX( sysblk.minprio, sysblk.cpuprio - 1 ));
+
+    do
+    {
+        /* Only check for problems "every once in a while" */
+        SLEEP( sleep_seconds );
+
+#if defined( _MSVC_ )
+        // Disable all watchdog logic while debugger is attached
+        if (IsDebuggerPresent())
+            continue;
+#endif
+        /* Check for and report any deadlocks */
+        if (hthread_report_deadlocks( deadlock_reported ? NULL : "S" ))
+        {
+            /*****************************************************/
+            /*               DEADLOCK DETECTED!                  */
+            /*****************************************************/
+
+            if (!deadlock_reported)
+            {
+                // "DEADLOCK!"
+                WRMSG( HHC90024, "S" );
+                HDC1( debug_watchdog_signal, NULL );
+            }
+            deadlock_reported = true;
+        }
+
+        for (cpu=0; cpu < sysblk.maxcpu; cpu++)
+        {
+            /* We're only interested in ONLINE and STARTED CPUs */
+            if (0
+                || !IS_CPU_ONLINE( cpu )
+                || (regs = sysblk.regs[ cpu ])->cpustate != CPUSTATE_STARTED
+            )
+            {
+                /* CPU not ONLINE or not STARTED */
+                savecount[ cpu ] = -1;
+                continue;
+            }
+
+            /* CPU is ONLINE and STARTED. Now check to see if it's
+               maybe in a WAITSTATE. If so, we're not interested.
+            */
+            if (0
+                || WAITSTATE( &regs->psw )
+#if defined( _FEATURE_WAITSTATE_ASSIST )
+                || (1
+                    && regs->sie_active
+                    && WAITSTATE( &GUESTREGS->psw )
+                   )
+#endif
+            )
+            {
+                /* CPU is in a WAITSTATE */
+                savecount[ cpu ] = -1;
+                continue;
+            }
+
+            /* We have found a running CPU that should be executing
+               instructions. Compare its current instruction count
+               with our previously saved value. If they're different
+               then it has obviously executed SOME instructions and
+               all is well. Save its current instruction counter and
+               move on the next CPU. This one appears to be healthy.
+            */
+            if (INSTCOUNT( regs ) != (U64) savecount[ cpu ])
+            {
+                /* Save updated instruction count for next time */
+                savecount[ cpu ] = INSTCOUNT( regs );
+                continue;
+            }
+
+            /*****************************************************/
+            /*           MALFUNCTIONING CPU DETECTED!            */
+            /*****************************************************/
+
+            hung_cpus_mask |= CPU_BIT( cpu );
+        }
+
+        /* If any hung CPUs were detected, do a second pass in
+           case there is another CPU that also stopped executing
+           instructions a few seconds after the first one did.
+        */
+        if (hung_cpus_mask && sleep_seconds != sleep_secs2nd)
+        {
+            sleep_seconds = sleep_secs2nd;
+            continue;
+        }
+
+        /* Report all hung CPUs all at the same time */
+        if (hung_cpus_mask && !hung_cpu_reported)
+        {
+            for (cpu=0; cpu < sysblk.maxcpu; cpu++)
+            {
+                if (hung_cpus_mask & CPU_BIT( cpu ))
+                {
+                    // "PROCESSOR %s%02X APPEARS TO BE HUNG!"
+                    WRMSG( HHC00822, "S", PTYPSTR( cpu ), cpu );
+                    HDC1( debug_watchdog_signal, sysblk.regs[ cpu ]);
+                }
+            }
+
+            hung_cpu_reported = true;
+        }
+
+        /* Create a crash dump if any problems were detected */
+        if (deadlock_reported || hung_cpu_reported)
+        {
+#if defined( _MSVC_ )
+            // Give developer time to attach a debugger before crashing
+            // If they do so, then prevent the crash from occurring as
+            // long as their debugger is still attached, but once they
+            // detach their debugger, then go ahead and allow the crash
+            {
+                int i;
+                for (i=0; !IsDebuggerPresent() && i < WAIT_FOR_DEBUGGER_SECS; ++i)
+                    SLEEP( 1 );
+
+                // Don't crash if there is now a debugger attached
+                if (IsDebuggerPresent())
+                    continue; // (don't crash)
+
+                // They chose not to attach a debugger. Allow crash.
+            }
+#endif
+            /* Display additional debugging information */
+            panel_command( "ptt" );
+            panel_command( "ipending" );
+            panel_command( "locks held sort tid" );
+            panel_command( "threads waiting sort tid" );
+
+            /* Display the instruction each hung CPU was executing */
+            if (hung_cpus_mask)
+            {
+                BYTE* ip;
+                REGS* regs;
+
+                for (cpu=0; cpu < sysblk.maxcpu; cpu++)
+                {
+                    if (hung_cpus_mask & CPU_BIT( cpu ))
+                    {
+                        /* Backup to actual instruction being executed */
+                        regs = sysblk.regs[ cpu ];
+                        UPD_PSW_IA( regs, PSW_IA( regs, -REAL_ILC( regs )));
+
+                        /* Display instruction that appears to be hung */
+                        ip = regs->ip < regs->aip ? regs->inst : regs->ip;
+                        ARCH_DEP( display_inst )( regs, ip );
+                    }
+                }
+            }
+
+            /* Give logger thread time to log messages */
+            SLEEP(1);
+
+            /* Create the crash dump for offline analysis */
+            CRASH();
+        }
+    }
+    while (!sysblk.shutdown);
+
+    return NULL;
+}
+#endif /* defined( OPTION_WATCHDOG ) */
+
 /*-------------------------------------------------------------------*/
 /* Herclin (plain line mode Hercules) message callback function      */
 /*-------------------------------------------------------------------*/
@@ -506,7 +697,10 @@ int     rc;
 
     INIT_BLOCK_HEADER_TRAILER( (&sysblk), SYSBLK );
 
+    // Set some defaults
     sysblk.msglvl = DEFAULT_MLVL;
+    sysblk.logoptnotime = 0;
+    sysblk.logoptnodate = 1;
 
     /* Initialize program name and version strings arrays */
     init_progname( argc, argv );
@@ -656,6 +850,7 @@ int     rc;
 #endif
 
     /* Initialize locks, conditions, and attributes */
+    initialize_lock( &sysblk.bindlock );
     initialize_lock( &sysblk.config   );
     initialize_lock( &sysblk.todlock  );
     initialize_lock( &sysblk.mainlock );
@@ -666,6 +861,9 @@ int     rc;
     initialize_lock( &sysblk.crwlock  );
     initialize_lock( &sysblk.ioqlock  );
     initialize_lock( &sysblk.dasdcache_lock );
+#if defined( OPTION_TXF_SINGLE_THREAD )
+    initialize_lock( &sysblk.txf_tran_lock );
+#endif
 
     initialize_condition( &sysblk.scrcond );
     initialize_condition( &sysblk.ioqcond );
@@ -682,17 +880,28 @@ int     rc;
     /* Initialize thread creation attributes so all of hercules
        can use them at any time when they need to create_thread
     */
-    initialize_detach_attr (DETACHED);
-    initialize_join_attr   (JOINABLE);
+    initialize_detach_attr( DETACHED );
+    initialize_join_attr( JOINABLE );
 
-    initialize_condition (&sysblk.cpucond);
+    /* Initialize CPU ENGINES locks and conditions */
+    initialize_condition( &sysblk.cpucond );
     {
-        int i;
-        for (i = 0; i < MAX_CPU_ENGINES; i++)
-            initialize_lock (&sysblk.cpulock[i]);
+        int i; char buf[32];
+        for (i=0; i < MAX_CPU_ENGS; i++)
+        {
+            MSGBUF( buf,    "&sysblk.cpulock[%*d]", MAX_CPU_ENGS > 99 ? 3 : 2, i );
+            initialize_lock( &sysblk.cpulock[i] );
+            set_lock_name(   &sysblk.cpulock[i], buf );
+
+#if defined( _FEATURE_073_TRANSACT_EXEC_FACILITY )
+            MSGBUF( buf,    "&sysblk.txf_lock[%*d]", MAX_CPU_ENGS > 99 ? 3 : 2, i );
+            initialize_lock( &sysblk.txf_lock[i] );
+            set_lock_name(   &sysblk.txf_lock[i], buf );
+#endif
+        }
     }
-    initialize_condition (&sysblk.sync_cond);
-    initialize_condition (&sysblk.sync_bc_cond);
+    initialize_condition( &sysblk.sync_cond );
+    initialize_condition( &sysblk.sync_bc_cond );
 
     /* Copy length for regs */
     sysblk.regs_copy_len = (int)((uintptr_t)&sysblk.dummyregs.regs_copy_end
@@ -706,6 +915,9 @@ int     rc;
     */
     if (!isatty(STDERR_FILENO) && !isatty(STDOUT_FILENO))
         sysblk.daemon_mode = 1;       /* Leave -d intact */
+
+    /* Initialize panel colors */
+    set_panel_colors();
 
     /* Initialize the logmsg pipe and associated logger thread.
        This causes all subsequent logmsg's to be redirected to
@@ -921,7 +1133,7 @@ int     rc;
 #endif // (KEEPALIVE)
 
     /* Initialize runtime opcode tables */
-    init_opcode_tables();
+    init_runtime_opcode_tables();
 
     /* Initialize the Hercules Dynamic Loader (HDL) */
     rc = hdl_main
@@ -1091,6 +1303,19 @@ int     rc;
     sysblk.todstart = hw_clock() << 8;
 
     hdl_addshut( "release_config", release_config, NULL );
+
+#if defined( OPTION_WATCHDOG )
+    /* Start the watchdog thread */
+    rc = create_thread( &sysblk.wdtid, DETACHED,
+        watchdog_thread, NULL, WATCHDOG_THREAD_NAME );
+    if (rc)
+    {
+        // "Error in function create_thread(): %s"
+        WRMSG( HHC00102, "E", strerror( rc ));
+        delayed_exit( -1 );
+        return 1;
+    }
+#endif /* defined( OPTION_WATCHDOG ) */
 
     /* Build system configuration */
     if ( build_config (cfgorrc[want_cfg].filename) )

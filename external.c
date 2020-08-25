@@ -50,16 +50,16 @@ int     rc;
     /* Set the main storage reference and change bits */
     if(SIE_MODE(regs)
 #if defined(_FEATURE_EXPEDITED_SIE_SUBSET)
-                       && !SIE_FEATB(regs, S, EXP_TIMER)
-#endif /*defined(_FEATURE_EXPEDITED_SIE_SUBSET)*/
+                       && !SIE_FEAT_BIT_ON(regs, S, EXP_TIMER)
+#endif
 #if defined(_FEATURE_EXTERNAL_INTERRUPT_ASSIST)
-                       && !SIE_FEATB(regs, EC0, EXTA)
+                       && !SIE_FEAT_BIT_ON(regs, EC0, EXTA)
 #endif
                                                             )
     {
         /* Point to SIE copy of PSA in state descriptor */
-        psa = (void*)(regs->hostregs->mainstor + SIE_STATE(regs) + SIE_IP_PSA_OFFSET);
-        STORAGE_KEY(SIE_STATE(regs), regs->hostregs) |= (STORKEY_REF | STORKEY_CHANGE);
+        psa = (void*)(HOSTREGS->mainstor + SIE_STATE(regs) + SIE_IP_PSA_OFFSET);
+        STORAGE_KEY(SIE_STATE(regs), HOSTREGS) |= (STORKEY_REF | STORKEY_CHANGE);
     }
     else
 #endif /*defined(_FEATURE_SIE)*/
@@ -93,13 +93,23 @@ int     rc;
 
     if ( !SIE_MODE(regs)
 #if defined(_FEATURE_EXPEDITED_SIE_SUBSET)
-                       || SIE_FEATB(regs, S, EXP_TIMER)
-#endif /*defined(_FEATURE_EXPEDITED_SIE_SUBSET)*/
+                       || SIE_FEAT_BIT_ON(regs, S, EXP_TIMER)
+#endif
 #if defined(_FEATURE_EXTERNAL_INTERRUPT_ASSIST)
-                       || SIE_FEATB(regs, EC0, EXTA)
+                       || SIE_FEAT_BIT_ON(regs, EC0, EXTA)
 #endif
        )
     {
+#if defined( FEATURE_073_TRANSACT_EXEC_FACILITY )
+        /* Abort any active transaction and then return back to here
+           to continue with external interrupt processing */
+        if (HOSTREGS->txf_tnd)
+        {
+            PTT_TXF( "*TXF EI", 0, 0, HOSTREGS->txf_tnd );
+            regs->txf_why |= TXF_WHY_EXT_INT;
+            ABORT_TRANS( regs, ABORT_RETRY_RETURN, TAC_EXT );
+        }
+#endif
         /* Store current PSW at PSA+X'18' */
         ARCH_DEP(store_psw) (regs, psa->extold);
 
@@ -122,10 +132,10 @@ int     rc;
 
     if ( SIE_MODE(regs)
 #if defined(_FEATURE_EXPEDITED_SIE_SUBSET)
-                       && !SIE_FEATB(regs, S, EXP_TIMER)
-#endif /*defined(_FEATURE_EXPEDITED_SIE_SUBSET)*/
+                       && !SIE_FEAT_BIT_ON(regs, S, EXP_TIMER)
+#endif
 #if defined(_FEATURE_EXTERNAL_INTERRUPT_ASSIST)
-                       && !SIE_FEATB(regs, EC0, EXTA)
+                       && !SIE_FEAT_BIT_ON(regs, EC0, EXTA)
 #endif
        )
         longjmp (regs->progjmp, SIE_INTERCEPT_EXT);
@@ -270,38 +280,54 @@ U16     servcode;      /* Service Signal or Block I/O Interrupt code */
     }
 
     /* External interrupt if TOD clock exceeds clock comparator */
-    if ( tod_clock(regs) > regs->clkc
-        && OPEN_IC_CLKC(regs) )
+    if (1
+        && tod_clock( regs ) > regs->clkc
+        && OPEN_IC_CLKC( regs )
+    )
     {
-        if (CPU_STEPPING_OR_TRACING_ALL)
+        if (1
+            && CPU_STEPPING_OR_TRACING_ALL
+            && !TXF_INSTR_TRACING()
+        )
         {
-            WRMSG (HHC00841, "I");
+            // "External interrupt: clock comparator"
+            WRMSG( HHC00841, "I" );
         }
-        ARCH_DEP(external_interrupt) (EXT_CLOCK_COMPARATOR_INTERRUPT, regs);
+        ARCH_DEP( external_interrupt )( EXT_CLOCK_COMPARATOR_INTERRUPT, regs );
     }
 
     /* External interrupt if CPU timer is negative */
-    if ( CPU_TIMER(regs) < 0
-        && OPEN_IC_PTIMER(regs) )
+    if (1
+        && CPU_TIMER( regs ) < 0
+        && OPEN_IC_PTIMER( regs )
+    )
     {
-        if (CPU_STEPPING_OR_TRACING_ALL)
+        if (1
+            && CPU_STEPPING_OR_TRACING_ALL
+            && !TXF_INSTR_TRACING()
+        )
         {
-            WRMSG (HHC00842, "I", CPU_TIMER(regs) );
+            // "External interrupt: CPU timer=%16.16"PRIX64
+            WRMSG( HHC00842, "I", CPU_TIMER( regs ));
         }
-        ARCH_DEP(external_interrupt) (EXT_CPU_TIMER_INTERRUPT, regs);
+        ARCH_DEP( external_interrupt )( EXT_CPU_TIMER_INTERRUPT, regs );
     }
 
     /* External interrupt if interval timer interrupt is pending */
 #if defined(FEATURE_INTERVAL_TIMER)
     if (OPEN_IC_ITIMER(regs)
 #if defined(_FEATURE_SIE)
-        && !(SIE_STATB(regs, M, ITMOF))
-#endif /*defined(_FEATURE_SIE)*/
+        && !(SIE_STATE_BIT_ON(regs, M, ITMOF))
+#endif
         )
     {
-        if (CPU_STEPPING_OR_TRACING_ALL)
+        if (1
+            && CPU_STEPPING_OR_TRACING_ALL
+            && !TXF_INSTR_TRACING()
+        )
         {
-            WRMSG (HHC00843, "I");
+            // "External interrupt: interval timer"
+            WRMSG( HHC00843, "I" );
         }
         OFF_IC_ITIMER(regs);
         ARCH_DEP(external_interrupt) (EXT_INTERVAL_TIMER_INTERRUPT, regs);
@@ -328,103 +354,114 @@ U16     servcode;      /* Service Signal or Block I/O Interrupt code */
         {
         case EXT_BLOCKIO_INTERRUPT:  /* VM Block I/O Interrupt */
 
-           if (sysblk.biodev->ccwtrace)
-           {
-           WRMSG (HHC00844, "I",
-                SSID_TO_LCSS(sysblk.biodev->ssid),
-                sysblk.biodev->devnum,
-                sysblk.servcode,
-                sysblk.bioparm,
-                sysblk.biostat,
-                sysblk.biosubcd
+            if (sysblk.biodev->ccwtrace)
+            {
+                // "%1d:%04X: processing block I/O interrupt: code %4.4X parm %16.16"PRIX64" status %2.2X subcode %2.2X"
+                WRMSG (HHC00844, "I",
+                    SSID_TO_LCSS(sysblk.biodev->ssid),
+                    sysblk.biodev->devnum,
+                    sysblk.servcode,
+                    sysblk.bioparm,
+                    sysblk.biostat,
+                    sysblk.biosubcd
                 );
-           }
+            }
 
-           servcode = EXT_BLOCKIO_INTERRUPT;
+            servcode = EXT_BLOCKIO_INTERRUPT;
 
 #if defined( FEATURE_001_ZARCH_INSTALLED_FACILITY )
 /* Real address used to store the 64-bit interrupt parameter */
 #define VM_BLOCKIO_INT_PARM   0x11B8
-           if (sysblk.biosubcd == 0x07)
-           {
-           /* 8-byte interrupt parm */
+            if (sysblk.biosubcd == 0x07)
+            {
+                /* 8-byte interrupt parm */
+                if (1
+                    && CPU_STEPPING_OR_TRACING_ALL
+                    && !TXF_INSTR_TRACING()
+                )
+                {
+                    char buf[40];
+                    MSGBUF( buf, "%16.16X", (unsigned) sysblk.bioparm );
+                    // "External interrupt: block I/O %s"
+                    WRMSG( HHC00845,"I", buf );
+                }
 
-               if (CPU_STEPPING_OR_TRACING_ALL)
-               {
-                  char buf[40];
-                  MSGBUF(buf, "%16.16X", (unsigned) sysblk.bioparm);
-                  WRMSG (HHC00845,"I", buf);
-               }
+                /* Set the main storage reference and change bits   */
+                /* for 64-bit interruption parameter.               */
+                /* Note: This is handled for the first 4K page in   */
+                /* ARCH_DEP(external_interrupt), but not for the    */
+                /* the second 4K page used for the 64-bit interrupt */
+                /* parameter.                                       */
 
-               /* Set the main storage reference and change bits   */
-               /* for 64-bit interruption parameter.               */
-               /* Note: This is handled for the first 4K page in   */
-               /* ARCH_DEP(external_interrupt), but not for the    */
-               /* the second 4K page used for the 64-bit interrupt */
-               /* parameter.                                       */
+                /* Point to 2nd page of PSA in main storage */
+                servpadr=APPLY_PREFIXING(VM_BLOCKIO_INT_PARM,regs->PX);
 
-               /* Point to 2nd page of PSA in main storage */
-               servpadr=APPLY_PREFIXING(VM_BLOCKIO_INT_PARM,regs->PX);
-
-               STORAGE_KEY(servpadr, regs)
-                     |= (STORKEY_REF | STORKEY_CHANGE);
+                STORAGE_KEY(servpadr, regs)
+                    |= (STORKEY_REF | STORKEY_CHANGE);
 
 #if 0
-               /* Store the 64-bit interrupt parameter */
-               logmsg (_("Saving 64-bit Block I/O interrupt parm at "
-                         "%16.16X: %16.16X\n"),
-                         servpadr,
-                         sysblk.bioparm
-                      );
+                /* Store the 64-bit interrupt parameter */
+                LOGMSG( "Saving 64-bit Block I/O interrupt parm at "
+                    "%16.16X: %16.16X\n",
+                    servpadr,
+                    sysblk.bioparm
+                );
 #endif
 
-               STORE_DW(regs->mainstor + servpadr,sysblk.bioparm);
-               psa = (void*)(regs->mainstor + regs->PX);
-           }
-           else
+                STORE_DW(regs->mainstor + servpadr,sysblk.bioparm);
+                psa = (void*)(regs->mainstor + regs->PX);
+            }
+            else
 #endif  /* defined( FEATURE_001_ZARCH_INSTALLED_FACILITY ) */
-           {
-              /* 4-byte interrupt parm */
+            {
+                /* 4-byte interrupt parm */
+                if (1
+                    && CPU_STEPPING_OR_TRACING_ALL
+                    && !TXF_INSTR_TRACING()
+                )
+                {
+                    char buf[40];
+                    MSGBUF( buf, "%8.8X", (U32) sysblk.bioparm );
+                    // "External interrupt: block I/O %s"
+                    WRMSG( HHC00845,"I", buf );
+                }
 
-              if (CPU_STEPPING_OR_TRACING_ALL)
-              {
-                 char buf[40];
-                 MSGBUF(buf, "%8.8X", (U32) sysblk.bioparm);
-                 WRMSG (HHC00845,"I", buf);
-              }
+                /* Store Block I/O parameter at PSA+X'80' */
+                psa = (void*)(regs->mainstor + regs->PX);
+                STORE_FW(psa->extparm,(U32)sysblk.bioparm);
+            }
 
-              /* Store Block I/O parameter at PSA+X'80' */
-              psa = (void*)(regs->mainstor + regs->PX);
-              STORE_FW(psa->extparm,(U32)sysblk.bioparm);
-           }
+            /* Store sub-interruption code and status at PSA+X'84' */
+            STORE_HW(psa->extcpad,(sysblk.biosubcd<<8)|sysblk.biostat);
 
-           /* Store sub-interruption code and status at PSA+X'84' */
-           STORE_HW(psa->extcpad,(sysblk.biosubcd<<8)|sysblk.biostat);
+            /* Reset interruption data */
+            sysblk.bioparm  = 0;
+            sysblk.biosubcd = 0;
+            sysblk.biostat  = 0;
 
-           /* Reset interruption data */
-           sysblk.bioparm  = 0;
-           sysblk.biosubcd = 0;
-           sysblk.biostat  = 0;
-
-           break;
+            break;
 
         case EXT_SERVICE_SIGNAL_INTERRUPT: /* Service Signal */
         default:
-             servcode = EXT_SERVICE_SIGNAL_INTERRUPT;
+            servcode = EXT_SERVICE_SIGNAL_INTERRUPT;
 
             /* Apply prefixing if the parameter is a storage address */
             if ( (sysblk.servparm & SERVSIG_ADDR) )
                 sysblk.servparm =
                      APPLY_PREFIXING (sysblk.servparm, regs->PX);
 
-             if (CPU_STEPPING_OR_TRACING_ALL)
-             {
-                 WRMSG (HHC00846,"I", sysblk.servparm);
-             }
+            if (1
+                && CPU_STEPPING_OR_TRACING_ALL
+                && !TXF_INSTR_TRACING()
+            )
+            {
+                // "External interrupt: service signal %8.8X"
+                WRMSG( HHC00846,"I", sysblk.servparm );
+            }
 
-             /* Store service signal parameter at PSA+X'80' */
-             psa = (void*)(regs->mainstor + regs->PX);
-             STORE_FW(psa->extparm,sysblk.servparm);
+            /* Store service signal parameter at PSA+X'80' */
+            psa = (void*)(regs->mainstor + regs->PX);
+            STORE_FW(psa->extparm,sysblk.servparm);
 
         }  /* end switch(sysblk.servcode) */
         /* Reset service parameter */
@@ -442,13 +479,16 @@ U16     servcode;      /* Service Signal or Block I/O Interrupt code */
 #else /* defined(FEATURE_VM_BLOCKIO) */
 
         /* Apply prefixing if the parameter is a storage address */
-        if ( (sysblk.servparm & SERVSIG_ADDR) )
-            sysblk.servparm =
-                APPLY_PREFIXING (sysblk.servparm, regs->PX);
+        if (sysblk.servparm & SERVSIG_ADDR)
+            sysblk.servparm = APPLY_PREFIXING( sysblk.servparm, regs->PX );
 
-        if (CPU_STEPPING_OR_TRACING_ALL)
+        if (1
+            && CPU_STEPPING_OR_TRACING_ALL
+            && !TXF_INSTR_TRACING()
+        )
         {
-            WRMSG (HHC00846,"I", sysblk.servparm);
+            // "External interrupt: service signal %8.8X"
+            WRMSG( HHC00846,"I", sysblk.servparm );
         }
 
         /* Store service signal parameter at PSA+X'80' */

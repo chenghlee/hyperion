@@ -132,54 +132,70 @@ int cckd_dasd_init( int argc, BYTE* argv[] )
 } /* end function cckd_dasd_init */
 
 /*-------------------------------------------------------------------*/
-/* CCKD dasd global termination                                      */
+/* Perform global CCKD dasd termination (if appropriate)             */
 /*-------------------------------------------------------------------*/
-int cckd_dasd_term ()
+void cckd_dasd_term_if_appropriate()
 {
-    /* Terminate the readahead threads */
-    obtain_lock (&cckdblk.ralock);
-    cckdblk.ramax = 0;
-    while (cckdblk.ras)
+    /* Check if it's time to terminate yet */
+    obtain_lock( &cckdblk.devlock );
     {
-        broadcast_condition (&cckdblk.racond);
-        wait_condition (&cckdblk.termcond, &cckdblk.ralock);
+        if (cckdblk.dev1st)
+        {
+            /* Not time yet; return without doing anything */
+            release_lock( &cckdblk.devlock );
+            return;
+        }
+        /* cckdblk.dev1st == NULL: time to globally terminate */
     }
-    release_lock (&cckdblk.ralock);
-    destroy_lock (&cckdblk.ralock);
-    destroy_condition (&cckdblk.racond);
+    release_lock( &cckdblk.devlock );
 
-    /* Terminate the garbage collection threads */
-    obtain_lock (&cckdblk.gclock);
-    cckdblk.gcmax = 0;
-    while (cckdblk.gcs)
+    /* Terminate all readahead threads... */
+    obtain_lock( &cckdblk.ralock );
     {
-        broadcast_condition (&cckdblk.gccond);
-        wait_condition (&cckdblk.termcond, &cckdblk.gclock);
+        cckdblk.ramax = 0;      /* signal   all threads to terminate */
+        while (cckdblk.ras)     /* wait for all threads to terminate */
+        {
+            broadcast_condition( &cckdblk.racond );
+            wait_condition( &cckdblk.termcond, &cckdblk.ralock );
+        }
     }
-    release_lock (&cckdblk.gclock);
-    destroy_lock (&cckdblk.gclock);
-    destroy_condition (&cckdblk.gccond);
+    release_lock( &cckdblk.ralock );
+    destroy_lock( &cckdblk.ralock );
+    destroy_condition( &cckdblk.racond );
 
-    /* Terminate the writer threads */
-    obtain_lock (&cckdblk.wrlock);
-    cckdblk.wrmax = 0;
-    while (cckdblk.wrs)
+    /* Terminate all garbage collection threads... */
+    obtain_lock( &cckdblk.gclock );
     {
-        broadcast_condition (&cckdblk.wrcond);
-        wait_condition (&cckdblk.termcond, &cckdblk.wrlock);
+        cckdblk.gcmax = 0;      /* signal   all threads to terminate */
+        while (cckdblk.gcs)     /* wait for all threads to terminate */
+        {
+            broadcast_condition( &cckdblk.gccond );
+            wait_condition( &cckdblk.termcond, &cckdblk.gclock );
+        }
     }
-    release_lock (&cckdblk.wrlock);
-    destroy_lock (&cckdblk.wrlock);
-    destroy_condition (&cckdblk.wrcond);
+    release_lock( &cckdblk.gclock );
+    destroy_lock( &cckdblk.gclock );
+    destroy_condition( &cckdblk.gccond );
 
-    destroy_lock (&cckdblk.devlock);
+    /* Terminate all writer threads... */
+    obtain_lock( &cckdblk.wrlock );
+    {
+        cckdblk.wrmax = 0;      /* signal   all threads to terminate */
+        while (cckdblk.wrs)     /* wait for all threads to terminate */
+        {
+            broadcast_condition( &cckdblk.wrcond );
+            wait_condition( &cckdblk.termcond, &cckdblk.wrlock );
+        }
+    }
+    release_lock( &cckdblk.wrlock );
+    destroy_lock( &cckdblk.wrlock );
+    destroy_condition( &cckdblk.wrcond );
 
-    destroy_condition (&cckdblk.devcond);
-    destroy_condition (&cckdblk.termcond);
-
-    memset(&cckdblk, 0, sizeof(CCKDBLK));
-
-    return 0;
+    /* Finish global termination... */
+    destroy_lock( &cckdblk.devlock  );
+    destroy_condition( &cckdblk.devcond );
+    destroy_condition( &cckdblk.termcond );
+    memset( &cckdblk, 0, sizeof( CCKDBLK ));
 
 } /* end function cckd_dasd_term */
 
@@ -188,27 +204,35 @@ int cckd_dasd_term ()
 /*-------------------------------------------------------------------*/
 int cckd_dasd_init_handler ( DEVBLK *dev, int argc, char *argv[] )
 {
-CCKD_EXT       *cckd;                   /* -> cckd extension         */
-DEVBLK         *dev2;                   /* -> device in cckd queue   */
-int             i;                      /* Counter                   */
-int             fdflags;                /* File flags                */
+CCKD_EXT    *cckd;                      /* -> cckd extension         */
+DEVBLK      *dev2;                      /* -> device in cckd queue   */
+int          i;                         /* Counter                   */
+int          fdflags;                   /* File flags                */
+char         buf[32];                   /* Work buffer                      */
 
-    UNREFERENCED(argc);
-    UNREFERENCED(argv);
+    UNREFERENCED( argc );
+    UNREFERENCED( argv );
 
     /* Initialize the global cckd block if necessary */
-    if (memcmp (&cckdblk.id, CCKDBLK_ID, sizeof(cckdblk.id)))
-        cckd_dasd_init (0, NULL);
+    if (memcmp( &cckdblk.id, CCKDBLK_ID, sizeof( cckdblk.id )))
+        cckd_dasd_init( 0, NULL );
 
     /* Obtain area for cckd extension */
-    dev->cckd_ext = cckd = cckd_calloc (dev, "ext", 1, sizeof(CCKD_EXT));
+    dev->cckd_ext = cckd = cckd_calloc( dev, "ext", 1, sizeof( CCKD_EXT ));
     if (cckd == NULL)
         return -1;
 
     /* Initialize locks and conditions */
-    initialize_lock (&cckd->cckdiolock);
-    initialize_lock (&cckd->filelock);
-    initialize_condition (&cckd->cckdiocond);
+
+    initialize_lock( &cckd->cckdiolock );
+    MSGBUF( buf,    "&cckd->cckdiolock %1d:%04X", LCSS_DEVNUM );
+    set_lock_name(   &cckd->cckdiolock, buf );
+
+    initialize_lock( &cckd->filelock );
+    MSGBUF( buf,    "&cckd->filelock %1d:%04X", LCSS_DEVNUM );
+    set_lock_name(   &cckd->filelock, buf );
+
+    initialize_condition( &cckd->cckdiocond );
 
     /* Initialize some variables */
     obtain_lock (&cckd->filelock);
@@ -381,7 +405,7 @@ int             rc, i;                  /* Return code, Loop index   */
     dev->fd = -1;
 
     /* If no more devices then perform global termination */
-    if (cckdblk.dev1st == NULL) cckd_dasd_term ();
+    cckd_dasd_term_if_appropriate();
 
     dev->buf = NULL;
     dev->bufsize = 0;
@@ -1474,6 +1498,7 @@ int             r;                      /* Readahead queue index     */
 TID             tid;                    /* Readahead thread id       */
 char            threadname[40];
 int             rc;
+int             ras;
 
     UNREFERENCED(arg);
 
@@ -1490,7 +1515,6 @@ int             rc;
 
         if (!cckdblk.ramax)
         {
-            signal_condition(&cckdblk.termcond);
             if (!cckdblk.batch || cckdblk.batchml > 1)
                 // "Thread id "TIDPAT", prio %d, name '%s' ended"
                 LOG_THREAD_END( threadname );
@@ -1501,7 +1525,8 @@ int             rc;
                 WRMSG( HHC00108, "W", TID_CAST( thread_id()), threadname,
                     get_thread_priority(), ra, cckdblk.ramax );
 
-        release_lock(&cckdblk.ralock);
+        release_lock( &cckdblk.ralock );
+        signal_condition( &cckdblk.termcond );
         return NULL;
     }
 
@@ -1589,10 +1614,13 @@ int             rc;
     --cckdblk.ras;
     --cckdblk.raa;
 
-    if (!cckdblk.ras)
-        signal_condition(&cckdblk.termcond);
+    ras = cckdblk.ras;
 
-    release_lock(&cckdblk.ralock);
+    release_lock( &cckdblk.ralock );
+
+    if (!ras)
+        signal_condition( &cckdblk.termcond );
+
     return NULL;
 } /* end thread cckd_ra_thread */
 
@@ -1740,6 +1768,7 @@ int             o;                      /* Cache entry found         */
 TID             tid;                    /* Writer thead id           */
 char            threadname[40];
 int             rc;
+int             wrs;
 
     UNREFERENCED( arg );
 
@@ -1765,8 +1794,6 @@ int             rc;
 
         if (!cckdblk.wrmax)  /* choose thread termination message  */
         {
-            signal_condition( &cckdblk.termcond );/* shutting down */
-
             if (!cckdblk.batch || cckdblk.batchml > 1)
               // "Thread id "TIDPAT", prio %d, name '%s' ended"
               LOG_THREAD_END( threadname  );
@@ -1778,6 +1805,7 @@ int             rc;
                 get_thread_priority(), writer, cckdblk.wrmax );
 
         release_lock( &cckdblk.wrlock );
+        signal_condition( &cckdblk.termcond );/* shutting down */
         return NULL;
     }
 
@@ -1871,10 +1899,13 @@ int             rc;
     cckdblk.wrs--;
     cckdblk.wra--;
 
-    if (cckdblk.wrs == 0)
-        signal_condition( &cckdblk.termcond );
+    wrs = cckdblk.wrs;
 
     release_lock( &cckdblk.wrlock );
+
+    if (!wrs)
+        signal_condition( &cckdblk.termcond );
+
     return NULL;
 } /* end thread cckd_writer */
 
@@ -4956,6 +4987,7 @@ CCKD_EXT       *cckd;                   /* -> cckd extension         */
 struct timeval  tv_now;                 /* Time-of-day (as timeval)  */
 time_t          tt_now;                 /* Time-of-day (as time_t)   */
 struct timespec tm;                     /* Time-of-day to wait       */
+int             gcs;
 
     UNREFERENCED( arg );
 
@@ -4973,7 +5005,6 @@ struct timespec tm;                     /* Time-of-day to wait       */
 
         if (!cckdblk.gcs)
         {
-            signal_condition(&cckdblk.termcond);  /* signal if last gcol thread ending before init. */
             if (!cckdblk.batch || cckdblk.batchml > 1)
                 // "Thread id "TIDPAT", prio %d, name '%s' ended"
                 LOG_THREAD_END( CCKD_GC_THREAD_NAME  );
@@ -4984,7 +5015,8 @@ struct timespec tm;                     /* Time-of-day to wait       */
                 WRMSG( HHC00108, "W", TID_CAST( thread_id()), CCKD_GC_THREAD_NAME,
                     get_thread_priority(), cckdblk.gcs, cckdblk.gcmax );
 
-        release_lock (&cckdblk.gclock);
+        release_lock( &cckdblk.gclock );
+        signal_condition( &cckdblk.termcond );  /* signal if last gcol thread ending before init. */
         return NULL;        /* back to the shadows again  */
     }
 
@@ -5028,8 +5060,14 @@ struct timespec tm;                     /* Time-of-day to wait       */
 
     cckdblk.gcs--;
     cckdblk.gca--;
-    if (!cckdblk.gcs) signal_condition (&cckdblk.termcond);
-    release_lock (&cckdblk.gclock);
+
+    gcs = cckdblk.gcs;
+
+    release_lock( &cckdblk.gclock );
+
+    if (!gcs)
+        signal_condition( &cckdblk.termcond );
+
     return NULL;
 } /* end thread cckd_gcol */
 

@@ -2026,10 +2026,8 @@ static void commadpt_wait(DEVBLK *dev)
 /*-------------------------------------------------------------------*/
 /* Halt currently executing I/O command                              */
 /*-------------------------------------------------------------------*/
-static BYTE commadpt_halt_or_clear( DEVBLK* dev )
+static void commadpt_halt_or_clear( DEVBLK* dev )
 {
-    BYTE unitstat = 0;
-
     if (dev->busy)
     {
         obtain_lock( &dev->commadpt->lock );
@@ -2050,8 +2048,6 @@ static BYTE commadpt_halt_or_clear( DEVBLK* dev )
         }
         release_lock( &dev->commadpt->lock );
     }
-
-    return unitstat;
 }
 
 /* The following 3 MSG functions ensure only 1 (one)  */
@@ -3537,21 +3533,30 @@ BYTE    b1, b2;                 /* 2741 overstrike rewriting */
                             {
                                 /* If there was a DLE on previous pass */
                                 if(gotdle)
-                            {
-                                /* check for DLE/ETX */
-                                if(b==0x02)
                                 {
-                                    /* Indicate transparent mode on */
-                                    turnxpar=1;
+                                    /* check for DLE/STX */
+                                    if(b==0x02)
+                                    {
+                                        /* Indicate transparent mode on */
+                                        turnxpar=1;
+                                    }
+                                   gotdle=0;
                                 }
+                                else 
+                                {   
+                                    if((b==0x03) || (b==0x26)) 
+                                    {
+                                        commadpt_ring_push(&dev->commadpt->outbfr,b);
+                                        break;
+                                    }
+                                }   
                             }
                         }
-                    }
-                }  /* end of else (async) */
-                /* Put the current byte on the output ring */
-                commadpt_ring_push(&dev->commadpt->outbfr,b);
-            }
-            if (IS_BSC_LNCTL(dev->commadpt))
+                    }  /* end of else (async) */
+                    /* Put the current byte on the output ring */
+                    commadpt_ring_push(&dev->commadpt->outbfr,b);
+                }
+            if (IS_BSC_LNCTL(dev->commadpt)) 
             {
                 /* If we had a DLE/STX, the line is now in Transparent Write Wait state */
                 /* meaning that no CCW codes except Write, No-Op, Sense are allowed     */

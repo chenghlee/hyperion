@@ -41,8 +41,9 @@ static int   logger_wrapped;            /* msg buffer has wrapped    */
 static int   logger_active = 0;         /* set by logger_thread,     */
                                         /* cleared by logger_term    */
 
-static FILE *logger_syslog[2];          /* Syslog read/write pipe    */
-       int   logger_syslogfd[2];        /*   pairs                   */
+static FILE *logger_syslog[2];          /* read/write ...            */
+       int   logger_syslogfd[2] =       /* ... pipe pairs            */
+                            { -1, -1 };
 static FILE *logger_hrdcpy;             /* Hardcopy log or zero      */
 static int   logger_hrdcpyfd;           /* Hardcopt fd or -1         */
 static char  logger_filename[MAX_PATH];
@@ -218,61 +219,6 @@ DLL_EXPORT void logger_unredirect()
 
 #endif // !defined( _MSVC_ )
 
-static void logger_term(void *arg)
-{
-    UNREFERENCED(arg);
-
-    log_wakeup(NULL);
-    usleep(1000);
-
-    /* Flush all pending logger o/p before redirecting?? */
-    fflush(stdout);
-
-    if (logger_active)
-    {
-        /* Redirect all output to stderr */
-        dup2(STDERR_FILENO, STDOUT_FILENO);
-
-        /* Tell logger thread we want it to exit */
-        logger_active = 0;
-        log_wakeup(NULL);
-        usleep(1000);
-
-        if (sysblk.loggertid != 0 && !sysblk.shutdown)
-        {
-            sleep(2);
-            /* Logger is now terminating */
-            obtain_lock(&logger_lock);
-
-            /* Wait for the logger to terminate */
-            join_thread( sysblk.loggertid, NULL );
-            detach_thread( sysblk.loggertid );
-
-            release_lock(&logger_lock);
-
-        }
-
-        /* In external GUI mode, the external GUI will receive this
-           message when the logger_thread writes it to the hardcopy
-           file just before it exits. If we also issued it here too,
-           it would end up receiving the message twice, so we skip
-           issuing it here if we're running in external GUI mode.
-
-           In all OTHER cases however (i.e. if we're NOT running in
-           external GUI mode), it's unimportant to us whether or not
-           it also gets written to the hardcopy file. We ALWAYS need
-           to issue the message here so that it appears on the screen.
-        */
-        if (!daemon_task)
-        {
-            // "Thread id "TIDPAT", prio %2d, name %s ended"
-            FWRMSG( stderr, HHC00101, "I", TID_CAST( thread_id()),
-                get_thread_priority(), LOGGER_THREAD_NAME );
-            fflush( stderr );
-        }
-    }
-}
-
 static void logger_logfile_write( const void* pBuff, size_t nBytes )
 {
     char* pLeft = (char*) pBuff;
@@ -303,25 +249,48 @@ static void logger_logfile_write( const void* pBuff, size_t nBytes )
 }
 
 /* ZZ FIXME:
- * This should really be part of logmsg, as the timestamps have currently
- * the time when the logger reads the message from the log pipe.  There can be
- * quite a delay at times when there is a high system activity. Moving the timestamp
- * to logmsg() will fix this.
- * The timestamp option should also NOT depend on anything like daemon mode.
- * log entries should always be timestamped, in a fixed format, such that
- * log readers may decide to skip the timestamp when displaying (ie panel.c).
+ *
+ * This should really be part of logmsg, as the stamps currently have
+ * the date/time of when the logger READS the message from the pipe.
+ * During periods of high system (message) activity however, there can
+ * be a CONSIDERABLE delay from the time when the message was actually
+ * issued and the time it is actually displayed and/or written to the
+ * logfile. Moving date/time stamping to logmsg() instead fixes this.
+ *
+ * The date/time stamp option should also NOT depend on anything like
+ * daemon mode and should always be date/time stamped in a fixed format
+ * such that log readers (e.g. panel.c for example) can then decide on
+ * their own whether or not to skip the date/time stamp when displaying
+ * and/or logging the message.
  */
 static void logger_logfile_timestamp()
 {
-    if (!sysblk.daemon_mode)
+    if (!extgui) // FIXME! (see above)
     {
-        struct timeval  now;
-        time_t          tt;
-        char            hhmmss[10];
+        char stamp[32];     // "YYYY-MM-DD HH:MM:SS.uuuuuu"
 
-        gettimeofday( &now, NULL ); tt = now.tv_sec;
-        STRLCPY( hhmmss, ctime(&tt)+11 );
-        logger_logfile_write( hhmmss, strlen(hhmmss) );
+        FormatTIMEVAL( NULL, stamp, sizeof( stamp ));
+
+        stamp[19] = ' ';    // "YYYY-MM-DD HH:MM:SS uuuuuu"
+        stamp[20] =  0;     // "YYYY-MM-DD HH:MM:SS "
+
+        if (DATESTAMPLOG && TIMESTAMPLOG)
+        {
+            logger_logfile_write( stamp, strlen( stamp ));
+        }
+        else if (DATESTAMPLOG && !TIMESTAMPLOG)
+        {
+            stamp[11] = 0;  // "YYYY-MM-DD "
+            logger_logfile_write( stamp, strlen( stamp ));
+        }
+        else if (TIMESTAMPLOG && !DATESTAMPLOG)
+        {
+            logger_logfile_write( &stamp[11], strlen( &stamp[11] ));
+        }
+        else // neither!
+        {
+            return;
+        }
     }
 }
 
@@ -329,7 +298,7 @@ DLL_EXPORT void logger_timestamped_logfile_write( const void* pBuff, size_t nByt
 {
     if (logger_hrdcpy)
     {
-        if (!sysblk.logoptnotime)
+        if (STAMPLOG)
             logger_logfile_timestamp();
         logger_logfile_write( pBuff, nBytes );
     }
@@ -356,19 +325,20 @@ static void* logger_thread( void* arg )
     }
     release_lock( &logger_lock );
 
-    /* ZZ FIXME:  We must empty the read pipe before we terminate */
-    /* (Couldn't we just loop waiting for a 'select(,&readset,,,timeout)'
-        to return zero?? Or use the 'poll' function similarly?? - Fish) */
-
-    while (logger_active)
+    /* This read causes logger to exit when the write end is closed */
+    while
+    (
+        (bytes_read =
+            read_pipe   // read the maximum amount possible
+            (
+                logger_syslogfd[ LOG_READ ],
+                 (logger_buffer  + logger_currmsg),
+                ((logger_bufsize - logger_currmsg) < LOG_DEFSIZE ?
+                 (logger_bufsize - logger_currmsg) : LOG_DEFSIZE)
+            )
+        )
+    )
     {
-        bytes_read = read_pipe( logger_syslogfd[ LOG_READ ], logger_buffer + logger_currmsg,
-          ((logger_bufsize - logger_currmsg) > LOG_DEFSIZE ?
-            LOG_DEFSIZE : logger_bufsize - logger_currmsg ));
-
-        if (!bytes_read)        /* Has pipe been closed? */
-            break;              /* Yes, then we are done */
-
         if (bytes_read < 0)
         {
             int read_pipe_errno = HSO_errno;
@@ -415,20 +385,20 @@ static void* logger_thread( void* arg )
             /* Write log data to hardcopy file */
             if (logger_hrdcpy)
             {
-                /* Need to prefix each line with a timestamp. */
+                /* Prefix each line with a date/time stamp if needed */
 
-                static int needstamp = 1;
+                static bool dostamp = true; // (MAYBE!)
                 char*  pLeft  = logger_buffer + logger_currmsg;
                 int    nLeft  = bytes_read;
                 char*  pRight = NULL;
                 int    nRight = 0;
                 char*  pNL    = NULL;   /* (pointer to NEWLINE character) */
 
-                if (needstamp)
+                if (dostamp)
                 {
-                    if (!sysblk.logoptnotime)
+                    if (STAMPLOG)
                         logger_logfile_timestamp();
-                    needstamp = 0;
+                    dostamp = false;
                 }
 
                 while ((pNL = memchr( pLeft, '\n', nLeft )) != NULL)
@@ -445,11 +415,11 @@ static void* logger_thread( void* arg )
 
                     if (!nLeft)
                     {
-                        needstamp = 1;
+                        dostamp = true;
                         break;
                     }
 
-                    if (!sysblk.logoptnotime)
+                    if (STAMPLOG)
                         logger_logfile_timestamp();
                 }
 
@@ -475,7 +445,7 @@ static void* logger_thread( void* arg )
         }
         release_lock( &logger_lock );
 
-    } /* end while(logger_active) */
+    } /* end while (...) */
 
     logger_active = 0;
     sysblk.loggertid = 0;
@@ -607,6 +577,7 @@ DLL_EXPORT void logger_init( void )
         fprintf( stderr, MSG( HHC02102, "E", "create_pipe()", strerror( errno )));
         exit(1);  /* Hercules running without syslog */
     }
+    socket_set_blocking_mode(logger_syslogfd[ LOG_WRITE ], O_NONBLOCK);
 
     setvbuf( logger_syslog[ LOG_WRITE ], NULL, _IONBF, 0 );
 
@@ -622,10 +593,6 @@ DLL_EXPORT void logger_init( void )
     wait_condition( &logger_cond, &logger_lock );
 
     release_lock( &logger_lock );
-
-    /* call logger_term on system shutdown */
-    hdl_addshut( "logger_term", logger_term, NULL );
-
 }
 
 DLL_EXPORT char* log_dsphrdcpy( void )
