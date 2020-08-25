@@ -1,8 +1,8 @@
 Use of the system libtool rather than building from included sources
 
---- sdl-hercules-4.2.1/Makefile.am
-+++ sdl-hercules-4.2.1/Makefile.am
-@@ -140,14 +140,15 @@ dyndev_SRC =  \
+--- sdl-hyperion/Makefile.am
++++ sdl-hyperion/Makefile.am
+@@ -142,14 +142,15 @@ dyndev_SRC =  \
  
  XSTATIC =
  DYNSRC  =
@@ -20,7 +20,7 @@ Use of the system libtool rather than building from included sources
  
  DYNMOD_LD_ADD =     \
    libherc.la        \
-@@ -498,7 +499,6 @@ libherc_la_SOURCES = \
+@@ -510,7 +511,6 @@ libherc_la_SOURCES = \
    $(DYNSRC)
  
  EXTRA_libherc_la_SOURCES = \
@@ -28,7 +28,7 @@ Use of the system libtool rather than building from included sources
    memrchr.c          \
    $(dynamic_SRC)     \
    $(dyndev_SRC)      \
-@@ -513,6 +513,7 @@ libherc_la_LIBADD = \
+@@ -525,6 +525,7 @@ libherc_la_LIBADD = \
    libherct.la       \
    libhercd.la       \
    $(extpkg_ldadd)   \
@@ -36,7 +36,7 @@ Use of the system libtool rather than building from included sources
    $(ldadd)
  
  #--------------------------------------------------------
-@@ -528,7 +529,10 @@ hercules_SOURCES = \
+@@ -540,7 +541,10 @@ hercules_SOURCES = \
  hercules_LDADD =  \
    libherc.la      \
    libhercs.la     \
@@ -47,7 +47,7 @@ Use of the system libtool rather than building from included sources
    $(ldadd)
  
  hercules_LDFLAGS = $(HLDFLAGS)
-@@ -536,6 +540,8 @@ hercules_LDFLAGS = $(HLDFLAGS)
+@@ -548,6 +552,8 @@ hercules_LDFLAGS = $(HLDFLAGS)
  hercules_DEPENDENCIES = \
    libherc.la            \
    libhercs.la           \
@@ -56,7 +56,7 @@ Use of the system libtool rather than building from included sources
    $(HDEPS)
  
  herclin_SOURCES = \
-@@ -544,7 +550,10 @@ herclin_SOURCES = \
+@@ -556,7 +562,10 @@ herclin_SOURCES = \
  herclin_LDADD =   \
    libherc.la      \
    libhercs.la     \
@@ -67,7 +67,7 @@ Use of the system libtool rather than building from included sources
    $(ldadd)
  
  herclin_LDFLAGS = $(HLDFLAGS)
-@@ -552,6 +561,8 @@ herclin_LDFLAGS = $(HLDFLAGS)
+@@ -564,6 +573,8 @@ herclin_LDFLAGS = $(HLDFLAGS)
  herclin_DEPENDENCIES = \
    libherc.la           \
    libhercs.la          \
@@ -76,7 +76,7 @@ Use of the system libtool rather than building from included sources
    $(HDEPS)
  
  #------------------------------------------------------------------------------
-@@ -722,7 +733,6 @@ EXTRA_DIST =                  \
+@@ -734,7 +745,6 @@ EXTRA_DIST =                  \
    autoconf/hercules.m4        \
    autoconf/install-sh         \
    autoconf/libtool.m4         \
@@ -84,16 +84,16 @@ Use of the system libtool rather than building from included sources
    autoconf/ltmain.sh          \
    autoconf/missing            \
    autoconf/mkinstalldirs      \
-@@ -937,7 +947,6 @@ noinst_HEADERS =          \
-   inline.h                \
+@@ -954,7 +964,6 @@ noinst_HEADERS =          \
+   instfmts.h              \
    linklist.h              \
    logger.h                \
 -  ltdl.h                  \
    machdep.h               \
    memrchr.h               \
    mpc.h                   \
---- sdl-hercules-4.2.1/autoconf/hercules.m4
-+++ sdl-hercules-4.2.1/autoconf/hercules.m4
+--- sdl-hyperion/autoconf/hercules.m4
++++ sdl-hyperion/autoconf/hercules.m4
 @@ -254,6 +254,7 @@ AC_DEFUN( [HC_GET_C11_LOCK_FREE_VALUE],
  AC_DEFUN([_HC_CHECK_NEED_GETOPT_WRAPPER],
  [
@@ -102,13 +102,12 @@ Use of the system libtool rather than building from included sources
      AC_MSG_CHECKING([whether getopt wrapper kludge is necessary])
  
      if test "$1" != "auto"; then
---- sdl-hercules-4.2.1/configure.ac
-+++ sdl-hercules-4.2.1/configure.ac
-@@ -303,152 +303,8 @@ fi
- modexecdir='$(libdir)/$(PACKAGE)'
+--- sdl-hyperion/configure.ac
++++ sdl-hyperion/configure.ac
+@@ -309,177 +309,8 @@ modexecdir='$(libdir)/$(PACKAGE)'
  AC_SUBST(modexecdir)
  
--
+ 
 -# -----------------------------------------------------------------------------
 -#
 -#  AC_LIBTOOL_DLOPEN
@@ -143,6 +142,32 @@ Use of the system libtool rather than building from included sources
 -
 -AC_LIBTOOL_WIN32_DLL()                  # (we need Win32 support in libtool)
 -
+-# -----------------------------------------------------------------------------
+-#  This is a hack:
+-#
+-#    On NetBSD, override how libtool decides that a library can be linked into
+-#    a shared library. The libSoftFloat.a library is not permissible by the
+-#    usual rule, which allows *.so and *_pic.a (because all code in a shared
+-#    library must be Position Independent Code).
+-#
+-#    The result is that the shared libraries are not built and hercules
+-#    does not work.
+-#
+-#    Linux commonly seems to have "pass_all" for this setting.
+-#    We want to affect the line deplibs_check_method=... in the copied
+-#    libtool script.
+-#
+-#    Since we know that External Packages static libs are always built as PIC,
+-#    the following should workaround the problem.
+-#
+-# -----------------------------------------------------------------------------
+-
+-case $host_os in
+-    netbsd*)
+-      #lt_cv_deplibs_check_method="match_pattern /lib[^/]+(\\.so|_pic\\.a|\\.a)\$"
+-      lt_cv_deplibs_check_method="pass_all"
+-      ;;
+-esac
 -
 -# -----------------------------------------------------------------------------
 -#  See: 'AC_PROG_LIBTOOL' below.

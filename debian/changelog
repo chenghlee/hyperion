@@ -1,3 +1,12 @@
+sdl-hercules (4.3~dev20200821-1ppa1~ubuntu18.04) bionic; urgency=medium
+
+  * Build an updated package version off commit 03d08aeb of the upstream
+    development branch.  This picks up numerous improvements made since the
+    4.2.1 release, including fixes for bugs that were causing IPL errors
+    with certain guest operating systems.
+
+ -- Cheng H. Lee <cheng.h.lee@gmail.com>  Mon, 24 Aug 2020 21:26:28 -0500
+
 sdl-hercules (4.2.1-1ppa3~ubuntu18.04) bionic; urgency=medium
 
   * Use post-install script to configure `hercifc` so members of the

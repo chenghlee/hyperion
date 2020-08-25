@@ -4,9 +4,9 @@ will cause `dh_autoreconf` to fail with the following error:
   autoreconf: running: aclocal -I m4 -I autoconf --force \
   aclocal: error: non-option arguments are not accepted: '\'.
 
---- sdl-hercules-4.2.1/Makefile.am
-+++ sdl-hercules-4.2.1/Makefile.am
-@@ -15,9 +15,7 @@
+--- sdl-hyperion/Makefile.am
++++ sdl-hyperion/Makefile.am
+@@ -15,9 +15,7 @@ ldadd          = @LIBS@
  
  #------------------------------------------------------------------------------
  

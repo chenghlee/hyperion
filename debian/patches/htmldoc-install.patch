@@ -1,8 +1,8 @@
 Autotools changes so we don't need additional Makefile commands to
 install upstream-provided HTML documentation in the right place.
 
---- sdl-hercules-4.2.1/html/Makefile.am
-+++ sdl-hercules-4.2.1/html/Makefile.am
+--- sdl-hyperion/html/Makefile.am
++++ sdl-hyperion/html/Makefile.am
 @@ -1,5 +1,5 @@
  
 -dist_pkgdata_DATA =   \
