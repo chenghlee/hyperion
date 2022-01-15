@@ -1,5 +1,6 @@
 /* HSCMISC.C    (C) Copyright Roger Bowler, 1999-2012                */
 /*              (C) Copyright Jan Jaeger, 1999-2012                  */
+/*              (C) and others 2013-2021                             */
 /*              Miscellaneous System Command Routines                */
 /*                                                                   */
 /*   Released under "The Q Public License Version 1"                 */
@@ -27,23 +28,10 @@
 #define COMPILE_THIS_ONLY_ONCE
 
 //-------------------------------------------------------------------
-//                     Helper macro
-//-------------------------------------------------------------------
-
-#define LIMIT_RANGE( _start, _end, _limit )                           \
-    do {                                                              \
-        if ((_end) > (_limit) && ((_end) - (_limit) + 1) > (_start))  \
-            (_end) = ((_start) + (_limit) - 1);                       \
-    } while(0)
-
-#define RANGE_LIMIT  _64_KILOBYTE  // (default limit for LIMIT_RANGE)
-
-//-------------------------------------------------------------------
 //         (static helper function forward references)
 //-------------------------------------------------------------------
 
 static int  display_inst_regs ( REGS* regs, BYTE* inst, BYTE opcode, char* buf, int buflen );
-static int  parse_range       ( char* operand, U64 maxadr, U64* sadrp, U64* eadrp, BYTE* newval );
 
 #endif /* COMPILE_THIS_ONLY_ONCE */
 
@@ -71,7 +59,7 @@ static int  parse_range       ( char* operand, U64 maxadr, U64* sadrp, U64* eadr
 /*      arn     Access register number                               */
 /*      regs    CPU register context                                 */
 /*      acctype Type of access (ACCTYPE_INSTFETCH, ACCTYPE_READ,     */
-/*              ACCTYPE_WRITE or ACCTYPE_LRA)                        */
+/*              ACCTYPE_WRITE, ACCTYPE_LRA or ACCTYPE_HW)            */
 /* Output:                                                           */
 /*      raptr   Points to word in which real address is returned     */
 /*      siptr   Points to word to receive indication of which        */
@@ -90,7 +78,7 @@ static int  parse_range       ( char* operand, U64 maxadr, U64* sadrp, U64* eadr
 /*      (v_vmd), 'alter_display_virt' (v_cmd), 'disasm_stor' (u_cmd) */
 /*      and 'display_inst'.                                          */
 /*                                                                   */
-/*      PLEASE NOTE HOWEVER, that since "logical_to_main" IS called, */
+/*      PLEASE NOTE HOWEVER, that since logical_to_main_l IS called, */
 /*      the storage key reference and change bits ARE updated when   */
 /*      the translation is successful.                               */
 /*                                                                   */
@@ -111,7 +99,7 @@ int ARCH_DEP( virt_to_real )( U64* raptr, int* siptr, U64 vaddr,
         if (SIE_MODE( regs ))
             memcpy( HOSTREGS->progjmp, regs->progjmp, sizeof( jmp_buf ));
 
-        ARCH_DEP( logical_to_main )( (VADR)vaddr, temp_arn, regs, acctype, 0 );
+        ARCH_DEP( logical_to_main_l )( (VADR)vaddr, temp_arn, regs, acctype, 0, 1 );
     }
 
     *siptr = regs->dat.stid;
@@ -147,7 +135,7 @@ BYTE    c;                              /* Character work area       */
     n = snprintf(buf, bufl, "%s", hdr);
     if (draflag)
     {
-        n += snprintf (buf+n, bufl-n, "R:"F_RADR":", raddr);
+        n += idx_snprintf( n, buf, bufl, "R:"F_RADR":", raddr);
     }
 
     aaddr = APPLY_PREFIXING (raddr, regs->PX);
@@ -155,23 +143,26 @@ BYTE    c;                              /* Character work area       */
     {
         if (HOSTREGS->mainlim == 0 || aaddr > HOSTREGS->mainlim)
         {
-            n += snprintf (buf+n, bufl-n,
+            n += idx_snprintf( n, buf, bufl,
                 "A:"F_RADR" Guest real address is not valid", aaddr);
             return n;
         }
         else
         {
-            n += snprintf (buf+n, bufl-n, "A:"F_RADR":", aaddr);
+            n += idx_snprintf( n, buf, bufl, "A:"F_RADR":", aaddr);
         }
     }
     else
     if (regs->mainlim == 0 || aaddr > regs->mainlim)
     {
-        n += snprintf (buf+n, bufl-n, "%s", " Real address is not valid");
+        n += idx_snprintf( n, buf, bufl, "%s", " Real address is not valid");
         return n;
     }
 
-    n += snprintf (buf+n, bufl-n, "K:%2.2X=", STORAGE_KEY(aaddr, regs));
+    /* Note: we use the internal "_get_storage_key" function here
+       so that we display the STORKEY_BADFRM bit too, if it's set.
+    */
+    n += idx_snprintf( n, buf, bufl, "K:%2.2X=", ARCH_DEP( _get_storage_key )( aaddr, SKEY_K ));
 
     memset (hbuf, SPACE, sizeof(hbuf));
     memset (cbuf, SPACE, sizeof(cbuf));
@@ -179,15 +170,19 @@ BYTE    c;                              /* Character work area       */
     for (i = 0, j = 0; i < 16; i++)
     {
         c = regs->mainstor[aaddr++];
-        j += snprintf (hbuf+j, sizeof(hbuf)-j, "%2.2X", c);
-        if ((aaddr & 0x3) == 0x0) hbuf[j++] = SPACE;
+        j += idx_snprintf( j, hbuf, sizeof(hbuf), "%2.2X", c);
+        if ((aaddr & 0x3) == 0x0)
+        {
+            hbuf[j] = SPACE;
+            hbuf[++j] = 0;
+        }
         c = guest_to_host(c);
         if (!isprint(c)) c = '.';
         cbuf[i] = c;
         if ((aaddr & PAGEFRAME_BYTEMASK) == 0x000) break;
     } /* end for(i) */
 
-    n += snprintf (buf+n, bufl-n, "%36.36s %16.16s", hbuf, cbuf);
+    n += idx_snprintf( n, buf, bufl, "%36.36s %16.16s", hbuf, cbuf);
     return n;
 
 } /* end function display_real */
@@ -204,16 +199,26 @@ RADR    raddr;                          /* Real address              */
 int     n;                              /* Number of bytes in buffer */
 int     stid;                           /* Segment table indication  */
 
-    n = snprintf (buf, bufl, "%s%c:"F_VADR":", hdr,
-                 ar == USE_REAL_ADDR ? 'R' : 'V', vaddr);
+    /* Convert virtual address to real address */
     *xcode = ARCH_DEP(virt_to_real) (&raddr, &stid,
                                      vaddr, ar, regs, acctype);
+
     if (*xcode == 0)
-        n += ARCH_DEP(display_real) (regs, raddr, buf+n, bufl-n, 0, "");
+    {
+        if (ar == USE_REAL_ADDR)
+            n = snprintf( buf, bufl, "%sR:"F_VADR":", hdr, vaddr );
+        else
+            n = snprintf( buf, bufl, "%sV:"F_VADR":R:"F_RADR":", hdr, vaddr, raddr );
+
+        n += ARCH_DEP( display_real )( regs, raddr, buf+n, bufl-n, 0, "" );
+    }
     else
-        n += snprintf( buf+n, bufl-n,
-                       " Translation exception %4.4hX (%s)",
-                       *xcode, PIC2Name( *xcode ));
+    {
+        n = snprintf (buf, bufl, "%s%c:"F_VADR":", hdr,
+                     ar == USE_REAL_ADDR ? 'R' : 'V', vaddr);
+        n += idx_snprintf( n, buf, bufl, " Translation exception %4.4hX (%s)",
+            *xcode, PIC2Name( *xcode ));
+    }
     return n;
 
 } /* end function display_virt */
@@ -391,7 +396,7 @@ char    buf[512];                       /* MSGBUF work buffer        */
     }
 
     /* Limit the amount to be displayed to a reasonable value */
-    LIMIT_RANGE( saddr, eaddr, RANGE_LIMIT );
+    LIMIT_RANGE( saddr, eaddr, _64_KILOBYTE );
 
     /* Display real storage */
     while (saddr <= eaddr)
@@ -401,7 +406,7 @@ char    buf[512];                       /* MSGBUF work buffer        */
         else
         {
             /* Convert virtual address to real address */
-            if((xcode = ARCH_DEP(virt_to_real) (&raddr, &stid, saddr, 0, regs, ACCTYPE_INSTFETCH) ))
+            if((xcode = ARCH_DEP(virt_to_real) (&raddr, &stid, saddr, 0, regs, ACCTYPE_HW) ))
             {
                 MSGBUF( buf, "R:"F_RADR"  Storage not accessible code = %4.4X (%s)",
                     saddr, xcode, PIC2Name( xcode ));
@@ -440,14 +445,14 @@ char    buf[512];                       /* MSGBUF work buffer        */
 
         if(ilc > 2)
         {
-            len += snprintf(buf + len, sizeof(buf)-len, "%2.2X%2.2X", inst[2], inst[3]);
+            len += idx_snprintf( len, buf, sizeof(buf), "%2.2X%2.2X", inst[2], inst[3]);
             if(ilc > 4)
-                len += snprintf(buf + len, sizeof(buf)-len, "%2.2X%2.2X ", inst[4], inst[5]);
+                len += idx_snprintf( len, buf, sizeof(buf), "%2.2X%2.2X ", inst[4], inst[5]);
             else
-                len += snprintf(buf + len, sizeof(buf)-len, "     ");
+                len += idx_snprintf( len, buf, sizeof(buf), "     ");
         }
         else
-            len += snprintf(buf + len, sizeof(buf)-len, "         ");
+            len += idx_snprintf( len, buf, sizeof(buf), "         ");
 
         /* Disassemble the instruction and display the results */
         PRINT_INST(inst, buf + len);
@@ -537,12 +542,12 @@ char    absorr[8];                      /* Uppercase command         */
 
             /* Update absolute storage */
             regs->mainstor[aaddr] = newval[i];
-            STORAGE_KEY(aaddr, regs) |= (STORKEY_REF | STORKEY_CHANGE);
+
         } /* end for(i) */
     }
 
     /* Limit the amount to be displayed to a reasonable value */
-    LIMIT_RANGE( saddr, eaddr, RANGE_LIMIT );
+    LIMIT_RANGE( saddr, eaddr, _64_KILOBYTE );
 
     /* Display real or absolute storage */
     if ((totamt = (eaddr - saddr) + 1) > 0)
@@ -577,9 +582,12 @@ char    absorr[8];                      /* Uppercase command         */
                 break;
             }
 
-            /* Display storage key for this page */
+            /* Display storage key for this page. Note: we use the
+               internal "_get_storage_key" function here so that we
+               can display our STORKEY_BADFRM bit too, if it's set.
+            */
             MSGBUF( buf, "A:"F_RADR"  K:%2.2X",
-                aaddr, STORAGE_KEY( aaddr, regs ));
+                aaddr, ARCH_DEP( _get_storage_key )( aaddr, SKEY_K ));
             WRMSG( HHC02290, "I", buf );
 
             /* Now hexdump that absolute page */
@@ -693,8 +701,8 @@ size_t  totamt;                         /* Total amount to be dumped */
 
     /* Alter virtual storage */
     if (len > 0
-        && ARCH_DEP(virt_to_real) (&raddr, &stid, saddr, arn, regs, ACCTYPE_LRA) == 0
-        && ARCH_DEP(virt_to_real) (&raddr, &stid, eaddr, arn, regs, ACCTYPE_LRA) == 0
+        && ARCH_DEP(virt_to_real) (&raddr, &stid, saddr, arn, regs, ACCTYPE_HW) == 0
+        && ARCH_DEP(virt_to_real) (&raddr, &stid, eaddr, arn, regs, ACCTYPE_HW) == 0
     )
     {
         for (i=0; i < len; i++)
@@ -704,7 +712,7 @@ size_t  totamt;                         /* Total amount to be dumped */
 
             /* Convert virtual address to real address */
             xcode = ARCH_DEP(virt_to_real) (&raddr, &stid, vaddr,
-                arn, regs, ACCTYPE_LRA);
+                arn, regs, ACCTYPE_HW);
             ARCH_DEP( bldtrans )(regs, arn, stid, trans, sizeof(trans));
 
             /* Check for Translation Exception */
@@ -729,12 +737,11 @@ size_t  totamt;                         /* Total amount to be dumped */
 
             /* Update absolute storage */
             regs->mainstor[aaddr] = newval[i];
-            STORAGE_KEY(aaddr, regs) |= (STORKEY_REF | STORKEY_CHANGE);
         }
     }
 
     /* Limit the amount to be displayed to a reasonable value */
-    LIMIT_RANGE( saddr, eaddr, RANGE_LIMIT );
+    LIMIT_RANGE( saddr, eaddr, _64_KILOBYTE );
 
     /* Display virtual storage */
     if ((totamt = (eaddr - saddr) + 1) > 0)
@@ -757,7 +764,7 @@ size_t  totamt;                         /* Total amount to be dumped */
 
             /* Convert virtual address to real address */
             xcode = ARCH_DEP( virt_to_real )( &raddr, &stid, vaddr,
-                arn, regs, ACCTYPE_LRA );
+                arn, regs, ACCTYPE_HW );
             ARCH_DEP( bldtrans )(regs, arn, stid, trans, sizeof(trans));
 
             /* Check for Translation Exception */
@@ -780,9 +787,13 @@ size_t  totamt;                         /* Total amount to be dumped */
                     break;  /* (no sense in continuing) */
                 }
 
-                /* Display storage key for page and how translated */
+                /* Display storage key for page and how translated. Note: we
+                   use the internal "_get_storage_key" function here so that
+                   we can display our STORKEY_BADFRM bit too, if it's set.
+                */
                 MSGBUF( buf, "R:"F_RADR"  K:%2.2X  %s",
-                    raddr, STORAGE_KEY( aaddr, regs ), trans );
+                    raddr, ARCH_DEP( _get_storage_key )( aaddr, SKEY_K ), trans );
+
                 WRMSG( HHC02291, "I", buf );
 
                 /* Now hexdump that absolute page */
@@ -825,6 +836,8 @@ char    op1_stor_msg[128]   = {0};
 char    op2_stor_msg[128]   = {0};
 char    regs_msg_buf[4*512] = {0};
 
+    PTT_PGM( "dinst", inst, 0, pgmint );
+
     /* Ensure storage exists to attempt the display */
     if (iregs->mainlim == 0)
     {
@@ -835,6 +848,7 @@ char    regs_msg_buf[4*512] = {0};
     n = 0;
     buf[0] = '\0';
 
+    /* Get a working (modifiable) copy of the REGS */
     if (iregs->ghostregs)
         regs = iregs;
     else if (!(regs = copy_regs( iregs )))
@@ -842,26 +856,7 @@ char    regs_msg_buf[4*512] = {0};
 
 #if defined( _FEATURE_SIE )
     if (SIE_MODE( regs ))
-        n += snprintf( buf + n, sizeof( buf )-n, "SIE: " );
-#endif
-
-    /* Display the PSW */
-    memset( qword, 0, sizeof( qword ));
-    copy_psw( regs, qword );
-
-    if (sysblk.cpus > 1)
-        n += snprintf( buf + n, sizeof( buf )-n, "%s%02X: ", PTYPSTR( regs->cpuad ), regs->cpuad );
-
-    n += snprintf( buf + n, sizeof( buf )-n,
-                "PSW=%2.2X%2.2X%2.2X%2.2X%2.2X%2.2X%2.2X%2.2X ",
-                qword[0], qword[1], qword[2], qword[3],
-                qword[4], qword[5], qword[6], qword[7] );
-
-#if defined( FEATURE_001_ZARCH_INSTALLED_FACILITY )
-    n += snprintf (buf + n, sizeof(buf)-n,
-                "%2.2X%2.2X%2.2X%2.2X%2.2X%2.2X%2.2X%2.2X ",
-                qword[8], qword[9], qword[10], qword[11],
-                qword[12], qword[13], qword[14], qword[15]);
+        n += idx_snprintf( n, buf, sizeof( buf ), "SIE: " );
 #endif
 
     /* Exit if instruction is not valid */
@@ -881,16 +876,52 @@ char    regs_msg_buf[4*512] = {0};
         return;
     }
 
-    /* Extract the opcode and determine the instruction length */
+    /* Save the opcode and determine the instruction length */
     opcode = inst[0];
     ilc = ILC( opcode );
 
+    PTT_PGM( "dinst op,ilc", opcode, ilc, pgmint );
+
+    /* If we were called to display the instruction that program
+       checked, then since the "iregs" REGS value that was passed
+       to us (that we made a working copy of) was pointing PAST
+       the instruction that actually program checked (not at it),
+       we need to backup by the ilc amount so that it points at
+       the instruction that program checked, not past it.
+    */
+    PTT_PGM( "dinst ip,IA", regs->ip, regs->psw.IA, pgmint );
+    if (pgmint)
+    {
+        regs->ip -= ilc;
+        regs->psw.IA = PSW_IA_FROM_IP( regs, 0 );
+    }
+    PTT_PGM( "dinst ip,IA", regs->ip, regs->psw.IA, pgmint );
+
+    /* Display the PSW */
+    memset( qword, 0, sizeof( qword ));
+    copy_psw( regs, qword );
+
+    if (sysblk.cpus > 1)
+        n += idx_snprintf( n, buf, sizeof( buf ), "%s%02X: ", PTYPSTR( regs->cpuad ), regs->cpuad );
+
+    n += idx_snprintf( n, buf, sizeof( buf ),
+                "PSW=%2.2X%2.2X%2.2X%2.2X%2.2X%2.2X%2.2X%2.2X ",
+                qword[0], qword[1], qword[2], qword[3],
+                qword[4], qword[5], qword[6], qword[7] );
+
+#if defined( FEATURE_001_ZARCH_INSTALLED_FACILITY )
+    n += idx_snprintf( n, buf, sizeof(buf),
+                "%2.2X%2.2X%2.2X%2.2X%2.2X%2.2X%2.2X%2.2X ",
+                qword[8], qword[9], qword[10], qword[11],
+                qword[12], qword[13], qword[14], qword[15]);
+#endif
+
     /* Format instruction line */
-                 n += snprintf( buf + n, sizeof( buf )-n, "INST=%2.2X%2.2X", inst[0], inst[1] );
-    if (ilc > 2) n += snprintf( buf + n, sizeof( buf )-n, "%2.2X%2.2X",      inst[2], inst[3] );
-    if (ilc > 4) n += snprintf( buf + n, sizeof( buf )-n, "%2.2X%2.2X",      inst[4], inst[5] );
-                 n += snprintf( buf + n, sizeof( buf )-n, " %s", (ilc < 4) ? "        " :
-                                                                 (ilc < 6) ? "    " : "" );
+                 n += idx_snprintf( n, buf, sizeof( buf ), "INST=%2.2X%2.2X", inst[0], inst[1] );
+    if (ilc > 2){n += idx_snprintf( n, buf, sizeof( buf ), "%2.2X%2.2X",      inst[2], inst[3] );}
+    if (ilc > 4){n += idx_snprintf( n, buf, sizeof( buf ), "%2.2X%2.2X",      inst[4], inst[5] );}
+                 n += idx_snprintf( n, buf, sizeof( buf ), " %s", (ilc < 4) ? "        " :
+                                                                  (ilc < 6) ? "    " : "" );
     n += PRINT_INST( inst, buf + n );
     MSGBUF( psw_inst_msg, MSG( HHC02324, "I", buf ));
 
@@ -923,9 +954,9 @@ char    regs_msg_buf[4*512] = {0};
         /* Apply indexing for RX/RXE/RXF instructions */
         if (0
             || (opcode >= 0x40 && opcode <= 0x7F)
-            || opcode == 0xB1   // LRA
-            || opcode == 0xE3   // RXY-x
-            || opcode == 0xED   // RXE-x, RXF-x, RXY-x, RSL-x
+            ||  opcode == 0xB1   // LRA
+            ||  opcode == 0xE3   // RXY-x
+            ||  opcode == 0xED   // RXE-x, RXF-x, RXY-x, RSL-x
         )
         {
             x1 = inst[1] & 0x0F;
@@ -1011,19 +1042,18 @@ char    regs_msg_buf[4*512] = {0};
         || opcode == 0xC6   // RIL-x  (relative)
     )
     {
-        S64 offset = 2LL * (S32) (fetch_fw( inst+2 ));
-        addr1 = (!regs->execflag) ? PSW_IA( regs, offset )
-            : (regs->ET + offset) & ADDRESS_MAXWRAP( regs );
+        S64 offset;
+        S32 relative_long_operand = fetch_fw( inst+2 );
+        offset = 2LL * relative_long_operand;
+        addr1 = PSW_IA_FROM_IP( regs, 0 );  // (current instruction address)
+
+        PTT_PGM( "dinst rel1:", addr1, offset, relative_long_operand );
+
+        addr1 += (VADR)offset;      // (plus relative offset)
+        addr1 &= ADDRESS_MAXWRAP( regs );
         b1 = 0;
 
-        /* If we were called to display the instruction that
-           program checked, then since the PSW's IA is pointing
-           PAST the instruction (and not at it) and the operand
-           is relative to the instruction, then we need to make
-           a minor adjustment to our calculated operand address.
-        */
-        if (pgmint)         // ("display_pgmint_inst" call?)
-            addr1 -= ilc;   // (yes, adjust operand address)
+        PTT_PGM( "dinst rel1=", addr1, offset, relative_long_operand );
     }
 
     /* Format storage at first storage operand location */
@@ -1034,26 +1064,26 @@ char    regs_msg_buf[4*512] = {0};
 
 #if defined( _FEATURE_SIE )
         if (SIE_MODE( regs ))
-            n += snprintf( buf2 + n, sizeof( buf2 )-n, "SIE: " );
+            n += idx_snprintf( n, buf2, sizeof( buf2 ), "SIE: " );
 #endif
         if (sysblk.cpus > 1)
-            n += snprintf( buf2 + n, sizeof( buf2 )-n, "%s%02X: ",
+            n += idx_snprintf( n, buf2, sizeof( buf2 ), "%s%02X: ",
                           PTYPSTR( regs->cpuad ), regs->cpuad );
 
         if (REAL_MODE( &regs->psw ))
             ARCH_DEP( display_virt )( regs, addr1, buf2+n, sizeof( buf2 )-n-1,
-                                      USE_REAL_ADDR, ACCTYPE_READ, "", &xcode );
+                                      USE_REAL_ADDR, ACCTYPE_HW, "", &xcode );
         else
             ARCH_DEP( display_virt )( regs, addr1, buf2+n, sizeof( buf2 )-n-1,
-                                      b1, (opcode == 0x44
+                                      b1, (opcode == 0x44                 // EX?
 #if defined( FEATURE_035_EXECUTE_EXTN_FACILITY )
-                                 || (opcode == 0xc6 && !(inst[1] & 0x0f))
+                                 || (opcode == 0xc6 && !(inst[1] & 0x0f)) // EXRL?
 #endif
-                                                ? ACCTYPE_INSTFETCH :
-                                 opcode == 0xB1 ? ACCTYPE_LRA :
-                                                  ACCTYPE_READ ), "", &xcode );
+                                                ? ACCTYPE_HW :     // EX/EXRL
+                                 opcode == 0xB1 ? ACCTYPE_HW :
+                                                  ACCTYPE_HW ), "", &xcode );
 
-        MSGBUF( op1_stor_msg, MSG( HHC02326, "I", buf2 ));
+        MSGBUF( op1_stor_msg, MSG( HHC02326, "I", RTRIM( buf2 )));
     }
 
     /* Format storage at second storage operand location */
@@ -1065,10 +1095,10 @@ char    regs_msg_buf[4*512] = {0};
 
 #if defined(_FEATURE_SIE)
         if (SIE_MODE( regs ))
-            n += snprintf( buf2 + n, sizeof( buf2 )-n, "SIE: " );
+            n += idx_snprintf( n, buf2, sizeof( buf2 ), "SIE: " );
 #endif
         if (sysblk.cpus > 1)
-            n += snprintf( buf2 + n, sizeof( buf2 )-n, "%s%02X: ",
+            n += idx_snprintf( n, buf2, sizeof( buf2 ), "%s%02X: ",
                            PTYPSTR( regs->cpuad ), regs->cpuad );
         if (0
             || REAL_MODE( &regs->psw )
@@ -1080,9 +1110,9 @@ char    regs_msg_buf[4*512] = {0};
             ar = USE_REAL_ADDR;
 
         ARCH_DEP( display_virt )( regs, addr2, buf2+n, sizeof( buf2 )-n-1,
-                                  ar, ACCTYPE_READ, "", &xcode );
+                                  ar, ACCTYPE_HW, "", &xcode );
 
-        MSGBUF( op2_stor_msg, MSG( HHC02326, "I", buf2 ));
+        MSGBUF( op2_stor_msg, MSG( HHC02326, "I", RTRIM( buf2 )));
     }
 
     /* Format registers associated with the instruction */
@@ -1107,7 +1137,7 @@ char    regs_msg_buf[4*512] = {0};
     if (!iregs->ghostregs)
         free_aligned( regs );
 
-} /* end function display_inst */
+} /* end function display_inst_adj */
 
 /*-------------------------------------------------------------------*/
 /*                    display_inst                                   */
@@ -1123,6 +1153,20 @@ void ARCH_DEP( display_inst )( REGS* iregs, BYTE* inst )
 void ARCH_DEP( display_pgmint_inst )( REGS* iregs, BYTE* inst )
 {
     ARCH_DEP( display_inst_adj )( iregs, inst, true );
+}
+
+/*-------------------------------------------------------------------*/
+/*                    display_guest_inst                             */
+/*-------------------------------------------------------------------*/
+void ARCH_DEP( display_guest_inst )( REGS* regs, BYTE* inst )
+{
+    switch (GUESTREGS->arch_mode)
+    {
+    case ARCH_370_IDX: s370_display_inst( GUESTREGS, inst ); break;
+    case ARCH_390_IDX: s390_display_inst( GUESTREGS, inst ); break;
+    case ARCH_900_IDX: z900_display_inst( GUESTREGS, inst ); break;
+    default: CRASH();
+    }
 }
 
 /*-------------------------------------------------------------------*/
@@ -1411,21 +1455,21 @@ static int display_regs32(char *hdr,U16 cpuad,U32 *r,int numcpus,char *buf,int b
         {
             if(i)
             {
-                len+=snprintf(buf+len, buflen-len, "%s", "\n");
+                len += idx_snprintf( len, buf, buflen, "%s", "\n" );
             }
-            len+=snprintf(buf+len, buflen-len, "%s", msghdr);
+            len += idx_snprintf( len, buf, buflen, "%s", msghdr );
             if(numcpus>1)
             {
-                len+=snprintf(buf+len,buflen-len,"%s%02X: ", PTYPSTR(cpuad), cpuad);
+                len += idx_snprintf( len, buf, buflen, "%s%02X: ", PTYPSTR(cpuad), cpuad );
             }
         }
         if(i%4)
         {
-            len+=snprintf(buf+len,buflen-len,"%s", " ");
+            len += idx_snprintf( len, buf, buflen, "%s", " ");
         }
-        len+=snprintf(buf+len,buflen-len,"%s%2.2d=%8.8"PRIX32,hdr,i,r[i]);
+        len += idx_snprintf( len, buf, buflen, "%s%2.2d=%8.8"PRIX32, hdr, i, r[i] );
     }
-    len+=snprintf(buf+len,buflen-len,"%s","\n");
+    len += idx_snprintf( len, buf, buflen, "%s", "\n" );
     return(len);
 }
 
@@ -1436,7 +1480,7 @@ static int display_regs64(char *hdr,U16 cpuad,U64 *r,int numcpus,char *buf,int b
     int i;
     int rpl;
     int len=0;
-    if(numcpus>1 && !(sysblk.insttrace || sysblk.inststep) )
+    if(numcpus>1 && !(sysblk.insttrace || sysblk.instbreak) )
     {
         rpl=2;
     }
@@ -1450,21 +1494,21 @@ static int display_regs64(char *hdr,U16 cpuad,U64 *r,int numcpus,char *buf,int b
         {
             if(i)
             {
-                len+=snprintf(buf+len,buflen-len,"%s", "\n");
+                len += idx_snprintf( len, buf, buflen, "%s", "\n" );
             }
-            len+=snprintf(buf+len,buflen-len, "%s", msghdr);
+            len += idx_snprintf( len, buf, buflen, "%s", msghdr );
             if(numcpus>1)
             {
-                len+=snprintf(buf+len,buflen-len,"%s%02X: ", PTYPSTR(cpuad), cpuad);
+                len += idx_snprintf( len, buf, buflen, "%s%02X: ", PTYPSTR(cpuad), cpuad );
             }
         }
         if(i%rpl)
         {
-            len+=snprintf(buf+len,buflen-len,"%s"," ");
+            len += idx_snprintf( len, buf, buflen, "%s", " " );
         }
-        len+=snprintf(buf+len,buflen-len,"%s%1.1X=%16.16"PRIX64,hdr,i,r[i]);
+        len += idx_snprintf( len, buf, buflen, "%s%1.1X=%16.16"PRIX64, hdr, i, r[i] );
     }
-    len+=snprintf(buf+len,buflen-len,"%s","\n");
+    len += idx_snprintf( len, buf, buflen, "%s", "\n" );
     return(len);
 }
 
@@ -1521,7 +1565,7 @@ static int display_inst_regs (REGS *regs, BYTE *inst, BYTE opcode, char *buf, in
                                 || (opcode == 0xED && (inst[1] >= 0xA8 && inst[1] <= 0xAF)))   /* RXE DFP conversions  */
         )
     {
-        len += snprintf(buf + len, buflen - len, MSG(HHC02276,"I", regs->fpc));
+        len += idx_snprintf( len, buf, buflen, MSG( HHC02276,"I", regs->fpc ));
     }
 
     /* Display floating-point registers if appropriate */
@@ -1542,7 +1586,7 @@ static int display_inst_regs (REGS *regs, BYTE *inst, BYTE opcode, char *buf, in
     }
 
     if (len && sysblk.showregsfirst)
-        len += snprintf( buf + len, buflen - len, "\n" );
+        len += idx_snprintf( len, buf, buflen, "\n" );
 
     return len;
 }
@@ -1690,13 +1734,13 @@ int display_subchannel (DEVBLK *dev, char *buf, int buflen, char *hdr)
     union ByteToBits { struct BITS b; U8 status; } u;
     int len = 0;
 
-    len+=snprintf(buf+len,buflen-len,
+    len += idx_snprintf( len, buf, buflen,
         "%s%1d:%04X D/T%04X\n",
         hdr, LCSS_DEVNUM, dev->devtype);
 
     if (ARCH_370_IDX == sysblk.arch_mode)
     {
-        len+=snprintf(buf+len,buflen-len,
+        len += idx_snprintf( len, buf, buflen,
             "%s  CSW Flags:%2.2X CCW:%2.2X%2.2X%2.2X            Flags\n"
             "%s         US:%2.2X  CS:%2.2X Count:%2.2X%2.2X       (Key) Subchannel key          %1.1X\n"
             "%s                                       (S)   Suspend control         %1.1X\n"
@@ -1712,7 +1756,7 @@ int display_subchannel (DEVBLK *dev, char *buf, int buflen, char *hdr)
             hdr, (dev->scsw.flag0 & SCSW0_CC));
     }
 
-    len+=snprintf(buf+len,buflen-len,
+    len += idx_snprintf( len, buf, buflen,
         "%s  Subchannel Number[%04X]\n"
         "%s    Path Management Control Word (PMCW)\n"
         "%s  IntParm:%2.2X%2.2X%2.2X%2.2X\n"
@@ -1738,7 +1782,7 @@ int display_subchannel (DEVBLK *dev, char *buf, int buflen, char *hdr)
         hdr,dev->pmcw.zone, dev->pmcw.flag25,
         dev->pmcw.flag26, dev->pmcw.flag27);
 
-    len+=snprintf(buf+len,buflen-len,
+    len += idx_snprintf( len, buf, buflen,
         "%s  Subchannel Status Word (SCSW)\n"
         "%s    Flags: %2.2X%2.2X  Subchan Ctl: %2.2X%2.2X     (FC)  Function Control\n"
         "%s      CCW: %2.2X%2.2X%2.2X%2.2X                          Start                   %1.1X\n"
@@ -1796,7 +1840,7 @@ int display_subchannel (DEVBLK *dev, char *buf, int buflen, char *hdr)
         hdr, (dev->scsw.flag2 & SCSW2_Q)        >> 7);
 
     u.status = (U8)dev->scsw.unitstat;
-    len+=snprintf(buf+len,buflen-len,
+    len += idx_snprintf( len, buf, buflen,
         "%s    %s %s%s%s%s%s%s%s%s%s\n",
         hdr, status_type[(sysblk.arch_mode == ARCH_370_IDX)],
         u.status == 0 ? "is Normal" : "",
@@ -1810,7 +1854,7 @@ int display_subchannel (DEVBLK *dev, char *buf, int buflen, char *hdr)
         u.b.b7 ? "UE " : "");
 
     u.status = (U8)dev->scsw.chanstat;
-    len+=snprintf(buf+len,buflen-len,
+    len += idx_snprintf( len, buf, buflen,
         "%s    %s %s%s%s%s%s%s%s%s%s\n",
         hdr, status_type[2],
         u.status == 0 ? "is Normal" : "",
@@ -1836,7 +1880,7 @@ int display_subchannel (DEVBLK *dev, char *buf, int buflen, char *hdr)
   #define BUSYSHAREABLELINE_VALUE       hdr, dev->busy,
 #endif // defined( OPTION_SHARED_DEVICES )
 
-    len+=snprintf(buf+len,buflen-len,
+    len += idx_snprintf( len, buf, buflen,
         "%s  DEVBLK Status\n"
         BUSYSHAREABLELINE_PATTERN
         "%s    suspended        %1.1X    console       %1.1X    rlen3270 %5d\n"
@@ -1882,8 +1926,8 @@ int display_subchannel (DEVBLK *dev, char *buf, int buflen, char *hdr)
 /*           start/end/value are returned in saddr, eaddr, newval    */
 /*      -1 = error message issued                                    */
 /*-------------------------------------------------------------------*/
-static int parse_range (char *operand, U64 maxadr, U64 *sadrp,
-                        U64 *eadrp, BYTE *newval)
+DLL_EXPORT int parse_range (char *operand, U64 maxadr, U64 *sadrp,
+                            U64 *eadrp, BYTE *newval)
 {
 U64     opnd1, opnd2;                   /* Address/length operands   */
 U64     saddr, eaddr;                   /* Range start/end addresses */
@@ -2003,8 +2047,8 @@ void get_connected_client (DEVBLK* dev, char** pclientip, char** pclientname)
 }
 
 /*-------------------------------------------------------------------*/
-/*  Return the address of a regs structure to be used for address    */
-/*  translation.  This address should be freed by the caller.        */
+/*  Return the address of a REGS structure to be used for address    */
+/*  translation.  Use "free_aligned" to free the returned pointer.   */
 /*-------------------------------------------------------------------*/
 DLL_EXPORT REGS* copy_regs( REGS* regs )
 {
@@ -2027,7 +2071,7 @@ DLL_EXPORT REGS* copy_regs( REGS* regs )
     memset( &newregs->tlb.vaddr, 0, TLBN * sizeof( DW ));
 
     newregs->tlbID      = 1;
-    newregs->ghostregs  = 1;
+    newregs->ghostregs  = 1;      /* indicate these aren't real regs */
     HOST(  newregs )    = newregs;
     GUEST( newregs )    = NULL;
     newregs->sie_active = 0;
@@ -2041,7 +2085,7 @@ DLL_EXPORT REGS* copy_regs( REGS* regs )
         memset( &hostregs->tlb.vaddr, 0, TLBN * sizeof( DW ));
 
         hostregs->tlbID     = 1;
-        hostregs->ghostregs = 1;
+        hostregs->ghostregs = 1;  /* indicate these aren't real regs */
 
         HOST(  hostregs )   = hostregs;
         GUEST( hostregs )   = newregs;
@@ -2941,6 +2985,7 @@ void alter_display_real_or_abs (REGS *regs, int argc, char *argv[], char *cmdlin
         case ARCH_900_IDX:
             z900_alter_display_real_or_abs (regs, argc, argv, cmdline); break;
 #endif
+        default: CRASH();
     }
 
 } /* end function alter_display_real_or_abs */
@@ -2968,6 +3013,7 @@ void alter_display_virt (REGS *iregs, int argc, char *argv[], char *cmdline)
         case ARCH_900_IDX:
             z900_alter_display_virt (regs, argc, argv, cmdline); break;
 #endif
+        default: CRASH();
     }
 
     if (!iregs->ghostregs)
@@ -3000,6 +3046,7 @@ void disasm_stor(REGS *iregs, int argc, char *argv[], char *cmdline)
             z900_disasm_stor(regs, argc, argv, cmdline);
             break;
 #endif
+        default: CRASH();
     }
 
     if (!iregs->ghostregs)

@@ -26,6 +26,11 @@
 /* Thus  for  preconfigured FreeBSD interfaces we need to modify the */
 /* name of the character file being opened.                          */
 
+/* On NetBSD you open /dev/tun<n> which must be given by the user,   */
+/* who has pre-configured that tunnel for use.                       */
+/* If you want a L2 (ethernet) interface, open /dev/tap or           */
+/* /dev/tap<n>.  You cannot switch from one mode to the other.       */
+
 
 #include "hstdinc.h"
 
@@ -71,6 +76,7 @@ static void tuntap_term( void* arg )
 //
 // TUNTAP_SetMode           (TUNTAP_CreateInterface helper)
 //
+#if defined(__linux__) || defined(OPTION_W32_CTCI)
 static int TUNTAP_SetMode (int fd, struct hifr *hifr, int iFlags)
 {
     int rc;
@@ -157,6 +163,7 @@ static int TUNTAP_SetMode (int fd, struct hifr *hifr, int iFlags)
 
     return rc;
 }   // End of function  TUNTAP_SetMode()
+#endif /* __linux__ || OPTION_W32_CTCI */
 
 
 //
@@ -248,6 +255,7 @@ int             TUNTAP_CreateInterface( char* pszTUNDevice,
     if ( strncasecmp( utsbuf.sysname, "linux",  5 ) == 0 )
 #endif
     {
+#if defined (__linux__) || defined(OPTION_W32_CTCI)
         // Linux kernel (builtin tun device) or Windows
         struct hifr hifr;
 
@@ -271,10 +279,18 @@ int             TUNTAP_CreateInterface( char* pszTUNDevice,
         }
 
         strcpy( pszNetDevName, hifr.hifr_name );
+#endif /* __linux__ || OPTION_W32_CTCI */
     }
 #if !defined( OPTION_W32_CTCI )
     else
     {
+        if ((iFlags & IFF_TUN) && !strstr(pszTUNDevice, "tun")) {
+             WRMSG( HHC00156, "W", pszTUNDevice );
+        }
+        if ((iFlags & IFF_TAP) && !strstr(pszTUNDevice, "tap")) {
+             WRMSG( HHC00157, "W", pszTUNDevice );
+        }
+
         // Other OS: Simply use basename of the device
         // Notes: (JAP) This is problematic at best. Until we have a
         //        clean FreeBSD compile from the base tree I can't
@@ -1389,8 +1405,7 @@ void net_data_trace( DEVBLK* pDEVBLK, BYTE* pAddr, int iLen, BYTE bDir, BYTE bSe
         print_ebcdic[sizeof(print_ebcdic)-1] = '\0';          /* with null termination */
         memset( print_line, 0, sizeof( print_line ) );
 
-        snprintf((char *) print_line, sizeof(print_line), "+%4.4X%c ", offset, bDir );
-        print_line[sizeof(print_line)-1] = '\0';            /* force null termination */
+        MSGBUF(print_line, "+%4.4X%c ", offset, bDir );
 
         for( i = 0; i < 16; i++ )
         {
@@ -1398,7 +1413,7 @@ void net_data_trace( DEVBLK* pDEVBLK, BYTE* pAddr, int iLen, BYTE bDir, BYTE bSe
 
             if( offset < iLen )
             {
-                snprintf((char *) tmp, 32, "%2.2X", c );
+                MSGBUF(tmp,"%2.2X", c );
                 tmp[sizeof(tmp)-1] = '\0';
                 STRLCAT( print_line, tmp );
 

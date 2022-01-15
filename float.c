@@ -3482,7 +3482,7 @@ int     i1, i2;
 
     RR(inst, regs, r1, r2);
 
-    TRAN_FLOAT_INSTR_CHECK( regs );
+    CONTRAN_INSTR_CHECK( regs );
     HFPREG2_CHECK(r1, r2, regs);
 
     i1 = FPR2I(r1);
@@ -4040,7 +4040,7 @@ int     r1, r2;                         /* Values of R fields        */
 
     RR(inst, regs, r1, r2);
 
-    TRAN_FLOAT_INSTR_CHECK( regs );
+    CONTRAN_INSTR_CHECK( regs );
     HFPREG2_CHECK(r1, r2, regs);
 
     /* Copy register content */
@@ -4334,7 +4334,7 @@ U64     dreg;                           /* Double word workarea      */
 
     RX(inst, regs, r1, b2, effective_addr2);
 
-    TRAN_FLOAT_INSTR_CHECK( regs );
+    CONTRAN_INSTR_CHECK( regs );
     HFPREG_CHECK(r1, regs);
 
     i1 = FPR2I(r1);
@@ -4397,7 +4397,7 @@ U64     dreg;                           /* Double word workarea      */
 
     RX(inst, regs, r1, b2, effective_addr2);
 
-    TRAN_FLOAT_INSTR_CHECK( regs );
+    CONTRAN_INSTR_CHECK( regs );
     HFPREG_CHECK(r1, regs);
 
     i1 = FPR2I(r1);
@@ -4708,7 +4708,7 @@ VADR    effective_addr2;                /* Effective address         */
 
     RX(inst, regs, r1, b2, effective_addr2);
 
-    TRAN_FLOAT_INSTR_CHECK( regs );
+    CONTRAN_INSTR_CHECK( regs );
     HFPREG_CHECK(r1, regs);
 
     /* Store register contents at operand address */
@@ -4727,7 +4727,7 @@ VADR    effective_addr2;                /* Effective address         */
 
     RX(inst, regs, r1, b2, effective_addr2);
 
-    TRAN_FLOAT_INSTR_CHECK( regs );
+    CONTRAN_INSTR_CHECK( regs );
     HFPREG_CHECK(r1, regs);
 
     /* Update first 32 bits of register from operand address */
@@ -7222,7 +7222,7 @@ int     i1, i2;                         /* Index into fpr array      */
 
     RRE(inst, regs, r1, r2);
 
-    TRAN_FLOAT_INSTR_CHECK( regs );
+    CONTRAN_INSTR_CHECK( regs );
     HFPODD2_CHECK(r1, r2, regs);
 
     i1 = FPR2I(r1);
@@ -7247,7 +7247,7 @@ int     i1;                             /* Index of R1 in fpr array  */
 
     RRE(inst, regs, r1, r2);
 
-    TRAN_FLOAT_INSTR_CHECK( regs );
+    CONTRAN_INSTR_CHECK( regs );
     HFPREG_CHECK(r1, regs);
 
     i1 = FPR2I(r1);
@@ -7268,7 +7268,7 @@ int     i1;                             /* Index of R1 in fpr array  */
 
     RRE(inst, regs, r1, r2);
 
-    TRAN_FLOAT_INSTR_CHECK( regs );
+    CONTRAN_INSTR_CHECK( regs );
     HFPREG_CHECK(r1, regs);
 
     i1 = FPR2I(r1);
@@ -7290,7 +7290,7 @@ int     i1;                             /* Index of R1 in fpr array  */
 
     RRE(inst, regs, r1, r2);
 
-    TRAN_FLOAT_INSTR_CHECK( regs );
+    CONTRAN_INSTR_CHECK( regs );
     HFPODD_CHECK(r1, regs);
 
     i1 = FPR2I(r1);
@@ -8082,7 +8082,7 @@ VADR    effective_addr2;                /* Effective address         */
 
     RXY(inst, regs, r1, b2, effective_addr2);
 
-    TRAN_FLOAT_INSTR_CHECK( regs );
+    CONTRAN_INSTR_CHECK( regs );
     HFPREG_CHECK(r1, regs);
 
     /* Update first 32 bits of register from operand address */
@@ -8103,7 +8103,7 @@ U64     dreg;                           /* Double word workarea      */
 
     RXY(inst, regs, r1, b2, effective_addr2);
 
-    TRAN_FLOAT_INSTR_CHECK( regs );
+    CONTRAN_INSTR_CHECK( regs );
     HFPREG_CHECK(r1, regs);
 
     i1 = FPR2I(r1);
@@ -8128,7 +8128,7 @@ VADR    effective_addr2;                /* Effective address         */
 
     RXY(inst, regs, r1, b2, effective_addr2);
 
-    TRAN_FLOAT_INSTR_CHECK( regs );
+    CONTRAN_INSTR_CHECK( regs );
     HFPREG_CHECK(r1, regs);
 
     /* Store register contents at operand address */
@@ -8149,7 +8149,7 @@ U64     dreg;                           /* Double word workarea      */
 
     RXY(inst, regs, r1, b2, effective_addr2);
 
-    TRAN_FLOAT_INSTR_CHECK( regs );
+    CONTRAN_INSTR_CHECK( regs );
     HFPREG_CHECK(r1, regs);
 
     i1 = FPR2I(r1);

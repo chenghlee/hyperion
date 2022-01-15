@@ -1,5 +1,6 @@
 /* CCKDDASD.C   (C) Copyright Roger Bowler, 1999-2012                */
 /*              (C) Copyright Greg Smith, 2002-2012                  */
+/*              (C) and others 2013-2021                             */
 /*                                                                   */
 /*              CCKD (Compressed CKD) Device Handler                 */
 /*                                                                   */
@@ -160,8 +161,6 @@ void cckd_dasd_term_if_appropriate()
         }
     }
     release_lock( &cckdblk.ralock );
-    destroy_lock( &cckdblk.ralock );
-    destroy_condition( &cckdblk.racond );
 
     /* Terminate all garbage collection threads... */
     obtain_lock( &cckdblk.gclock );
@@ -174,8 +173,6 @@ void cckd_dasd_term_if_appropriate()
         }
     }
     release_lock( &cckdblk.gclock );
-    destroy_lock( &cckdblk.gclock );
-    destroy_condition( &cckdblk.gccond );
 
     /* Terminate all writer threads... */
     obtain_lock( &cckdblk.wrlock );
@@ -188,19 +185,11 @@ void cckd_dasd_term_if_appropriate()
         }
     }
     release_lock( &cckdblk.wrlock );
-    destroy_lock( &cckdblk.wrlock );
-    destroy_condition( &cckdblk.wrcond );
-
-    /* Finish global termination... */
-    destroy_lock( &cckdblk.devlock  );
-    destroy_condition( &cckdblk.devcond );
-    destroy_condition( &cckdblk.termcond );
-    memset( &cckdblk, 0, sizeof( CCKDBLK ));
 
 } /* end function cckd_dasd_term */
 
 /*-------------------------------------------------------------------*/
-/* CKD dasd initialization                                           */
+/* Compressed CKD dasd initialization                                */
 /*-------------------------------------------------------------------*/
 int cckd_dasd_init_handler ( DEVBLK *dev, int argc, char *argv[] )
 {
@@ -395,7 +384,12 @@ int             rc, i;                  /* Return code, Loop index   */
         cckd_sf_stats (dev);
     release_lock (&cckd->filelock);
 
-    /* free the cckd extension */
+    /* Destroy the cckd extension's locks and conditions */
+    destroy_lock( &cckd->cckdiolock );
+    destroy_lock( &cckd->filelock );
+    destroy_condition( &cckd->cckdiocond );
+
+    /* free the cckd extension itself */
     dev->cckd_ext= cckd_free (dev, "ext", cckd);
 
     if (dev->dasdsfn) free (dev->dasdsfn);
@@ -867,7 +861,6 @@ int             cache;                  /* New active cache entry    */
 
     /* read the new track */
     dev->bufupd = 0;
-    *unitstat = 0;
     cache = cckd_read_trk (dev, trk, 0, unitstat);
     if (cache < 0)
     {
@@ -1052,7 +1045,6 @@ int             maxlen;                 /* Size for cache entry      */
 
     /* Read the new blkgrp */
     dev->bufupd = 0;
-    *unitstat = 0;
     cache = cckd_read_trk (dev, blkgrp, 0, unitstat);
     if (cache < 0)
     {
@@ -3973,10 +3965,20 @@ char            pathname[MAX_PATH];     /* file path in host format  */
     /* Backup to the last opened file number */
     cckd->sfn--;
 
-    /* If the last file was opened read-only then create a new one   */
+    /* If the last file was opened read-only then create a new one */
     if (cckd->open[cckd->sfn] == CCKD_OPEN_RO)
-        if (cckd_sf_new(dev) < 0)
-            return -1;
+    {
+        /* but ONLY IF not explicit batch utility READ-ONLY open */
+        if (!(1
+              && dev->batch
+              && dev->ckdrdonly
+        ))
+        {
+            /* NOT explicit batch utility read-only open: create new shadow file */
+            if (cckd_sf_new(dev) < 0)
+                return -1;
+        }
+    }
 
     /* Re-open previous rdwr files rdonly */
     for (i = 0; i < cckd->sfn; i++)
@@ -5393,7 +5395,7 @@ BYTE            buf[256*1024];          /* Buffer                    */
                 len = (int)l2.L2_size;
                 if (i + l2.L2_len > (int)ulen) break;
 
-                CCKD_TRACE( "gcperc move trk %d at pos 0x%16.16"PRIx64" len %h",
+                CCKD_TRACE( "gcperc move trk %d at pos 0x%16.16"PRIx64" len %hu",
                             trk, upos + i, l2.L2_len);
 
                 /* Relocate the track image somewhere else */
@@ -6527,7 +6529,7 @@ void cckd_trace( const char* func, int line, DEVBLK* dev, char* fmt, ... )
         STRLCPY( todwrk, ctime( &todsecs ));// "Day Mon dd hh:mm:ss yyyy\n"
         todwrk[19] = 0;                     // "Day Mon dd hh:mm:ss"
 
-        snprintf( trcpfx, sizeof( trcpfx ),
+        MSGBUF( trcpfx,
 
             "%s.%6.6ld %1d:%04X ",          // "hh:mm:ss.uuuuuu n:CCUU "
             todwrk + 11,                    // "hh:mm:ss" (%s)

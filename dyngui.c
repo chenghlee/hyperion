@@ -167,7 +167,7 @@ REGS* CopyREGS( int cpu )               // (same logic as in panel.c)
 #endif
         regs = &copyregs;
 
-    SET_PSW_IA( regs );
+    MAYBE_SET_PSW_IA_FROM_IP( regs );
 
     release_lock( &sysblk.cpulock[cpu] );
     return regs;
@@ -206,7 +206,7 @@ void ReadInputData ( int nTimeoutMillsecs )
         if (HSO_EINTR == HSO_errno)
             return;             // (we were interrupted by a signal)
 
-        // A bona fide error occurred; abort...
+        // A bonafide error occurred; abort...
 
         WRMSG
         (
@@ -244,7 +244,7 @@ void ReadInputData ( int nTimeoutMillsecs )
         if (EINTR == errno)
             return;             // (we were interrupted by a signal)
 
-        // A bona fide error occurred; abort...
+        // A bonafide error occurred; abort...
 
         WRMSG
         (
@@ -803,7 +803,7 @@ void  UpdateCPUStatus ()
             ,psw[8], psw[9], psw[10], psw[11], psw[12], psw[13], psw[14], psw[15]
 
             ,CPUSTATE_STOPPED == pTargetCPU_REGS->cpustate ? 'M' : '.'
-            ,sysblk.inststep                               ? 'T' : '.'
+            ,sysblk.instbreak                              ? 'T' : '.'
             ,wait_bit                                      ? 'W' : '.'
             ,pTargetCPU_REGS->loadstate                    ? 'L' : '.'
             ,pTargetCPU_REGS->checkstop                    ? 'C' : '.'

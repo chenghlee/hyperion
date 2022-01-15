@@ -114,7 +114,13 @@ subdir = .
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 am__aclocal_m4_deps = $(top_srcdir)/autoconf/hercules.m4 \
 	$(top_srcdir)/autoconf/libtool.m4 \
-	$(top_srcdir)/autoconf/ltdl.m4 $(top_srcdir)/configure.ac
+	$(top_srcdir)/autoconf/ltargz.m4 \
+	$(top_srcdir)/autoconf/ltdl.m4 \
+	$(top_srcdir)/autoconf/ltoptions.m4 \
+	$(top_srcdir)/autoconf/ltsugar.m4 \
+	$(top_srcdir)/autoconf/ltversion.m4 \
+	$(top_srcdir)/autoconf/lt~obsolete.m4 \
+	$(top_srcdir)/configure.ac
 am__configure_deps = $(am__aclocal_m4_deps) $(CONFIGURE_DEPENDENCIES) \
 	$(ACLOCAL_M4)
 DIST_COMMON = $(srcdir)/Makefile.am $(top_srcdir)/configure \
@@ -294,15 +300,15 @@ am_libherc_la_OBJECTS = _archdep_templ.lo archlvl.lo assist.lo \
 	cmpscput.lo config.lo control.lo cpu.lo crypto.lo dat.lo \
 	decimal.lo dfp.lo diagmssf.lo diagnose.lo dyn76.lo ecpsvm.lo \
 	esame.lo external.lo facility.lo fillfnam.lo float.lo \
-	general1.lo general2.lo general3.lo hao.lo hconsole.lo \
-	hdiagf18.lo history.lo hRexx.lo hRexx_o.lo hRexx_r.lo \
-	hsccmd.lo hscemode.lo hscloc.lo hscmisc.lo hscpufun.lo \
-	httpserv.lo ieee.lo impl.lo io.lo ipl.lo loadmem.lo \
-	loadparm.lo losc.lo machchk.lo opcode.lo panel.lo pfpo.lo \
-	plo.lo qdio.lo scedasd.lo scescsi.lo script.lo service.lo \
-	sie.lo sr.lo stack.lo strsignal.lo tcpip.lo timer.lo trace.lo \
-	transact.lo vector.lo vm.lo vmd250.lo x75.lo xstore.lo \
-	$(am__objects_1)
+	general1.lo general2.lo general3.lo hao.lo hbyteswp.lo \
+	hconsole.lo hdiagf18.lo history.lo hRexx.lo hRexx_o.lo \
+	hRexx_r.lo hsccmd.lo hscemode.lo hscloc.lo hscmisc.lo \
+	hscpufun.lo httpserv.lo ieee.lo impl.lo inline.lo io.lo ipl.lo \
+	loadmem.lo loadparm.lo losc.lo machchk.lo machdep.lo opcode.lo \
+	panel.lo pfpo.lo plo.lo qdio.lo scedasd.lo scescsi.lo \
+	script.lo service.lo sie.lo skey.lo sr.lo stack.lo \
+	strsignal.lo tcpip.lo timer.lo trace.lo transact.lo vector.lo \
+	vm.lo vmd250.lo vstore.lo x75.lo xstore.lo $(am__objects_1)
 libherc_la_OBJECTS = $(am_libherc_la_OBJECTS)
 libherc_la_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) \
 	$(LIBTOOLFLAGS) --mode=link $(CCLD) $(AM_CFLAGS) $(CFLAGS) \
@@ -332,15 +338,14 @@ libherct_la_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) \
 libhercu_la_DEPENDENCIES = $(am__DEPENDENCIES_1) $(am__DEPENDENCIES_1) \
 	libhercs.la
 am__libhercu_la_SOURCES_DIST = codepage.c hdl.c hexdumpe.c hostinfo.c \
-	hscutl.c hsocket.c hthreads.c logger.c logmsg.c memrchr.c \
-	parser.c pttrace.c version.c fthreads.c ltdl.c
+	hscutl.c hsocket.c hthreads.c logger.c logmsg.c machdep.c \
+	memrchr.c parser.c pttrace.c version.c fthreads.c
 am__objects_2 = fthreads.lo
 @BUILD_FTHREADS_TRUE@am__objects_3 = $(am__objects_2)
-am__objects_4 = ltdl.lo
 am_libhercu_la_OBJECTS = codepage.lo hdl.lo hexdumpe.lo hostinfo.lo \
 	hscutl.lo hsocket.lo hthreads.lo logger.lo logmsg.lo \
-	memrchr.lo parser.lo pttrace.lo version.lo $(am__objects_3) \
-	$(am__objects_4)
+	machdep.lo memrchr.lo parser.lo pttrace.lo version.lo \
+	$(am__objects_3)
 libhercu_la_OBJECTS = $(am_libhercu_la_OBJECTS)
 libhercu_la_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) \
 	$(LIBTOOLFLAGS) --mode=link $(CCLD) $(AM_CFLAGS) $(CFLAGS) \
@@ -630,25 +635,26 @@ am__depfiles_remade = ./$(DEPDIR)/_archdep_templ.Plo \
 	./$(DEPDIR)/general1.Plo ./$(DEPDIR)/general2.Plo \
 	./$(DEPDIR)/general3.Plo ./$(DEPDIR)/hRexx.Plo \
 	./$(DEPDIR)/hRexx_o.Plo ./$(DEPDIR)/hRexx_r.Plo \
-	./$(DEPDIR)/hao.Plo ./$(DEPDIR)/hchan.Plo \
-	./$(DEPDIR)/hconsole.Plo ./$(DEPDIR)/hdiagf18.Plo \
-	./$(DEPDIR)/hdl.Plo ./$(DEPDIR)/hdteq.Plo \
-	./$(DEPDIR)/hercifc.Po ./$(DEPDIR)/herclin.Po \
-	./$(DEPDIR)/hetget.Po ./$(DEPDIR)/hetinit.Po \
-	./$(DEPDIR)/hetlib.Plo ./$(DEPDIR)/hetmap.Po \
-	./$(DEPDIR)/hettape.Plo ./$(DEPDIR)/hetupd.Po \
-	./$(DEPDIR)/hexdumpe.Plo ./$(DEPDIR)/history.Plo \
-	./$(DEPDIR)/hostinfo.Plo ./$(DEPDIR)/hsccmd.Plo \
-	./$(DEPDIR)/hscemode.Plo ./$(DEPDIR)/hscloc.Plo \
-	./$(DEPDIR)/hscmisc.Plo ./$(DEPDIR)/hscpufun.Plo \
-	./$(DEPDIR)/hscutl.Plo ./$(DEPDIR)/hsocket.Plo \
-	./$(DEPDIR)/hsys.Plo ./$(DEPDIR)/hthreads.Plo \
-	./$(DEPDIR)/httpserv.Plo ./$(DEPDIR)/ieee.Plo \
-	./$(DEPDIR)/impl.Plo ./$(DEPDIR)/io.Plo ./$(DEPDIR)/ipl.Plo \
+	./$(DEPDIR)/hao.Plo ./$(DEPDIR)/hbyteswp.Plo \
+	./$(DEPDIR)/hchan.Plo ./$(DEPDIR)/hconsole.Plo \
+	./$(DEPDIR)/hdiagf18.Plo ./$(DEPDIR)/hdl.Plo \
+	./$(DEPDIR)/hdteq.Plo ./$(DEPDIR)/hercifc.Po \
+	./$(DEPDIR)/herclin.Po ./$(DEPDIR)/hetget.Po \
+	./$(DEPDIR)/hetinit.Po ./$(DEPDIR)/hetlib.Plo \
+	./$(DEPDIR)/hetmap.Po ./$(DEPDIR)/hettape.Plo \
+	./$(DEPDIR)/hetupd.Po ./$(DEPDIR)/hexdumpe.Plo \
+	./$(DEPDIR)/history.Plo ./$(DEPDIR)/hostinfo.Plo \
+	./$(DEPDIR)/hsccmd.Plo ./$(DEPDIR)/hscemode.Plo \
+	./$(DEPDIR)/hscloc.Plo ./$(DEPDIR)/hscmisc.Plo \
+	./$(DEPDIR)/hscpufun.Plo ./$(DEPDIR)/hscutl.Plo \
+	./$(DEPDIR)/hsocket.Plo ./$(DEPDIR)/hsys.Plo \
+	./$(DEPDIR)/hthreads.Plo ./$(DEPDIR)/httpserv.Plo \
+	./$(DEPDIR)/ieee.Plo ./$(DEPDIR)/impl.Plo \
+	./$(DEPDIR)/inline.Plo ./$(DEPDIR)/io.Plo ./$(DEPDIR)/ipl.Plo \
 	./$(DEPDIR)/loadmem.Plo ./$(DEPDIR)/loadparm.Plo \
 	./$(DEPDIR)/logger.Plo ./$(DEPDIR)/logmsg.Plo \
-	./$(DEPDIR)/losc.Plo ./$(DEPDIR)/ltdl.Plo \
-	./$(DEPDIR)/machchk.Plo ./$(DEPDIR)/maketape.Po \
+	./$(DEPDIR)/losc.Plo ./$(DEPDIR)/machchk.Plo \
+	./$(DEPDIR)/machdep.Plo ./$(DEPDIR)/maketape.Po \
 	./$(DEPDIR)/memrchr.Plo ./$(DEPDIR)/mpc.Plo \
 	./$(DEPDIR)/netsupp.Plo ./$(DEPDIR)/omatape.Plo \
 	./$(DEPDIR)/opcode.Plo ./$(DEPDIR)/panel.Plo \
@@ -660,10 +666,10 @@ am__depfiles_remade = ./$(DEPDIR)/_archdep_templ.Plo \
 	./$(DEPDIR)/script.Plo ./$(DEPDIR)/scsitape.Plo \
 	./$(DEPDIR)/scsiutil.Plo ./$(DEPDIR)/service.Plo \
 	./$(DEPDIR)/shared.Plo ./$(DEPDIR)/sie.Plo \
-	./$(DEPDIR)/sllib.Plo ./$(DEPDIR)/sockdev.Plo \
-	./$(DEPDIR)/sr.Plo ./$(DEPDIR)/stack.Plo \
-	./$(DEPDIR)/strsignal.Plo ./$(DEPDIR)/tapeccws.Plo \
-	./$(DEPDIR)/tapecopy-scsiutil.Po \
+	./$(DEPDIR)/skey.Plo ./$(DEPDIR)/sllib.Plo \
+	./$(DEPDIR)/sockdev.Plo ./$(DEPDIR)/sr.Plo \
+	./$(DEPDIR)/stack.Plo ./$(DEPDIR)/strsignal.Plo \
+	./$(DEPDIR)/tapeccws.Plo ./$(DEPDIR)/tapecopy-scsiutil.Po \
 	./$(DEPDIR)/tapecopy-tapecopy.Po ./$(DEPDIR)/tapedev.Plo \
 	./$(DEPDIR)/tapemap.Po ./$(DEPDIR)/tapesplt.Po \
 	./$(DEPDIR)/tcpip.Plo ./$(DEPDIR)/tcpnje.Plo \
@@ -671,8 +677,9 @@ am__depfiles_remade = ./$(DEPDIR)/_archdep_templ.Plo \
 	./$(DEPDIR)/transact.Plo ./$(DEPDIR)/tuntap.Plo \
 	./$(DEPDIR)/vector.Plo ./$(DEPDIR)/version.Plo \
 	./$(DEPDIR)/vm.Plo ./$(DEPDIR)/vmd250.Plo \
-	./$(DEPDIR)/vmfplc2.Po ./$(DEPDIR)/x75.Plo \
-	./$(DEPDIR)/xstore.Plo ./$(DEPDIR)/zfcp.Plo
+	./$(DEPDIR)/vmfplc2.Po ./$(DEPDIR)/vstore.Plo \
+	./$(DEPDIR)/x75.Plo ./$(DEPDIR)/xstore.Plo \
+	./$(DEPDIR)/zfcp.Plo
 am__mv = mv -f
 COMPILE = $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) \
 	$(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS)
@@ -857,15 +864,12 @@ CCDEPMODE = @CCDEPMODE@
 CFLAGS = @CFLAGS@
 CPP = @CPP@
 CPPFLAGS = @CPPFLAGS@
-CXX = @CXX@
-CXXCPP = @CXXCPP@
-CXXDEPMODE = @CXXDEPMODE@
-CXXFLAGS = @CXXFLAGS@
 CYGPATH_W = @CYGPATH_W@
 DEFS = @DEFS@
 DEPDIR = @DEPDIR@
 DLLTOOL = @DLLTOOL@
-ECHO = @ECHO@
+DSYMUTIL = @DSYMUTIL@
+DUMPBIN = @DUMPBIN@
 ECHO_C = @ECHO_C@
 ECHO_N = @ECHO_N@
 ECHO_T = @ECHO_T@
@@ -874,30 +878,49 @@ EXEEXT = @EXEEXT@
 EXTPKG_HEADERS = @EXTPKG_HEADERS@
 EXTPKG_INCDIRS = @EXTPKG_INCDIRS@
 EXTPKG_LDADD = @EXTPKG_LDADD@
-F77 = @F77@
-FFLAGS = @FFLAGS@
+FGREP = @FGREP@
 GREP = @GREP@
 HERCIFC_GROUPNAME = @HERCIFC_GROUPNAME@
 HQA_DIR = @HQA_DIR@
 HQA_INC = @HQA_INC@
+INCLTDL = @INCLTDL@
 INSTALL = @INSTALL@
 INSTALL_DATA = @INSTALL_DATA@
 INSTALL_PROGRAM = @INSTALL_PROGRAM@
 INSTALL_SCRIPT = @INSTALL_SCRIPT@
 INSTALL_STRIP_PROGRAM = @INSTALL_STRIP_PROGRAM@
+LD = @LD@
 LDFLAGS = @LDFLAGS@
 LIBADD_DL = @LIBADD_DL@
+LIBADD_DLD_LINK = @LIBADD_DLD_LINK@
+LIBADD_DLOPEN = @LIBADD_DLOPEN@
+LIBADD_SHL_LOAD = @LIBADD_SHL_LOAD@
+LIBLTDL = @LIBLTDL@
 LIBOBJS = @LIBOBJS@
 LIBS = @LIBS@
 LIBTOOL = @LIBTOOL@
 LIBTOOL_DEPS = @LIBTOOL_DEPS@
+LIPO = @LIPO@
 LN_S = @LN_S@
+LTDLDEPS = @LTDLDEPS@
+LTDLINCL = @LTDLINCL@
+LTDLOPEN = @LTDLOPEN@
 LTLIBOBJS = @LTLIBOBJS@
+LT_ARGZ_H = @LT_ARGZ_H@
+LT_CONFIG_H = @LT_CONFIG_H@
+LT_DLLOADERS = @LT_DLLOADERS@
+LT_DLPREOPEN = @LT_DLPREOPEN@
+LT_SYS_LIBRARY_PATH = @LT_SYS_LIBRARY_PATH@
 MAINT = @MAINT@
 MAKEINFO = @MAKEINFO@
+MANIFEST_TOOL = @MANIFEST_TOOL@
 MKDIR_P = @MKDIR_P@
+NM = @NM@
+NMEDIT = @NMEDIT@
 OBJDUMP = @OBJDUMP@
 OBJEXT = @OBJEXT@
+OTOOL = @OTOOL@
+OTOOL64 = @OTOOL64@
 PACKAGE = @PACKAGE@
 PACKAGE_BUGREPORT = @PACKAGE_BUGREPORT@
 PACKAGE_NAME = @PACKAGE_NAME@
@@ -907,6 +930,7 @@ PACKAGE_URL = @PACKAGE_URL@
 PACKAGE_VERSION = @PACKAGE_VERSION@
 PATH_SEPARATOR = @PATH_SEPARATOR@
 RANLIB = @RANLIB@
+SED = @SED@
 SET_MAKE = @SET_MAKE@
 SHELL = @SHELL@
 STRIP = @STRIP@
@@ -915,9 +939,9 @@ abs_builddir = @abs_builddir@
 abs_srcdir = @abs_srcdir@
 abs_top_builddir = @abs_top_builddir@
 abs_top_srcdir = @abs_top_srcdir@
+ac_ct_AR = @ac_ct_AR@
 ac_ct_CC = @ac_ct_CC@
-ac_ct_CXX = @ac_ct_CXX@
-ac_ct_F77 = @ac_ct_F77@
+ac_ct_DUMPBIN = @ac_ct_DUMPBIN@
 am__include = @am__include@
 am__leading_dot = @am__leading_dot@
 am__quote = @am__quote@
@@ -948,6 +972,8 @@ libdir = @libdir@
 libexecdir = @libexecdir@
 localedir = @localedir@
 localstatedir = @localstatedir@
+ltdl_LIBOBJS = @ltdl_LIBOBJS@
+ltdl_LTLIBOBJS = @ltdl_LTLIBOBJS@
 mandir = @mandir@
 mkdir_p = @mkdir_p@
 modexecdir = @modexecdir@
@@ -960,6 +986,8 @@ runstatedir = @runstatedir@
 sbindir = @sbindir@
 sharedstatedir = @sharedstatedir@
 srcdir = @srcdir@
+subdirs = @subdirs@
+sys_symbol_underscore = @sys_symbol_underscore@
 sysconfdir = @sysconfdir@
 target = @target@
 target_alias = @target_alias@
@@ -980,10 +1008,11 @@ lns = @LN_S@
 ldadd = @LIBS@
 
 #------------------------------------------------------------------------------
-ACLOCAL_AMFLAGS = \
-  -I autoconf       \
-  -I m4
+# Note! Backslash line continuation is disallowed by newer versions of aclocal
+#------------------------------------------------------------------------------
+ACLOCAL_AMFLAGS = -I autoconf -I m4
 
+#------------------------------------------------------------------------------
 
 # Now simply pass those version defines on the command-line...
 AM_CPPFLAGS = -I $(top_srcdir) -I $(hqa_inc) $(extpkg_incdirs) -D \
@@ -992,7 +1021,7 @@ AM_CPPFLAGS = -I $(top_srcdir) -I $(hqa_inc) $(extpkg_incdirs) -D \
 	VERS_BLD=$(VERS_BLD)
 
 #------------------------------------------------------------------------------
-# NOte! Due to inter-module dependencies the sequence
+# Note! Due to inter-module dependencies the sequence
 #       (ordering) of the SUBDIRS list is important!
 #------------------------------------------------------------------------------
 SUBDIRS = \
@@ -1085,7 +1114,6 @@ dyndev_SRC = \
 #-----------------------------------------------------------------
 XSTATIC = 
 DYNSRC = 
-LTDL = ltdl.c
 DYNMOD_LD_FLAGS = \
   -module           \
   -no-undefined     \
@@ -1268,12 +1296,12 @@ libhercu_la_SOURCES = \
   hthreads.c          \
   logger.c            \
   logmsg.c            \
+  machdep.c           \
   memrchr.c           \
   parser.c            \
   pttrace.c           \
   version.c           \
-  $(FTHREADS)         \
-  $(LTDL)
+  $(FTHREADS)
 
 libhercu_la_LDFLAGS = $(LIB_LD_FLAGS)
 libhercu_la_LIBADD = \
@@ -1340,6 +1368,7 @@ libherc_la_SOURCES = \
   general2.c         \
   general3.c         \
   hao.c              \
+  hbyteswp.c         \
   hconsole.c         \
   hdiagf18.c         \
   history.c          \
@@ -1354,12 +1383,14 @@ libherc_la_SOURCES = \
   httpserv.c         \
   ieee.c             \
   impl.c             \
+  inline.c           \
   io.c               \
   ipl.c              \
   loadmem.c          \
   loadparm.c         \
   losc.c             \
   machchk.c          \
+  machdep.c          \
   opcode.c           \
   panel.c            \
   pfpo.c             \
@@ -1370,6 +1401,7 @@ libherc_la_SOURCES = \
   script.c           \
   service.c          \
   sie.c              \
+  skey.c             \
   sr.c               \
   stack.c            \
   strsignal.c        \
@@ -1380,12 +1412,12 @@ libherc_la_SOURCES = \
   vector.c           \
   vm.c               \
   vmd250.c           \
+  vstore.c           \
   x75.c              \
   xstore.c           \
   $(DYNSRC)
 
 EXTRA_libherc_la_SOURCES = \
-  ltdl.c             \
   memrchr.c          \
   $(dynamic_SRC)     \
   $(dyndev_SRC)      \
@@ -1605,6 +1637,9 @@ EXTRA_DIST = \
   Hercules_VS2019.sln              \
   Hercules_VS2019.vcxproj          \
   Hercules_VS2019.vcxproj.filters  \
+  Hercules_VS2022.sln              \
+  Hercules_VS2022.vcxproj          \
+  Hercules_VS2022.vcxproj.filters  \
   hercver.rc2                 \
   INSTALL                     \
   license_dyn76.txt           \
@@ -1672,6 +1707,7 @@ EXTRA_DIST = \
   readme/README.RXVT4APL.md       \
   readme/README.S37X.md           \
   readme/README.SETUID.md         \
+  readme/README.SNA.md            \
   readme/README.SUN.md            \
   readme/README.TAPE.md           \
   readme/README.TCPIP.md          \
@@ -1707,7 +1743,6 @@ noinst_HEADERS = \
   cckddasd.h              \
   ccnowarn.h              \
   ccwarn.h                \
-  chain.h                 \
   chsc.h                  \
   clock.h                 \
   cmdtab.h                \
@@ -1786,7 +1821,6 @@ noinst_HEADERS = \
   instfmts.h              \
   linklist.h              \
   logger.h                \
-  ltdl.h                  \
   machdep.h               \
   memrchr.h               \
   mpc.h                   \
@@ -1803,6 +1837,8 @@ noinst_HEADERS = \
   scsiutil.h              \
   service.h               \
   shared.h                \
+  sie.h                   \
+  skey.h                  \
   sllib.h                 \
   sockdev.h               \
   sr.h                    \
@@ -2329,6 +2365,7 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/hRexx_o.Plo@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/hRexx_r.Plo@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/hao.Plo@am__quote@ # am--include-marker
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/hbyteswp.Plo@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/hchan.Plo@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/hconsole.Plo@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/hdiagf18.Plo@am__quote@ # am--include-marker
@@ -2357,6 +2394,7 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/httpserv.Plo@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/ieee.Plo@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/impl.Plo@am__quote@ # am--include-marker
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/inline.Plo@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/io.Plo@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/ipl.Plo@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/loadmem.Plo@am__quote@ # am--include-marker
@@ -2364,8 +2402,8 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/logger.Plo@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/logmsg.Plo@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/losc.Plo@am__quote@ # am--include-marker
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/ltdl.Plo@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/machchk.Plo@am__quote@ # am--include-marker
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/machdep.Plo@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/maketape.Po@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/memrchr.Plo@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/mpc.Plo@am__quote@ # am--include-marker
@@ -2389,6 +2427,7 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/service.Plo@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/shared.Plo@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/sie.Plo@am__quote@ # am--include-marker
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/skey.Plo@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/sllib.Plo@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/sockdev.Plo@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/sr.Plo@am__quote@ # am--include-marker
@@ -2411,6 +2450,7 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/vm.Plo@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/vmd250.Plo@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/vmfplc2.Po@am__quote@ # am--include-marker
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/vstore.Plo@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/x75.Plo@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/xstore.Plo@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/zfcp.Plo@am__quote@ # am--include-marker
@@ -2918,6 +2958,7 @@ distclean: distclean-recursive
 	-rm -f ./$(DEPDIR)/hRexx_o.Plo
 	-rm -f ./$(DEPDIR)/hRexx_r.Plo
 	-rm -f ./$(DEPDIR)/hao.Plo
+	-rm -f ./$(DEPDIR)/hbyteswp.Plo
 	-rm -f ./$(DEPDIR)/hchan.Plo
 	-rm -f ./$(DEPDIR)/hconsole.Plo
 	-rm -f ./$(DEPDIR)/hdiagf18.Plo
@@ -2946,6 +2987,7 @@ distclean: distclean-recursive
 	-rm -f ./$(DEPDIR)/httpserv.Plo
 	-rm -f ./$(DEPDIR)/ieee.Plo
 	-rm -f ./$(DEPDIR)/impl.Plo
+	-rm -f ./$(DEPDIR)/inline.Plo
 	-rm -f ./$(DEPDIR)/io.Plo
 	-rm -f ./$(DEPDIR)/ipl.Plo
 	-rm -f ./$(DEPDIR)/loadmem.Plo
@@ -2953,8 +2995,8 @@ distclean: distclean-recursive
 	-rm -f ./$(DEPDIR)/logger.Plo
 	-rm -f ./$(DEPDIR)/logmsg.Plo
 	-rm -f ./$(DEPDIR)/losc.Plo
-	-rm -f ./$(DEPDIR)/ltdl.Plo
 	-rm -f ./$(DEPDIR)/machchk.Plo
+	-rm -f ./$(DEPDIR)/machdep.Plo
 	-rm -f ./$(DEPDIR)/maketape.Po
 	-rm -f ./$(DEPDIR)/memrchr.Plo
 	-rm -f ./$(DEPDIR)/mpc.Plo
@@ -2978,6 +3020,7 @@ distclean: distclean-recursive
 	-rm -f ./$(DEPDIR)/service.Plo
 	-rm -f ./$(DEPDIR)/shared.Plo
 	-rm -f ./$(DEPDIR)/sie.Plo
+	-rm -f ./$(DEPDIR)/skey.Plo
 	-rm -f ./$(DEPDIR)/sllib.Plo
 	-rm -f ./$(DEPDIR)/sockdev.Plo
 	-rm -f ./$(DEPDIR)/sr.Plo
@@ -3000,6 +3043,7 @@ distclean: distclean-recursive
 	-rm -f ./$(DEPDIR)/vm.Plo
 	-rm -f ./$(DEPDIR)/vmd250.Plo
 	-rm -f ./$(DEPDIR)/vmfplc2.Po
+	-rm -f ./$(DEPDIR)/vstore.Plo
 	-rm -f ./$(DEPDIR)/x75.Plo
 	-rm -f ./$(DEPDIR)/xstore.Plo
 	-rm -f ./$(DEPDIR)/zfcp.Plo
@@ -3146,6 +3190,7 @@ maintainer-clean: maintainer-clean-recursive
 	-rm -f ./$(DEPDIR)/hRexx_o.Plo
 	-rm -f ./$(DEPDIR)/hRexx_r.Plo
 	-rm -f ./$(DEPDIR)/hao.Plo
+	-rm -f ./$(DEPDIR)/hbyteswp.Plo
 	-rm -f ./$(DEPDIR)/hchan.Plo
 	-rm -f ./$(DEPDIR)/hconsole.Plo
 	-rm -f ./$(DEPDIR)/hdiagf18.Plo
@@ -3174,6 +3219,7 @@ maintainer-clean: maintainer-clean-recursive
 	-rm -f ./$(DEPDIR)/httpserv.Plo
 	-rm -f ./$(DEPDIR)/ieee.Plo
 	-rm -f ./$(DEPDIR)/impl.Plo
+	-rm -f ./$(DEPDIR)/inline.Plo
 	-rm -f ./$(DEPDIR)/io.Plo
 	-rm -f ./$(DEPDIR)/ipl.Plo
 	-rm -f ./$(DEPDIR)/loadmem.Plo
@@ -3181,8 +3227,8 @@ maintainer-clean: maintainer-clean-recursive
 	-rm -f ./$(DEPDIR)/logger.Plo
 	-rm -f ./$(DEPDIR)/logmsg.Plo
 	-rm -f ./$(DEPDIR)/losc.Plo
-	-rm -f ./$(DEPDIR)/ltdl.Plo
 	-rm -f ./$(DEPDIR)/machchk.Plo
+	-rm -f ./$(DEPDIR)/machdep.Plo
 	-rm -f ./$(DEPDIR)/maketape.Po
 	-rm -f ./$(DEPDIR)/memrchr.Plo
 	-rm -f ./$(DEPDIR)/mpc.Plo
@@ -3206,6 +3252,7 @@ maintainer-clean: maintainer-clean-recursive
 	-rm -f ./$(DEPDIR)/service.Plo
 	-rm -f ./$(DEPDIR)/shared.Plo
 	-rm -f ./$(DEPDIR)/sie.Plo
+	-rm -f ./$(DEPDIR)/skey.Plo
 	-rm -f ./$(DEPDIR)/sllib.Plo
 	-rm -f ./$(DEPDIR)/sockdev.Plo
 	-rm -f ./$(DEPDIR)/sr.Plo
@@ -3228,6 +3275,7 @@ maintainer-clean: maintainer-clean-recursive
 	-rm -f ./$(DEPDIR)/vm.Plo
 	-rm -f ./$(DEPDIR)/vmd250.Plo
 	-rm -f ./$(DEPDIR)/vmfplc2.Po
+	-rm -f ./$(DEPDIR)/vstore.Plo
 	-rm -f ./$(DEPDIR)/x75.Plo
 	-rm -f ./$(DEPDIR)/xstore.Plo
 	-rm -f ./$(DEPDIR)/zfcp.Plo
@@ -3392,6 +3440,98 @@ uninstall-hook:
 
 check:
 	$(top_srcdir)/tests/runtest  $(top_srcdir)/tests
+
+.PHONY: diagnostic diagnostic-sysinfo diagnostic-tools diagnostic-dirs diagnostic-vars
+
+diagnostic: diagnostic-sysinfo diagnostic-tools diagnostic-dirs diagnostic-vars
+
+diagnostic-sysinfo:
+	@echo 'System information'
+	@echo '  /etc/os-release     ' `cat /etc/os-release 2>&1`
+	@echo '  uname -a            ' `uname -a`
+	@echo '  uname -m            ' `uname -m`
+	@echo '  uname -p            ' `uname -p`
+	@echo '  uname -s            ' `uname -s`
+	@echo ' '
+
+diagnostic-tools:
+	@echo 'Build tools versions'
+	@echo '  autoconf            ' `autoconf --version 2>&1 | head -n 1`
+	@echo '  automake            ' `automake --version 2>&1 | head -n 1`
+	@echo '  m4                  ' `m4 --version 2>&1 | head -n 1 | sed "s/.*illegal option.*/BSD version of m4"/`
+	@echo '  make                ' `make --version 2>&1 | head -n 1 | sed "s/^usage: make.*/BSD version of make/"`
+	@echo '  compiler            ' `$(CC) --version 2>&1 | head -n 1`
+	@echo '  linker              ' `$(LD) --version 2>&1 | head -n 1`
+	@echo ' '
+
+diagnostic-dirs:
+	@echo 'Build directories'
+	@echo '  source             ' `(cd $(top_srcdir) && pwd || echo $(top_srcdir))`
+	@echo '  build              ' `pwd`
+	@echo 'Install directories'
+	@echo '  prefix              $(prefix)'
+	@echo '    exec_prefix       $(exec_prefix)'
+	@echo '      bindir          $(bindir)'
+	@echo '      libdir          $(libdir)'
+	@echo '    includedir        $(includedir)'
+	@echo '    datarootdir       $(datarootdir)'
+	@echo '      datadir         $(datadir)'
+	@echo '      mandir          $(mandir)'
+	@echo '      infodir         $(infodir)'
+	@echo '      docdir          $(docdir)'
+	@echo ' '
+
+diagnostic-vars:
+	@echo 'Values from automake'
+@BUILD_HERCIFC_TRUE@	@echo '  BUILD_HERCIFC        Defined'
+@BUILD_HERCIFC_FALSE@	@echo '  BUILD_HERCIFC        Undefined'
+@BUILD_FTHREADS_TRUE@	@echo '  BUILD_FTHREADS       Defined'
+@BUILD_FTHREADS_FALSE@	@echo '  BUILD_FTHREADS       Undefined'
+# if BUILD_SHARED
+# 	@echo '  BUILD_SHARED         Defined'
+# else
+# 	@echo '  BUILD_SHARED         Undefined'
+# endif
+# if OPTION_DYNAMIC_LOAD
+# 	@echo '  OPTION_DYNAMIC_LOAD  Defined'
+# else
+# 	@echo '  OPTION_DYNAMIC_LOAD  Undefined'
+# endif
+	@echo ' '
+	@echo 'Values from make'
+	@echo '  $$CC                 $(CC)'
+	@echo '  $$CFLAGS             $(CFLAGS)'
+	@echo '  $$CXX                $(CXX)'
+	@echo '  $$CXXFLAG            $(CXXFLAGS)'
+	@echo '  $$LDFLAGS            $(LDFLAGS)'
+	@echo '  $$CPPFLAGS           $(CPPFLAGS)'
+	@echo ' '
+	@echo 'Values from configure'
+	@echo '  $$LIBS               @LIBS@'
+	@echo '  $$S3FH_INC           @S3FH_INC@'
+	@echo '  $$S3FH_LIB           @S3FH_LIB@     (future use)'
+	@echo '  $$HQA_INC            @HQA_INC@'
+	@echo ' '
+	@echo 'Values generated by Makefile.am'
+	@echo '  $$AM_CPPFLAGS         $(AM_CPPFLAGS)'
+	@echo '  $$DYNAMIC_VERISON     $(DYNAMIC_VERSION)'
+	@echo '  $$DYNMOD_LD_ADD       $(DYNMOD_LD_ADD)'
+	@echo '  $$DYNMOD_LD_FLAGS     $(DYNMOD_LD_FLAGS)'
+	@echo '  $$FTHREADS            $(FTHREADS)'
+	@echo '  $$HDEPS               $(HDEPS)'
+	@echo '  $$HDLFLAGS            $(HDLFLAGS)'
+	@echo '  $$HERCIFC             $(HERCIFC)'
+	@echo '  $$HERCLIBS            $(HERCLIBS)'
+	@echo '  $$HERCLIBS2           $(HERCLIBS2)'
+	@echo '  $$HERCLIN             $(HERCLIN)'
+	@echo '  $$LDADD               $(LDADD)'
+	@echo '  $$LIB_LD_FLAGS        $(LIB_LD_FLAGS)'
+	@echo '  $$LTDL                $(LTDL)'
+	@echo '  $$tools_ADDLIBS       $(tools_ADDLIBS)'
+	@echo '  $$disktools_ADDLIBS   $(disktools_ADDLIBS)'
+	@echo '  $$tapetools_ADDLIBS   $(tapetools_ADDLIBS)'
+	@echo '  $$tools_LD_FLAGS      $(tools_LD_FLAGS)'
+	@echo '  $$XSTATIC             $(XSTATIC)'
 
 # Tell versions [3.59,3.63) of GNU make to not export all variables.
 # Otherwise a system limit (for SysV at least) may be exceeded.

@@ -1,5 +1,6 @@
 /* CCKDDASD64.C (C) Copyright Roger Bowler, 1999-2012                */
 /*              (C) Copyright Greg Smith, 2002-2012                  */
+/*              (C) and others 2013-2021                             */
 /*                                                                   */
 /*              CCKD (Compressed CKD) Device Handler                 */
 /*                                                                   */
@@ -27,7 +28,7 @@
 DISABLE_GCC_UNUSED_SET_WARNING;
 
 /*-------------------------------------------------------------------*/
-/* CKD dasd initialization                                           */
+/* Compressed CKD dasd initialization                                */
 /*-------------------------------------------------------------------*/
 int cckd64_dasd_init_handler ( DEVBLK *dev, int argc, char *argv[] )
 {
@@ -222,7 +223,12 @@ int             rc, i;                  /* Return code, Loop index   */
         cckd64_sf_stats (dev);
     release_lock (&cckd->filelock);
 
-    /* free the cckd extension */
+    /* Destroy the cckd extension's locks and conditions */
+    destroy_lock( &cckd->cckdiolock );
+    destroy_lock( &cckd->filelock );
+    destroy_condition( &cckd->cckdiocond );
+
+    /* free the cckd extension itself */
     dev->cckd_ext= cckd_free (dev, "ext", cckd);
 
     if (dev->dasdsfn) free (dev->dasdsfn);
@@ -615,7 +621,6 @@ int             cache;                  /* New active cache entry    */
 
     /* read the new track */
     dev->bufupd = 0;
-    *unitstat = 0;
     cache = cckd64_read_trk (dev, trk, 0, unitstat);
     if (cache < 0)
     {
@@ -800,7 +805,6 @@ int             maxlen;                 /* Size for cache entry      */
 
     /* Read the new blkgrp */
     dev->bufupd = 0;
-    *unitstat = 0;
     cache = cckd64_read_trk (dev, blkgrp, 0, unitstat);
     if (cache < 0)
     {
@@ -3203,10 +3207,20 @@ char            pathname[MAX_PATH];     /* file path in host format  */
     /* Backup to the last opened file number */
     cckd->sfn--;
 
-    /* If the last file was opened read-only then create a new one   */
+    /* If the last file was opened read-only then create a new one */
     if (cckd->open[cckd->sfn] == CCKD_OPEN_RO)
-        if (cckd64_sf_new(dev) < 0)
-            return -1;
+    {
+        /* but ONLY IF not explicit batch utility READ-ONLY open */
+        if (!(1
+              && dev->batch
+              && dev->ckdrdonly
+        ))
+        {
+            /* NOT explicit batch utility read-only open: create new shadow file */
+            if (cckd64_sf_new(dev) < 0)
+                return -1;
+        }
+    }
 
     /* Re-open previous rdwr files rdonly */
     for (i = 0; i < cckd->sfn; i++)

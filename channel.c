@@ -41,6 +41,7 @@ DISABLE_GCC_UNUSED_FUNCTION_WARNING;
 #include "devtype.h"
 #include "opcode.h"
 #include "chsc.h"
+#include "inline.h"
 
 #ifdef FEATURE_S370_CHANNEL
 #include "commadpt.h"
@@ -61,9 +62,6 @@ DISABLE_GCC_UNUSED_SET_WARNING;
 /*-------------------------------------------------------------------*/
 /* CCW Tracing helper macros                                         */
 /*-------------------------------------------------------------------*/
-#ifndef OSTAILOR_QUIET
-#define OSTAILOR_QUIET()            (!sysblk.pgminttr)
-#endif
 
 #ifndef CCW_TRACE_OR_STEP
 #define CCW_TRACE_OR_STEP( dev )    ((dev)->ccwtrace || (dev)->ccwstep)
@@ -1047,7 +1045,6 @@ PSA_3XX *psa;                           /* -> Prefixed storage area  */
 
     /* Store the channel id word at PSA+X'A8' */
     psa = (PSA_3XX*)(regs->mainstor + regs->PX);
-    TXF_STOREREF( ((BYTE*)(psa)) + offsetof( PSA_3XX, chanid ), 4 );
     STORE_FW(psa->chanid, chanid);
 
     /* Exit with condition code 0 indicating channel id stored */
@@ -2881,7 +2878,7 @@ BYTE   *ccw;                            /* CCW pointer               */
     }
 
     /* Channel protection check if CCW is fetch protected */
-    storkey = STORAGE_KEY(ccwaddr, dev);
+    storkey = ARCH_DEP( get_dev_storage_key )( dev, ccwaddr );
     if (ccwkey != 0 && (storkey & STORKEY_FETCH)
         && (storkey & STORKEY_KEY) != ccwkey)
     {
@@ -2890,11 +2887,10 @@ BYTE   *ccw;                            /* CCW pointer               */
     }
 
     /* Set the main storage reference bit for the CCW location */
-    STORAGE_KEY(ccwaddr, dev) |= STORKEY_REF;
+    ARCH_DEP( or_dev_storage_key )( dev, ccwaddr, STORKEY_REF );
 
     /* Point to the CCW in main storage */
     ccw = dev->mainstor + ccwaddr;
-    TXF_FETCHREF( ccw, 8 );
 
     /* Extract CCW opcode, flags, byte count, and data address */
     if (ccwfmt == 0)
@@ -2956,7 +2952,7 @@ BYTE    storkey;                        /* Storage key               */
     }
 
     /* Channel protection check if IDAW is fetch protected */
-    storkey = STORAGE_KEY(idawaddr, dev);
+    storkey = ARCH_DEP( get_dev_storage_key )( dev, idawaddr );
     if (ccwkey != 0 && (storkey & STORKEY_FETCH)
         && (storkey & STORKEY_KEY) != ccwkey)
     {
@@ -2965,13 +2961,12 @@ BYTE    storkey;                        /* Storage key               */
     }
 
     /* Set the main storage reference bit for the IDAW location */
-    STORAGE_KEY(idawaddr, dev) |= STORKEY_REF;
+    ARCH_DEP( or_dev_storage_key )( dev, idawaddr, STORKEY_REF );
 
     /* Fetch IDAW from main storage */
     if (idawfmt == 2)
     {
         /* Fetch format-2 IDAW */
-        TXF_FETCHREF( dev->mainstor + idawaddr, 8 );
         FETCH_DW(idaw2, dev->mainstor + idawaddr);
 
 #if !defined( FEATURE_001_ZARCH_INSTALLED_FACILITY )
@@ -2989,7 +2984,6 @@ BYTE    storkey;                        /* Storage key               */
     else
     {
         /* Fetch format-1 IDAW */
-        TXF_FETCHREF( dev->mainstor + idawaddr, 4 );
         FETCH_FW(idaw1, dev->mainstor + idawaddr);
 
         /* Channel program check if bit 0 of
@@ -3091,7 +3085,7 @@ U16     maxlen;                         /* Maximum allowable length  */
     }
 
     /* Channel protection check if MIDAW is fetch protected */
-    storkey = STORAGE_KEY(midawadr, dev);
+    storkey = ARCH_DEP( get_dev_storage_key )( dev, midawadr );
     if (ccwkey != 0 && (storkey & STORKEY_FETCH)
         && (storkey & STORKEY_KEY) != ccwkey)
     {
@@ -3100,11 +3094,10 @@ U16     maxlen;                         /* Maximum allowable length  */
     }
 
     /* Set the main storage reference bit for the MIDAW location */
-    STORAGE_KEY(midawadr, dev) |= STORKEY_REF;
+    ARCH_DEP( or_dev_storage_key )( dev, midawadr, STORKEY_REF );
 
     /* Fetch MIDAW from main storage (MIDAW is quadword
        aligned and so cannot cross a page boundary) */
-    TXF_FETCHREF( dev->mainstor + midawadr, 8+8 );
     FETCH_DW(mword1, dev->mainstor + midawadr);
     FETCH_DW(mword2, dev->mainstor + midawadr + 8);
 
@@ -3341,7 +3334,7 @@ do {                                                                   \
                        is fetch protected, or if location is store
                        protected and command is READ, READ BACKWARD, or
                        SENSE */
-                    storkey = STORAGE_KEY(midawdat, dev);
+                    storkey = ARCH_DEP( get_dev_storage_key )( dev, midawdat );
                     if (ccwkey != 0
                         && (storkey & STORKEY_KEY) != ccwkey
                         && ((storkey & STORKEY_FETCH) || to_memory))
@@ -3376,16 +3369,16 @@ do {                                                                   \
 
                     /* Set the main storage reference and change
                        bits */
-                    STORAGE_KEY(midawdat, dev) |= (to_memory ?
-                            (STORKEY_REF|STORKEY_CHANGE) :
-                             STORKEY_REF);
+                    if (to_memory)
+                        ARCH_DEP( or_dev_storage_key )( dev, midawdat, (STORKEY_REF | STORKEY_CHANGE) );
+                    else
+                        ARCH_DEP( or_dev_storage_key )( dev, midawdat, STORKEY_REF );
 
                     /* Copy data between main storage and channel
                        buffer */
                     if (readbackwards)
                     {
                         midawdat = (midawdat - midawlen) + 1;
-                        TXF_STOREREF( dev->mainstor + midawdat, midawlen );
                         memcpy_backwards (dev->mainstor + midawdat,
                                           iobufptr,
                                           midawlen);
@@ -3397,7 +3390,6 @@ do {                                                                   \
                     {
                         if (to_iobuf)
                         {
-                            TXF_FETCHREF( dev->mainstor + midawdat, midawlen );
                             memcpy (iobuf,
                                     dev->mainstor + midawdat,
                                     midawlen);
@@ -3407,7 +3399,6 @@ do {                                                                   \
                         }
                         else
                         {
-                            TXF_STOREREF( dev->mainstor + midawdat, midawlen );
                             memcpy (dev->mainstor + midawdat,
                                     iobuf,
                                     midawlen);
@@ -3503,7 +3494,7 @@ do {                                                                   \
             /* Channel protection check if IDAW data location is
                fetch protected, or if location is store protected
                and command is READ, READ BACKWARD, or SENSE */
-            storkey = STORAGE_KEY( idadata, dev );
+            storkey = ARCH_DEP( get_dev_storage_key )( dev, idadata );
 
             if (1
                 && ccwkey != 0
@@ -3585,15 +3576,15 @@ do {                                                                   \
             if (idalen)
             {
                 /* Set the main storage reference and change bits */
-                STORAGE_KEY( idadata, dev ) |=
-                    (to_memory ? (STORKEY_REF | STORKEY_CHANGE)
-                               : (STORKEY_REF));
+                if (to_memory)
+                    ARCH_DEP( or_dev_storage_key )( dev, idadata, (STORKEY_REF | STORKEY_CHANGE) );
+                else
+                    ARCH_DEP( or_dev_storage_key )( dev, idadata, STORKEY_REF );
 
                 /* Copy data between main storage and channel buffer */
                 if (readbackwards)
                 {
                     idadata = (idadata - idalen) + 1;
-                    TXF_STOREREF( dev->mainstor + idadata, idalen );
                     memcpy_backwards( dev->mainstor + idadata,
                                       iobuf + dev->curblkrem + idacount - idalen,
                                       idalen );
@@ -3605,12 +3596,10 @@ do {                                                                   \
                 {
                     if (to_iobuf)
                     {
-                        TXF_FETCHREF( dev->mainstor + idadata, idalen );
                         memcpy( iobuf, dev->mainstor + idadata, idalen );
                     }
                     else
                     {
-                        TXF_STOREREF( dev->mainstor + idadata, idalen );
                         memcpy( dev->mainstor + idadata, iobuf, idalen );
                     }
 
@@ -3677,7 +3666,7 @@ do {                                                                   \
                 break;
             }
 
-            storkey = STORAGE_KEY( page, dev );
+            storkey = ARCH_DEP( get_dev_storage_key )( dev, page );
 
             if (1
                 && ccwkey != 0
@@ -3733,9 +3722,10 @@ do {                                                                   \
                  page <= (endpage | STORAGE_KEY_BYTEMASK);
                  page += STORAGE_KEY_PAGESIZE)
             {
-                STORAGE_KEY( page, dev ) |=
-                    (to_memory ? (STORKEY_REF | STORKEY_CHANGE)
-                               : (STORKEY_REF));
+                if (to_memory)
+                    ARCH_DEP( or_dev_storage_key )( dev, page, (STORKEY_REF | STORKEY_CHANGE) );
+                else
+                    ARCH_DEP( or_dev_storage_key )( dev, page, STORKEY_REF );
             } /* end for(page) */
 
 #if DEBUG_PREFETCH
@@ -3764,7 +3754,6 @@ do {                                                                   \
                 else
                 {
                     /* read backward  - use END of buffer */
-                    TXF_STOREREF( dev->mainstor + addr, count );
                     memcpy_backwards( dev->mainstor + addr,
                         iobufptr, count );
                 }
@@ -3781,7 +3770,6 @@ do {                                                                   \
             /* Handle Write and Control transfer to I/O buffer */
             else if (to_iobuf)
             {
-                TXF_FETCHREF( dev->mainstor + addr, count );
                 memcpy( iobuf, dev->mainstor + addr, count );
 
                 prefetch->pos += count;
@@ -3794,7 +3782,6 @@ do {                                                                   \
             /* Handle Read transfer from I/O buffer */
             else
             {
-                TXF_STOREREF( dev->mainstor + addr, count );
                 memcpy( dev->mainstor + addr, iobuf, count );
             }
 
@@ -4360,15 +4347,13 @@ resume_suspend:
         mbaddr = _IOA_MBO;
         mbaddr += (dev->pmcw.mbi[0] << 8 | dev->pmcw.mbi[1]) << 5;
         if ( !CHADDRCHK(mbaddr, dev)
-            && (((STORAGE_KEY(mbaddr, dev) & STORKEY_KEY) == _IOA_MBK)
+            && (((ARCH_DEP( get_dev_storage_key )( dev, mbaddr ) & STORKEY_KEY) == _IOA_MBK)
                 || (_IOA_MBK == 0)))
         {
-            STORAGE_KEY(mbaddr, dev) |= (STORKEY_REF | STORKEY_CHANGE);
+            ARCH_DEP( or_dev_storage_key )( dev, mbaddr, (STORKEY_REF | STORKEY_CHANGE) );
             mbk = (MBK*)&dev->mainstor[mbaddr];
-            TXF_FETCHREF( ((BYTE*)(mbk)) + offsetof( MBK, srcount ), 2 );
             FETCH_HW(mbcount,mbk->srcount);
             mbcount++;
-            TXF_STOREREF( ((BYTE*)(mbk)) + offsetof( MBK, srcount ), 2 );
             STORE_HW(mbk->srcount,mbcount);
         } else {
             /* Generate subchannel logout indicating program
@@ -5342,7 +5327,7 @@ breakchain:
 
             BYTE  tracing_active  = CCW_TRACING_ACTIVE( dev, tracethis );
             BYTE  cpu_tracing     = CPU_STEPPING_OR_TRACING_ALL;
-            BYTE  ostailor_quiet  = OSTAILOR_QUIET();
+            BYTE  ostailor_quiet  = (sysblk.pgminttr == 0);
             BYTE  ccw_tracing     = CCW_TRACE_OR_STEP( dev );
             BYTE  skip_ch9uc      = SKIP_CH9UC( dev, chanstat, unitstat );
 
@@ -5403,7 +5388,7 @@ breakchain:
 
                 /* Loop through prefetch table for CCW/IDAW display */
                 for (ts = 0, prevccwaddr = 1;
-                     ts <= ps && ts < prefetch.seq;
+                     ts < ps && ts < prefetch.seq;
                      ts++)
                 {
                     if (prevccwaddr != prefetch.ccwaddr[ts])
@@ -6027,6 +6012,10 @@ retry:
                     store_scsw_as_csw( regs, scsw );
                     break;
                 }
+
+                case ARCH_390_IDX: break;
+                case ARCH_900_IDX: break;
+                default: CRASH();
             }
 
             subchannel_interrupt_queue_cleanup( dev );
@@ -6234,6 +6223,7 @@ DLL_EXPORT int device_attention (DEVBLK *dev, BYTE unitstat)
 #if defined(_900)
         case ARCH_900_IDX: return z900_device_attention(dev, unitstat);
 #endif
+        default: CRASH();
     }
     return 3;   /* subchannel is not valid or not enabled */
 }
@@ -6251,6 +6241,7 @@ void call_execute_ccw_chain (int arch_mode, void* pDevBlk)
 #if defined(_900)
         case ARCH_900_IDX: z900_execute_ccw_chain((DEVBLK*)pDevBlk); break;
 #endif
+        default: CRASH();
     }
 }
 

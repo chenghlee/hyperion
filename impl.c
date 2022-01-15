@@ -1,4 +1,5 @@
 /* IMPL.C       (C) Copyright Roger Bowler, 1999-2012                */
+/*              (C) and others 2013-2021                             */
 /*              Hercules Initialization Module                       */
 /*                                                                   */
 /*   Released under "The Q Public License Version 1"                 */
@@ -31,7 +32,7 @@
 
 static char shortopts[] =
 
-    "eh::f:r:db:vt::p:l:s:";
+    "eh::f:o:r:db:vt::p:l:s:";
 
 #if defined(HAVE_GETOPT_LONG)
 static struct option longopts[] =
@@ -39,6 +40,8 @@ static struct option longopts[] =
     { "externalgui",    no_argument, NULL, 'e' },
     { "help",     optional_argument, NULL, 'h' },
     { "config",   required_argument, NULL, 'f' },
+    { "output",   required_argument, NULL, 'o' },
+    { "logfile",  required_argument, NULL, 'o' },
     { "rcfile",   required_argument, NULL, 'r' },
     { "daemon",         no_argument, NULL, 'd' },
     { "herclogo", required_argument, NULL, 'b' },
@@ -151,7 +154,7 @@ static void sigint_handler( int signo )
     sysblk.sigintreq = 1;
 
     /* Activate instruction stepping */
-    sysblk.inststep = 1;
+    sysblk.instbreak = 1;
     SET_IC_TRACE;
 }
 
@@ -412,6 +415,7 @@ static void* watchdog_thread( void* arg )
     int   cpu;
     int   sleep_seconds  = WATCHDOG_SECS;
     int   sleep_secs2nd  = 3;
+    int   slept_secs;
 
     bool  deadlock_reported = false;
     bool  hung_cpu_reported = false;
@@ -430,8 +434,13 @@ static void* watchdog_thread( void* arg )
 
     do
     {
-        /* Only check for problems "every once in a while" */
-        SLEEP( sleep_seconds );
+        /* PROGRAMMING NOTE: sleeping in many small increments (rather
+           than one large sleep) prevents problems that can occur when
+           the system resumes (awakens) after having been suspended.
+           (GH Issue #458 "Hercules crash after resume from suspend")
+        */
+        for (slept_secs=0; slept_secs < sleep_seconds; ++slept_secs)
+            SLEEP( 1 );     /* (sleep one second at a time) */
 
 #if defined( _MSVC_ )
         // Disable all watchdog logic while debugger is attached
@@ -540,6 +549,9 @@ static void* watchdog_thread( void* arg )
             // If they do so, then prevent the crash from occurring as
             // long as their debugger is still attached, but once they
             // detach their debugger, then go ahead and allow the crash
+
+            // "You have %d seconds to attach a debugger before crash dump will be taken!"
+            WRMSG( HHC00823, "S", WAIT_FOR_DEBUGGER_SECS );
             {
                 int i;
                 for (i=0; !IsDebuggerPresent() && i < WAIT_FOR_DEBUGGER_SECS; ++i)
@@ -547,9 +559,14 @@ static void* watchdog_thread( void* arg )
 
                 // Don't crash if there is now a debugger attached
                 if (IsDebuggerPresent())
-                    continue; // (don't crash)
+                {
+                    // "Debugger attached! NOT crashing!"
+                    WRMSG( HHC00824, "S" );
+                    continue;
+                }
 
-                // They chose not to attach a debugger. Allow crash.
+                // "TIME'S UP! (or debugger has been detached!) - Forcing crash dump!"
+                WRMSG( HHC00825, "S" );
             }
 #endif
             /* Display additional debugging information */
@@ -570,7 +587,7 @@ static void* watchdog_thread( void* arg )
                     {
                         /* Backup to actual instruction being executed */
                         regs = sysblk.regs[ cpu ];
-                        UPD_PSW_IA( regs, PSW_IA( regs, -REAL_ILC( regs )));
+                        SET_PSW_IA_AND_MAYBE_IP( regs, PSW_IA_FROM_IP( regs, -REAL_ILC( regs )));
 
                         /* Display instruction that appears to be hung */
                         ip = regs->ip < regs->aip ? regs->inst : regs->ip;
@@ -603,8 +620,19 @@ void* log_do_callback( void* dummy )
 
     UNREFERENCED( dummy );
 
-    while ((msglen = log_read( &msgbuf, &msgidx, LOG_BLOCK )))
-        log_callback( msgbuf, msglen );
+    while (!sysblk.shutfini && logger_isactive())
+    {
+        msglen = log_read( &msgbuf, &msgidx, LOG_NOBLOCK );
+
+        if (msglen)
+        {
+            log_callback( msgbuf, msglen );
+            continue;
+        }
+
+        /* wait a bit for new message(s) to arrive before retrying */
+        usleep( PANEL_REFRESH_RATE_FAST * 1000 );
+    }
 
     /* Let them know logger thread has ended */
     log_callback( NULL, 0 );
@@ -816,10 +844,15 @@ int     rc;
 
     sysblk.panrate = PANEL_REFRESH_RATE_SLOW;
 
-    /* set default Program Interrupt Trace to NONE */
+    /* set default Program Interrupt Trace */
     sysblk.pgminttr = OS_DEFAULT;
+    sysblk.ostailor = OSTAILOR_DEFAULT;
 
     sysblk.timerint = DEF_TOD_UPDATE_USECS;
+
+#if defined( _FEATURE_073_TRANSACT_EXEC_FACILITY )
+    sysblk.txf_timerint = sysblk.timerint;
+#endif
 
 #if defined( _FEATURE_ECPSVM )
     sysblk.ecpsvm.available = 0;
@@ -843,6 +876,10 @@ int     rc;
 
         MSGBUF( buf, "%04X", sysblk.cpumodel );
         set_symbol( "CPUMODEL", buf );
+
+#if defined( _FEATURE_073_TRANSACT_EXEC_FACILITY )
+        defsym_TXF_models();
+#endif
     }
 
 #if defined( _FEATURE_047_CMPSC_ENH_FACILITY )
@@ -861,8 +898,8 @@ int     rc;
     initialize_lock( &sysblk.crwlock  );
     initialize_lock( &sysblk.ioqlock  );
     initialize_lock( &sysblk.dasdcache_lock );
-#if defined( OPTION_TXF_SINGLE_THREAD )
-    initialize_lock( &sysblk.txf_tran_lock );
+#if defined( _FEATURE_073_TRANSACT_EXEC_FACILITY )
+    initialize_lock( &sysblk.rublock );
 #endif
 
     initialize_condition( &sysblk.scrcond );
@@ -900,8 +937,8 @@ int     rc;
 #endif
         }
     }
-    initialize_condition( &sysblk.sync_cond );
-    initialize_condition( &sysblk.sync_bc_cond );
+    initialize_condition( &sysblk.all_synced_cond );
+    initialize_condition( &sysblk.sync_done_cond );
 
     /* Copy length for regs */
     sysblk.regs_copy_len = (int)((uintptr_t)&sysblk.dummyregs.regs_copy_end
@@ -1014,6 +1051,18 @@ int     rc;
     display_version       ( stdout, 0, NULL );
     display_build_options ( stdout, 0 );
     display_extpkg_vers   ( stdout, 0 );
+
+    /* Warn if crash dumps aren't enabled */
+#if !defined( _MSVC_ )
+    {
+        struct rlimit  core_limit;
+        if (getrlimit( RLIMIT_CORE, &core_limit ) == 0)
+            sysblk.ulimit_unlimited = (RLIM_INFINITY == core_limit.rlim_cur);
+        if (!sysblk.ulimit_unlimited)
+            // "Crash dumps NOT enabled"
+            WRMSG( HHC00017, "W" );
+    }
+#endif
 
     /* Report whether Hercules is running in "elevated" mode or not */
     // HHC00018 "Hercules is %srunning in elevated mode"
@@ -1324,6 +1373,21 @@ int     rc;
         return 1;
     }
 
+    sysblk.config_processed = true;
+    sysblk.cfg_timerint = sysblk.timerint;
+
+#if defined( _FEATURE_073_TRANSACT_EXEC_FACILITY )
+
+    if (FACILITY_ENABLED_ARCH( 073_TRANSACT_EXEC, ARCH_900_IDX ))
+    {
+        txf_model_warning( true );
+        txf_set_timerint( true );
+    }
+    else
+        txf_set_timerint( false );
+
+#endif /* defined( _FEATURE_073_TRANSACT_EXEC_FACILITY ) */
+
     /* Process the .rc file synchronously when in daemon mode. */
     /* Otherwise Start up the RC file processing thread.       */
     if (sysblk.daemon_mode)
@@ -1519,6 +1583,11 @@ static int process_args( int argc, char* argv[] )
             case 'f':
 
                 cfgorrc[ want_cfg ].filename = optarg;
+                break;
+
+            case 'o':
+
+                log_sethrdcpy( optarg );
                 break;
 
             case 'r':

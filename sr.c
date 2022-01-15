@@ -1,4 +1,5 @@
-/* SR.C         (c)Copyright Greg Smith, 2005-2012                   */
+/* SR.C         (c) Copyright Greg Smith, 2005-2012                  */
+/*              (C) and others 2013-2021                             */
 /*              Suspend/Resume a Hercules session                    */
 /*                                                                   */
 /*   Released under "The Q Public License Version 1"                 */
@@ -254,7 +255,7 @@ BYTE     psw[16];
         SR_WRITE_VALUE(file, SR_CPU_DXC, regs->dxc, sizeof(regs->dxc));
         SR_WRITE_VALUE(file, SR_CPU_MC, regs->MC_G, sizeof(regs->MC_G));
         SR_WRITE_VALUE(file, SR_CPU_EA, regs->EA_G, sizeof(regs->EA_G));
-        SR_WRITE_VALUE(file, SR_CPU_PTIMER, cpu_timer(regs), sizeof(S64));
+        SR_WRITE_VALUE(file, SR_CPU_PTIMER, get_cpu_timer(regs), sizeof(S64));
         SR_WRITE_VALUE(file, SR_CPU_CLKC, regs->clkc, sizeof(regs->clkc));
         SR_WRITE_VALUE(file, SR_CPU_CHANSET, regs->chanset, sizeof(regs->chanset));
         SR_WRITE_VALUE(file, SR_CPU_TODPR, regs->todpr, sizeof(regs->todpr));
@@ -781,6 +782,7 @@ int      numconfdev=0;
                 rc = z900_load_psw(regs, (BYTE *)&buf);
                 break;
 #endif
+            default: CRASH();
             } /* switch (regs->arch_mode) */
             if (rc != 0 && memcmp(buf, zeros, len))
             {
@@ -1377,6 +1379,7 @@ int      numconfdev=0;
                                     z900_execute_ccw_chain, dev, "device thread");
                 break;
 #endif
+            default: CRASH();
             } /* switch (sysblk.arch_mode) */
             if (rc != 0)
             {

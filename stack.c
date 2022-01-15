@@ -215,9 +215,9 @@ int  i;
         tsao = lastbyte & PAGEFRAME_PAGEMASK;
         tsaa2 = ARCH_DEP(abs_trap_addr) (tsao, regs, ACCTYPE_WRITE);
     }
-    STORAGE_KEY(tsaa1, regs) |= STORKEY_CHANGE;
+    ARCH_DEP( or_storage_key )( tsaa1, STORKEY_CHANGE );
     if (tsaa1 != tsaa2)
-        STORAGE_KEY(tsaa2, regs) |= STORKEY_CHANGE;
+        ARCH_DEP( or_storage_key )( tsaa2, STORKEY_CHANGE );
 
 
 #if defined(FEATURE_001_ZARCH_INSTALLED_FACILITY)
@@ -328,18 +328,26 @@ int  i;
         regs->GR_L(15) = duct11 & DUCT11_TCBA;
 
     /* Ensure psw.IA is set */
-    SET_PSW_IA(regs);
+    MAYBE_SET_PSW_IA_FROM_IP(regs);
 
     /* Set the Breaking Event Address Register */
-    SET_BEAR_REG(regs, regs->ip -
-      (trap_is_trap4 ? 4 : likely(!regs->execflag) ? 2 : regs->exrl ? 6 : 4));
+    if (trap_is_trap4)
+    {
+        SET_BEAR_REG( regs, regs->ip - 4 );
+    }
+    else
+    {
+        SET_BEAR_REG( regs, regs->ip - 2 );
+    }
+
     regs->psw.amode = 1;
     regs->psw.AMASK = AMASK31;
-    UPD_PSW_IA(regs, trap_ia);
+    SET_PSW_IA_AND_MAYBE_IP(regs, trap_ia);
     /* set PSW to primary space */
     regs->psw.asc = 0;
     SET_AEA_MODE(regs);
-}
+
+} /* end function ARCH_DEP(trap_x) */
 
 
 /*-------------------------------------------------------------------*/

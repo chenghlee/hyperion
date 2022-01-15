@@ -1,4 +1,5 @@
 /* OPCODE.H     (C) Copyright Jan Jaeger, 2000-2012                  */
+/*              (C) and others 2013-2021                             */
 /*              Instruction decoding macros and prototypes           */
 /*                                                                   */
 /*   Released under "The Q Public License Version 1"                 */
@@ -10,8 +11,6 @@
 
 #ifndef _OPCODE_H
 #define _OPCODE_H
-
-#include "hercules.h"
 
 /*-------------------------------------------------------------------*/
 /*               Architecture INDEPENDENT macros                     */
@@ -284,20 +283,15 @@ extern int iprint_router_func( BYTE inst[], char mnemonic[], char* prtbuf );
   #define SIE_MODE( _regs )         ((_regs)->sie_mode)
   #define SIE_STATE( _regs )        ((_regs)->sie_state)
 
-  #define SIE_FEAT_BIT_ON( _regs, _byte, _bit ) \
-          ((_regs)->siebk->SIE_ ## _byte & SIE_ ## _byte ## _ ## _bit)
+  #define SIE_FEAT_BIT_ON(   _regs, _byte, _bit )   ((_regs)->siebk->SIE_ ## _byte & SIE_ ## _byte ## _ ## _bit)
+  #define SIE_EC_BIT_ON(     _regs, _byte, _bit )   ((_regs)->siebk->SIE_ ## _byte & SIE_ ## _byte ## _ ## _bit)
 
-  #define SIE_EC_BIT_ON( _regs, _byte, _bit ) \
-          ((_regs)->siebk->SIE_ ## _byte & SIE_ ## _bit)
+  #define SIE_FEAT_BIT_OFF(  _regs, _byte, _bit )   !SIE_FEAT_BIT_ON( _regs, _byte, _bit )
+  #define SIE_EC_BIT_OFF(    _regs, _byte, _bit )   !SIE_EC_BIT_ON(   _regs, _byte, _bit )
 
-  #define SIE_FEAT_BIT_OFF( _regs, _byte, _bit )    !SIE_FEAT_BIT_ON( _regs, _byte, _bit )
-  #define SIE_EC_BIT_OFF(   _regs, _byte, _bit )    !SIE_EC_BIT_ON(   _regs, _byte, _bit )
+  #define SIE_STATE_BIT_ON(  _regs, _byte, _bit )   (SIE_MODE((_regs)) && SIE_FEAT_BIT_ON(  (_regs), _byte, _bit ))
+  #define SIE_STATE_BIT_OFF( _regs, _byte, _bit )   (SIE_MODE((_regs)) && SIE_FEAT_BIT_OFF( (_regs), _byte, _bit ))
 
-  #define SIE_STATE_BIT_ON( _regs, _byte, _bit ) \
-          (SIE_MODE((_regs)) && SIE_FEAT_BIT_ON(  (_regs), _byte, _bit ))
-
-  #define SIE_STATE_BIT_OFF( _regs, _byte, _bit ) \
-          (SIE_MODE((_regs)) && SIE_FEAT_BIT_OFF( (_regs), _byte, _bit ))
 
   #define TXF_SIE_INTERCEPT( _regs, _name )                     \
     do                                                          \
@@ -310,7 +304,7 @@ extern int iprint_router_func( BYTE inst[], char mnemonic[], char* prtbuf );
         */                                                      \
         if (1                                                   \
             && SIE_MODE( (_regs) )                              \
-            && SIE_EC_BIT_OFF( (_regs), ECB0, ECTX )            \
+            && SIE_EC_BIT_OFF( (_regs), ECB0, TXF )             \
         )                                                       \
         {                                                       \
             if (TXF_TRACING())                                  \
@@ -351,7 +345,7 @@ extern int iprint_router_func( BYTE inst[], char mnemonic[], char* prtbuf );
   #define MULTIPLE_CONTROLLED_DATA_SPACE( _regs )   (0)
 #endif
 
-#if defined( FEATURE_INTERPRETIVE_EXECUTION )
+#if defined( FEATURE_SIE )
   #undef  SIE_ACTIVE
   #define SIE_ACTIVE( _regs )     ((_regs)->sie_active)
 #else
@@ -405,62 +399,74 @@ do { \
       )                                                               \
   )
 
-#define CPU_STEPPING(_regs, _ilc)                                     \
-  (                                                                   \
-      sysblk.inststep                                                 \
-   && (0                                                              \
+#define _CPU_STEP_OR_TRACE(_steptrace, _regs, _ilc)                   \
+   (0                                                                 \
        || !TXF_INSTR_TRACING()                                        \
        ||  TXF_TRACE_THIS_INSTR( _regs )                              \
-      )                                                               \
-   && (                                                               \
-        (sysblk.stepaddr[0] == 0 && sysblk.stepaddr[1] == 0)          \
-     || (sysblk.stepaddr[0] <= sysblk.stepaddr[1]                     \
-         && PSW_IA((_regs), -(_ilc)) >= sysblk.stepaddr[0]            \
-         && PSW_IA((_regs), -(_ilc)) <= sysblk.stepaddr[1]            \
+   )                                                                  \
+   &&                                                                 \
+   (                                                                  \
+        (sysblk._steptrace[0] == 0 && sysblk._steptrace[1] == 0)      \
+     || (sysblk._steptrace[0] <= sysblk._steptrace[1]                 \
+         && PSW_IA_FROM_IP((_regs), -(_ilc)) >= sysblk._steptrace[0]  \
+         && PSW_IA_FROM_IP((_regs), -(_ilc)) <= sysblk._steptrace[1]  \
         )                                                             \
-     || (sysblk.stepaddr[0] > sysblk.stepaddr[1]                      \
-         && PSW_IA((_regs), -(_ilc)) >= sysblk.stepaddr[1]            \
-         && PSW_IA((_regs), -(_ilc)) <= sysblk.stepaddr[0]            \
+     || (sysblk._steptrace[0] > sysblk._steptrace[1]                  \
+         && PSW_IA_FROM_IP((_regs), -(_ilc)) >= sysblk._steptrace[1]  \
+         && PSW_IA_FROM_IP((_regs), -(_ilc)) <= sysblk._steptrace[0]  \
         )                                                             \
-      )                                                               \
-  )
+   )                                                                  \
+
+#define CPU_STEPPING(_regs, _ilc)                                     \
+  (sysblk.instbreak  && _CPU_STEP_OR_TRACE(breakaddr,(_regs),(_ilc)))
 
 #define CPU_TRACING(_regs, _ilc)                                      \
-  (                                                                   \
-      sysblk.insttrace                                                \
-   && (0                                                              \
-       || !TXF_INSTR_TRACING()                                        \
-       ||  TXF_TRACE_THIS_INSTR( _regs )                              \
-      )                                                               \
-   && (                                                               \
-        (sysblk.traceaddr[0] == 0 && sysblk.traceaddr[1] == 0)        \
-     || (sysblk.traceaddr[0] <= sysblk.traceaddr[1]                   \
-         && PSW_IA((_regs), -(_ilc)) >= sysblk.traceaddr[0]           \
-         && PSW_IA((_regs), -(_ilc)) <= sysblk.traceaddr[1]           \
-        )                                                             \
-     || (sysblk.traceaddr[0] > sysblk.traceaddr[1]                    \
-         && PSW_IA((_regs), -(_ilc)) >= sysblk.traceaddr[1]           \
-         && PSW_IA((_regs), -(_ilc)) <= sysblk.traceaddr[0]           \
-        )                                                             \
-      )                                                               \
-  )
+  (sysblk.insttrace && _CPU_STEP_OR_TRACE(traceaddr,(_regs),(_ilc)))
 
 #define CPU_STEPPING_OR_TRACING(_regs, _ilc) \
-  ( unlikely((_regs)->tracing) && \
-    (CPU_STEPPING((_regs), (_ilc)) || CPU_TRACING((_regs), (_ilc))) \
+  ( unlikely((_regs)->breakortrace) && \
+    (CPU_STEPPING((_regs), (_ilc)) || CPU_TRACING((_regs), (_ilc)))   \
   )
 
-#define CPU_TRACING_ALL \
-  (sysblk.insttrace && sysblk.traceaddr[0] == 0 && sysblk.traceaddr[1] == 0)
+#define _CPU_TRACESTEP_ALL(_steptrace,_addr)                          \
+  (sysblk._steptrace && sysblk._addr[0] == 0 && sysblk._addr[1] == 0)
 
-#define CPU_STEPPING_ALL \
-  (sysblk.inststep && sysblk.stepaddr[0] == 0 && sysblk.stepaddr[1] == 0)
+#define CPU_TRACING_ALL                 _CPU_TRACESTEP_ALL( insttrace, traceaddr )
+#define CPU_STEPPING_ALL                _CPU_TRACESTEP_ALL( instbreak, breakaddr )
+#define CPU_STEPPING_OR_TRACING_ALL     (CPU_TRACING_ALL || CPU_STEPPING_ALL)
 
-#define CPU_STEPPING_OR_TRACING_ALL \
-  ( CPU_TRACING_ALL || CPU_STEPPING_ALL )
+#define PROCESS_TRACE( _regs, _ip, _goto )                            \
+  do                                                                  \
+  {                                                                   \
+    /* If stepping or tracing, trace this instruction */              \
+    if ((_regs)->breakortrace)                                        \
+    {                                                                 \
+      ARCH_DEP( process_trace )( (_regs), (_ip) );                    \
+                                                                      \
+      /* If the aie was invalidated, re-fetch the instruction.        \
+         Another CPU executing e.g. a IPTE instruction during         \
+         instruction stepping while process_trace was waiting         \
+         for the user to press the enter key can allow this to        \
+         occur. Otherwise it is impossible to occur. */               \
+      if (1                                                           \
+          && (_regs)->stepping                                        \
+          && !VALID_AIE( _regs )                                      \
+      )                                                               \
+      {                                                               \
+        /* "Processor %s%02X: aie invalidated; instruction refetched" */    \
+        WRMSG( HHC00835, "W", PTYPSTR( (_regs)->cpuad ), (_regs)->cpuad );  \
+        goto _goto;                                                   \
+      }                                                               \
+    }                                                                 \
+  }                                                                   \
+  while (0)
 
+/*-------------------------------------------------------------------*/
+/*         Simple helper macro that instructions can use             */
+/*         to force an immediate check for interrupts.               */
+/*-------------------------------------------------------------------*/
 
-#define RETURN_INTCHECK(_regs) \
+#define RETURN_INTCHECK(_regs)                                        \
         longjmp((_regs)->progjmp, SIE_NO_INTERCEPT)
 
 /*-------------------------------------------------------------------*/
@@ -695,124 +701,285 @@ do { \
 /*-------------------------------------------------------------------*/
 
 /*-------------------------------------------------------------------*/
-/*             PSW Instruction Address manipulation                  */
+/*               PSW Instruction Address macros                      */
 /*-------------------------------------------------------------------*/
+// The _IA_FROM_IP primary helper macro returns a raw virtual PSW
+// 'IA' value corresponding to where an offset mainstor 'ip' points,
+// i.e. psw.ia <== aiv + ((ip + offset) - aip).
 
-#undef  _PSW_IA
-#define _PSW_IA(_regs, _n) \
- (VADR)((_regs)->AIV + ((intptr_t)(_regs)->ip - (intptr_t)(_regs)->aip) + (_n))
+#undef  _IA_FROM_IP
+#define _IA_FROM_IP( _aiv, _regs, _offset )                           \
+  (                                                                   \
+    (_regs)->_aiv                                                     \
+    + ((uintptr_t)(_regs)->ip - (uintptr_t)(_regs)->aip)              \
+    + (_offset)                                                       \
+  )
 
-#undef  PSW_IA
-#define PSW_IA(_regs, _n) \
- (_PSW_IA((_regs), (_n)) & ADDRESS_MAXWRAP((_regs)))
+//---------------------------------------------------------------------
+// The generic PSW_IA_FROM_IP macro returns a PSW 'IA' as VADR value
+// corresponding to where regs 'ip' is pointing plus a passed offset,
+// with the resulting PSW 'IA' value masked with ADDRESS_MAXWRAP.
 
-#undef  SET_PSW_IA
-#define SET_PSW_IA(_regs) \
-do { \
-  if ((_regs)->aie) (_regs)->psw.IA = PSW_IA((_regs), 0); \
-} while (0)
+#undef  PSW_IA_FROM_IP
+#define PSW_IA_FROM_IP( _regs, _offset )                              \
+                                                                      \
+ ((VADR)(_IA_FROM_IP( AIV, (_regs), (_offset)) & ADDRESS_MAXWRAP( _regs )))
 
-#undef  INST_UPDATE_PSW
-#define INST_UPDATE_PSW(_regs, _len, _ilc) \
-     do { \
-            if (_len) (_regs)->ip += (_len); \
-            if (_ilc) (_regs)->psw.ilc = (_ilc); \
-        } while(0)
+//---------------------------------------------------------------------
+// The next three macros are minor architectural variations of the
+// above PSW_IA_FROM_IP macro that return a PSW 'IA' value matching
+// where 'ip' plus a passed offset is pointing. The only difference is
+// each are specific to the implied architecture, none of them cast
+// the result to VADR, and only PSW_IA24 applies an addressing mask.
 
-#undef  UPD_PSW_IA
-#define UPD_PSW_IA(_regs, _addr) \
-do { \
-  (_regs)->psw.IA = (_addr) & ADDRESS_MAXWRAP(_regs); \
-  if (likely((_regs)->aie != NULL)) { \
-    if (likely((_regs)->AIV == ((_regs)->psw.IA & (PAGEFRAME_PAGEMASK|1)))) \
-      (_regs)->ip = _PSW_IA_MAIN((_regs), (_regs)->psw.IA); \
-    else \
-      (_regs)->aie = NULL; \
-  } \
-} while (0)
-
-/*
- * The next three macros are used by branch-and-link type instructions
- * where the addressing mode is known.
- * Note that wrap is not performed for PSW_IA64 and for PSW_IA31.
- * For the latter, we expect branch-and-link code to `or' the hi bit
- * on so there is no need to `and' it off.
- */
 #undef  PSW_IA64
-#define PSW_IA64(_regs, _n) \
-  ((_regs)->AIV \
-   + (((uintptr_t)(_regs)->ip + (unsigned int)(_n)) - (uintptr_t)(_regs)->aip))
+#define PSW_IA64( _regs, _offset )                                    \
+                                                                      \
+      (_IA_FROM_IP( AIV_G, (_regs), (_offset)))
 
 #undef  PSW_IA31
-#define PSW_IA31(_regs, _n) \
-  ((_regs)->AIV_L + ((uintptr_t)(_regs)->ip + (unsigned int)(_n)) \
-   - (uintptr_t)(_regs)->aip)
+#define PSW_IA31( _regs, _offset )                                    \
+                                                                      \
+      (_IA_FROM_IP( AIV_L, (_regs), (_offset)))
 
 #undef  PSW_IA24
-#define PSW_IA24(_regs, _n) \
- (((_regs)->AIV_L + ((uintptr_t)(_regs)->ip + (unsigned int)(_n)) \
-   - (uintptr_t)(_regs)->aip) & AMASK24)
+#define PSW_IA24( _regs, _offset )                                    \
+                                                                      \
+      (_IA_FROM_IP( AIV_L, (_regs), (_offset)) & AMASK24)
+
+//---------------------------------------------------------------------
+// The PSEUDO_INVALID_AIE value is used whenever you wish to force
+// a break in normal instruction processing and cause the 'instfetch'
+// function to be called to perform a full address translation and
+// fetch of the next instruction. It is mostly used by instruction
+// stepping and tracing logic as well as by the SUCCESS_BRANCH macro
+// when the target of the branch is in a different mainstor page.
+// The "INVALID_AIE" value is used only by the INVALIDATE_AIA and
+// INVALIDATE_AIA_MAIN macros to ALSO to prevent any unwanted PSW
+// updating by short circuiting both the MAYBE_SET_PSW_IA_FROM_IP and
+// SET_PSW_IA_AND_MAYBE_IP macros. The "PSEUDO_INVALID_AIE" value
+// also forces instfetch to be called but additionally allows both
+// the MAYBE_SET_PSW_IA_FROM_IP and SET_PSW_IA_AND_MAYBE_IP macros
+// to continue behaving normally.
+
+#define INVALID_AIE             (NULL)
+#define PSEUDO_INVALID_AIE      ((BYTE*) 1)
+
+#undef  VALID_AIE
+#define VALID_AIE( _regs )      ((_regs)->aie != INVALID_AIE)
+
+//---------------------------------------------------------------------
+// The MAYBE_SET_PSW_IA_FROM_IP macro (notice the 'MAYBE' and 'SET'
+// in its name) CONDITIONALLY sets the virtual psw 'IA' value to point
+// to the same corresponding place as where the current mainstor 'ip'
+// currently points (with no offset), but does so IF AND ONLY IF the
+// 'aie' value is still valid. Otherwise it does absolutely nothing.
+
+#undef  MAYBE_SET_PSW_IA_FROM_IP
+#define MAYBE_SET_PSW_IA_FROM_IP( _regs )                             \
+  do                                                                  \
+  {                                                                   \
+    if (VALID_AIE( _regs ))                                           \
+      (_regs)->psw.IA = PSW_IA_FROM_IP( (_regs), 0 );                 \
+  }                                                                   \
+  while (0)
+
+//---------------------------------------------------------------------
+// The SET_PSW_IA_AND_MAYBE_IP macro (notice the 'MAYBE' in its name)
+// performs the opposite of the above MAYBE_SET_PSW_IA_FROM_IP macro:
+// it sets the mainstor 'ip' to the same corresponding place as where
+// the passed virtual psw 'IA' value points. It first UNCONDITIONALLY
+// SETS the PSW IA to the passed value and then MAYBE also sets the
+// 'ip' to the same corresponding place in mainstor, but it ONLY does
+// so IF AND ONLY IF the updated 'ia' value still points within the
+// same virtual page. If it doesn't, then the 'aie' value is set to
+// NULL to force a full 'instfetch' which then calculates a new 'ip',
+// 'aie' and 'aip' value on the next instruction fetch.
+
+#undef  SET_PSW_IA_AND_MAYBE_IP
+#define SET_PSW_IA_AND_MAYBE_IP( _regs, _ia )                         \
+  do                                                                  \
+  {                                                                   \
+    (_regs)->psw.IA = (_ia) & ADDRESS_MAXWRAP( _regs );               \
+                                                                      \
+    if (VALID_AIE( _regs ))                                           \
+    {                                                                 \
+      if ((_regs)->AIV == ((_regs)->psw.IA & (PAGEFRAME_PAGEMASK|1))) \
+        (_regs)->ip = _PSW_IA_MAIN( (_regs), (_regs)->psw.IA );       \
+      else                                                            \
+        (_regs)->aie = INVALID_AIE;                                   \
+    }                                                                 \
+  }                                                                   \
+  while (0)
+
+//---------------------------------------------------------------------
+// The INST_UPDATE_PSW macro sets the psw ILC to the passed value and
+// bumps the regs->ip instruction pointer by the passed _len value,
+// BUT ONLY IF the passed value is non-zero.
+//
+// It is typically used by the instruction decoder macros to set the
+// ilc for the instruction just decoded and to then bump the 'ip' to
+// the next sequential instruction.
+//
+// Normally '_len' and '_ilc' are the same value (being the length
+// of the instruction being decoded). The reason they are passed as
+// separate values however is to allow for branch instructions to
+// set the ilc value while at the same time NOT bumping the 'ip'
+// since they don't know yet if the branch will be taken or not.
+// If it is, they call the SUCCESSFUL_BRANCH macro. If not, they
+// call the INST_UPDATE_PSW to go on to the next instruction.
+
+#undef  INST_UPDATE_PSW
+#define INST_UPDATE_PSW( _regs, _len, _ilc )                          \
+  do                                                                  \
+  {                                                                   \
+    (_regs)->ip += (_len);                                            \
+    if (_ilc)                                                         \
+      (_regs)->psw.ilc = (_ilc);                                      \
+  }                                                                   \
+  while(0)
 
 /*-------------------------------------------------------------------*/
-/*             Accelerator for instruction addresses                 */
+/*             Accelerator for Instruction Addresses                 */
 /*-------------------------------------------------------------------*/
+/* The AIA is a term used to refer to the set of REGS fields that    */
+/* together control instruction execution. It consists if the 'ip',  */
+/* 'aip', 'aie' and 'aiv' fields. The 'ip' field of course is the    */
+/* mainstor instruction pointer. The 'aip' is the page address of    */
+/* the mainstor page associated with the 'ip'. The 'aiv' field is    */
+/* the guest virtual address of the page corresponding to the aip.   */
+/* The 'aie' is the "logical end" of the 'aip'. It is the highest    */
+/* mainstor 'ip' address that we can safely DIRECTLY fetch the next  */
+/* instruction from. Once the 'ip' reaches the 'aie', instruction    */
+/* fetching is forced to do a call to the "instfetch" function to    */
+/* perform full translation of the address of the next instruction,  */
+/* recalculating new 'ip', 'aip', 'aiv' and 'aie' values which can   */
+/* then be used again for DIRECT instruction fetching. This allows   */
+/* us to "accelerate" instruction fetching since we don't have to    */
+/* go through full address translation for each instruction fetch.   */
+/* We only need to do so when the instruction being fetched crosses  */
+/* over into a new page. That's the 'aie'. It is set to the end of   */
+/* the 'aip' page minus 5 bytes. As long as 'ip' is LESS than aie,   */
+/* we know we can safely fetch the next instruction from that same   */
+/* mainstor page. Otherwise we need to do a full instfetch.          */
+/*-------------------------------------------------------------------*/
+
+// The INVALIDATE_AIA macro essentially renders all AIA fields as
+// being invalid, thereby forcing a full instfetch to be performed.
+// It first ensures that the IA (address of the next instruction)
+// in the guest PSW structure matches where the current regs 'ip'
+// instruction pointer is pointing, and then "invalidates" all AIA
+// fields by setting the 'aie' value to NULL, thereby forcing the
+// next instruction fetch to call the 'instfetch' function.
 
 #undef  INVALIDATE_AIA
-#define INVALIDATE_AIA(_regs) \
-do { \
-  if ((_regs)->aie) { \
-    (_regs)->psw.IA = PSW_IA((_regs), 0); \
-    (_regs)->aie = NULL; \
-  } \
-} while (0)
+#define INVALIDATE_AIA( _regs )                                       \
+  do                                                                  \
+  {                                                                   \
+    if (VALID_AIE( _regs ))                                           \
+    {                                                                 \
+      (_regs)->psw.IA = PSW_IA_FROM_IP( (_regs), 0 );                 \
+      (_regs)->aie = INVALID_AIE;                                     \
+    }                                                                 \
+  }                                                                   \
+  while (0)
+
+//---------------------------------------------------------------------
+// The INVALIDATE_AIA_MAIN macro performs a conditional invalidation
+// of the AIA, but if and ONLY if the passed mainstor address matches
+// the 'aip'. It is used (e.g. the "invalidate_tlbe" function called
+// by the STORKEY_INVALIDATE macro) to invalidate the AIA whenever a
+// DAT page table entry is invalidated that happens to correspond to
+// the mainstor page we're currently fetching instructions from. It
+// first updates the psw IA to match the current instruction address
+// and then sets the 'aie' to NULL to force a full instruction fetch.
 
 #undef  INVALIDATE_AIA_MAIN
-#define INVALIDATE_AIA_MAIN(_regs, _main) \
-do { \
-  if ((_main) == (_regs)->aip && (_regs)->aie) { \
-    (_regs)->psw.IA = PSW_IA((_regs), 0); \
-    (_regs)->aie = NULL; \
-  } \
-} while (0)
+#define INVALIDATE_AIA_MAIN( _regs, _main )                           \
+  do                                                                  \
+  {                                                                   \
+    if (VALID_AIE( _regs ) &&                                         \
+        (((uintptr_t)(_main)) & PAGEFRAME_PAGEMASK) ==                \
+         ((uintptr_t)(_regs)->aip)                                    \
+    )                                                                 \
+    {                                                                 \
+      (_regs)->psw.IA = PSW_IA_FROM_IP( (_regs), 0 );                 \
+      (_regs)->aie = INVALID_AIE;                                     \
+    }                                                                 \
+  }                                                                   \
+  while (0)
+
+//---------------------------------------------------------------------
+// The _PSW_IA_MAIN helper macro returns the mainstor address
+// corresponding to a given guest virtual address. NOTE CAREFULLY
+// that it PRESUMES the virtual address that is passed is within the
+// same mainstor page as we're currently fetching instructions from!
 
 #undef  _PSW_IA_MAIN
-#define _PSW_IA_MAIN(_regs, _addr) \
- ((BYTE *)((uintptr_t)(_regs)->aip | (uintptr_t)((_addr) & PAGEFRAME_BYTEMASK)))
+#define _PSW_IA_MAIN( _regs, _addr )                                  \
+  (                                                                   \
+    (BYTE*)                                                           \
+    (                                                                 \
+        (uintptr_t)(_regs)->aip                                       \
+        |                                                             \
+        (uintptr_t)((_addr) & PAGEFRAME_BYTEMASK)                     \
+    )                                                                 \
+  )
 
 /*-------------------------------------------------------------------*/
 /*                     Instruction fetching                          */
 /*-------------------------------------------------------------------*/
 
+// The _VALID_IP helper macro is used only by the INSTRUCTION_FETCH
+// macro and returns either true/false indicating whether the current
+// instruction pointer is still valid or not (so INSTRUCTION_FETCH
+// can know whether to call the instfetch' function or not). It does
+// this by verifying regs->ip is either still less than regs->aie,
+// or for the 'exec' case, that the mainstor address corresponding
+// to regs->ET (the target of the execute instruction) is still less
+// than regs->aie. It determines the mainstor address of regs->ET
+// via the _PSW_IA_MAIN helper macro.
+
 #undef  _VALID_IP
 #define _VALID_IP( _regs, _exec )                                     \
-(                                                                     \
-      /* Instr NOT being EXecuted and instr ptr < aie */              \
+  (                                                                   \
+      /* Instr NOT being EXecuted and instr ptr in same page */       \
       (1                                                              \
         && !(_exec)                                                   \
         &&  (_regs)->ip < (_regs)->aie                                \
       )                                                               \
   ||                                                                  \
-      /* Instr IS being EXecuted but target instr ptr < aie */        \
+      /* Instr IS being EXecuted and instr ptr in same page */        \
       (1                                                              \
         && (_exec)                                                    \
+        /* Execute target in same virtual page? */                    \
         && ((_regs)->ET & (PAGEFRAME_PAGEMASK|0x01)) == (_regs)->AIV  \
+        /* Execute target in same mainstor page? */                   \
         && _PSW_IA_MAIN( (_regs), (_regs)->ET ) < (_regs)->aie        \
       )                                                               \
-)
+  )
+
+//---------------------------------------------------------------------
+// The INSTRUCTION_FETCH macro returns a mainstor 'ip' pointer
+// pointing to the next instruction to be executed. It either
+// returns regs->ip directly (or for the 'exec' case, the
+// corresponding mainstor address of the instruction being
+// executed), or else calls the 'instfetch' function to calculate
+// a new set of AIA values (ip, aie, aip and aiv).
 
 #undef  INSTRUCTION_FETCH
 #define INSTRUCTION_FETCH( _regs, _exec )                             \
+                                                                      \
+  /* If ip still valid, use current ip or target of executed instr */ \
   likely( _VALID_IP( (_regs), (_exec) )) ?                            \
   (                                                                   \
-    /* If AIA valid use target of EXecuted instr or current ip */     \
     (_exec) ?                                                         \
       _PSW_IA_MAIN( (_regs), (_regs)->ET )                            \
       :                                                               \
       (_regs)->ip                                                     \
   )                                                                   \
-  :                                                                   \
-  /* Else do a full instruction fetch which updates the AIA too */    \
-  ARCH_DEP( instfetch )( (_regs), (_exec) )
+  /* Else do a full instruction fetch (which updates the AIA too) */  \
+  : ARCH_DEP( instfetch )( (_regs), (_exec) )
 
 /*-------------------------------------------------------------------*/
 /*                   Instruction execution                           */
@@ -824,7 +991,7 @@ do { \
   #define ABORT_TRANS( _regs, _retry, _tac )        /* (nothing) */
 
   #undef  TXF_INSTRADDR_CONSTRAINT                  /* (nothing) */
-  #define TXF_INSTRADDR_CONSTRAINT( _ip, _regs )    /* (nothing) */
+  #define TXF_INSTRADDR_CONSTRAINT( _regs )         /* (nothing) */
 
   #undef  TXF_INSTRCOUNT_CONSTRAINT                 /* (nothing) */
   #define TXF_INSTRCOUNT_CONSTRAINT( _ip, _regs )   /* (nothing) */
@@ -842,11 +1009,11 @@ do { \
     ARCH_DEP( abort_transaction )( (_regs), (_retry), (_tac), PTT_LOC )
 
   #undef  TXF_INSTRADDR_CONSTRAINT
-  #define TXF_INSTRADDR_CONSTRAINT( _ip, _regs )                      \
+  #define TXF_INSTRADDR_CONSTRAINT( _regs )                           \
   do {                                                                \
     if (1                                                             \
       && (_regs)->txf_contran                                         \
-      && (_ip) >= (_regs)->txf_aie                                    \
+      && (_regs)->ip >= (_regs)->txf_aie                              \
     )                                                                 \
     {                                                                 \
       (_regs)->txf_why |= TXF_WHY_INSTRADDR;                          \
@@ -887,7 +1054,7 @@ do { \
   do {                                                                \
     if ((_regs)->txf_tnd)                                             \
     {                                                                 \
-      TXF_INSTRADDR_CONSTRAINT( (_ip), (_regs) );                     \
+      TXF_INSTRADDR_CONSTRAINT( (_regs) );                            \
       (_regs)->txf_instctr++;                                         \
       TXF_INSTRCOUNT_CONSTRAINT( (_ip), (_regs) );                    \
       TXF_RAND_ABORT_CONSTRAINT( (_regs) );                           \
@@ -932,111 +1099,14 @@ do {                                                                  \
 /*-------------------------------------------------------------------*/
 
 #undef  SUCCESSFUL_BRANCH
-#define SUCCESSFUL_BRANCH( _regs, _addr, _len )                       \
-do {                                                                  \
-  VADR _newia = (_addr) & ADDRESS_MAXWRAP( (_regs) );                 \
+#define SUCCESSFUL_BRANCH( _regs, _addr )                             \
                                                                       \
-  /* Point bear_ip at the branch instruction itself */                \
-  SET_BEAR_IP( (_regs), 0 ); /* (point bear_ip at branch instr) */    \
-                                                                      \
-  /* Branch target still within same page as branch instruction? */   \
-  if (likely(!(_regs)->permode && !(_regs)->execflag)                 \
-   && likely((_newia & (PAGEFRAME_PAGEMASK|0x01)) == (_regs)->AIV))   \
-  {                                                                   \
-    /* Check for constraint BEFORE actually updating to new ip */     \
-    BYTE* _new_ip = (BYTE*)((uintptr_t)(_regs)->aim ^ (uintptr_t)_newia); \
-    TXF_INSTRADDR_CONSTRAINT( (_new_ip), (_regs) );                   \
-    (_regs)->ip = (_new_ip);   /* (branch to the new instruction) */  \
-    return;                                                           \
-  }                                                                   \
-  /* Branch target is in another page... */                           \
-                                                                      \
-  /* Point bear_ip at the branch instruction itself */                \
-  if (unlikely( (_regs)->execflag ))                                  \
-    SET_BEAR_IP( (_regs), (_len) - ((_regs)->exrl ? 6 : 4) );         \
-                                                                      \
-  /* Set new ip by forcing full instruction fetch from target */      \
-  (_regs)->psw.IA = _newia;     /* (point PSW to target instr) */     \
-  (_regs)->aie = NULL;          /* (force a fresh 'instfetch') */     \
-  PER_SB( (_regs), (_regs)->psw.IA );                                 \
-} while (0)
-
-//---------------------------------------------------------------------
+    ARCH_DEP( SuccessfulBranch )( (_regs), (_addr) )
 
 #undef  SUCCESSFUL_RELATIVE_BRANCH
-#define SUCCESSFUL_RELATIVE_BRANCH( _regs, _offset, _len )            \
-do {                                                                  \
-  /* Point bear_ip at the branch instruction itself */                \
-  SET_BEAR_IP( (_regs), 0 );                                          \
+#define SUCCESSFUL_RELATIVE_BRANCH( _regs, _offset )                  \
                                                                       \
-  /* Branch target still within same page as branch instruction? */   \
-  if (likely(!(_regs)->permode && !(_regs)->execflag)                 \
-   && likely( (_regs)->ip + (_offset) >= (_regs)->aip)                \
-   && likely( (_regs)->ip + (_offset) <  (_regs)->aie) )              \
-  {                                                                   \
-    /* Check for constraint BEFORE actually updating to new ip */     \
-    BYTE* _new_ip = (_regs)->ip + (_offset);                          \
-    TXF_INSTRADDR_CONSTRAINT( (_new_ip), (_regs) );                   \
-    (_regs)->ip = (_new_ip);                                          \
-    return;                                                           \
-  }                                                                   \
-  /* Branch target is in another page... */                           \
-                                                                      \
-  /* Branch target in another page: calculate new ip */               \
-  if (likely(!(_regs)->execflag))                                     \
-    (_regs)->psw.IA = PSW_IA( (_regs), (_offset) );                   \
-  else                                                                \
-  {                                                                   \
-    /* Point bear_ip at the branch instruction itself */              \
-    SET_BEAR_IP( (_regs), (_len) - ((_regs)->exrl ? 6 : 4) );         \
-    (_regs)->psw.IA = (_regs)->ET + (_offset);                        \
-    (_regs)->psw.IA &= ADDRESS_MAXWRAP( (_regs) );                    \
-  }                                                                   \
-                                                                      \
-  /* Set new ip by forcing full instruction fetch from target */      \
-  (_regs)->aie = NULL;            /* (force a fresh 'instfetch') */   \
-  PER_SB( (_regs), (_regs)->psw.IA );                                 \
-} while (0)
-
-//---------------------------------------------------------------------
-//          BRCL, BRASL can branch +/- 4G.
-//          This is problematic on a 32 bit host.
-
-#undef  SUCCESSFUL_RELATIVE_BRANCH_LONG
-#define SUCCESSFUL_RELATIVE_BRANCH_LONG( _regs, _offset )             \
-do {                                                                  \
-  /* Point bear_ip at the branch instruction itself */                \
-  SET_BEAR_IP( (_regs), 0 );                                          \
-                                                                      \
-  /* Branch target still within same page as branch instruction? */   \
-  if (likely(!(_regs)->permode && !(_regs)->execflag  )               \
-   && likely(               (_offset) >      -4096    )               \
-   && likely(               (_offset) <       4096    )               \
-   && likely( (_regs)->ip + (_offset) >= (_regs)->aip )               \
-   && likely( (_regs)->ip + (_offset) <  (_regs)->aie ))              \
-  {                                                                   \
-    /* Check for constraint BEFORE actually updating to new ip */     \
-    BYTE* _new_ip = (_regs)->ip + (_offset);                          \
-    TXF_INSTRADDR_CONSTRAINT( (_new_ip), (_regs) );                   \
-    (_regs)->ip = (_new_ip);                                          \
-    return;                                                           \
-  }                                                                   \
-  /* Branch target is in another page... */                           \
-                                                                      \
-  if (likely(!(_regs)->execflag))                                     \
-    (_regs)->psw.IA = PSW_IA( (_regs), (_offset) );                   \
-  else                                                                \
-  {                                                                   \
-    /* Point bear_ip at the branch instruction itself */              \
-    SET_BEAR_IP( (_regs), 6 - ((_regs)->exrl ? 6 : 4) );              \
-    (_regs)->psw.IA = (_regs)->ET + (_offset);                        \
-    (_regs)->psw.IA &= ADDRESS_MAXWRAP( (_regs) );                    \
-  }                                                                   \
-                                                                      \
-  /* Set new ip by forcing full instruction fetch from target */      \
-  (_regs)->aie = NULL;            /* (force a fresh 'instfetch') */   \
-  PER_SB( (_regs), (_regs)->psw.IA );                                 \
-} while (0)
+    ARCH_DEP( SuccessfulRelativeBranch )( (_regs), (_offset) )
 
 /*-------------------------------------------------------------------*/
 /*                         (other)                                   */
@@ -1073,38 +1143,25 @@ do {                                                                  \
 #endif /* !defined( FEATURE_037_FP_EXTENSION_FACILITY ) */
 
 /*-------------------------------------------------------------------*/
-/*          PER3 Breaking Event Address Recording (BEAR)             */
+/*          PER3 Breaking-Event-Address Register (BEAR)              */
 /*-------------------------------------------------------------------*/
 
-#undef SET_BEAR_IP
 #undef SET_BEAR_REG
+#undef SET_BEAR_EX_REG
 
 #if defined( FEATURE_PER3 )
 
-  #define SET_BEAR_IP(  _regs, _n  )                                  \
-                                                                      \
-    (_regs)->bear_ip = (_regs)->ip + (_n)
-
-
   #define SET_BEAR_REG( _regs, _ip )                                  \
-    do                                                                \
-    {                                                                 \
-      if ((_ip))                                                      \
-      {                                                               \
-        /* BEAR = address of the begin of virtual ('AIV') page        \
-           + same displacement from begin of mainstore ('ip') page    \
-        */                                                            \
-        (_regs)->bear = (_regs)->AIV + (intptr_t)                     \
-                        ((_ip) - (_regs)->aip);                       \
-        (_regs)->bear &= ADDRESS_MAXWRAP( (_regs) );                  \
-        (_regs)->bear_ip = NULL;                                      \
-      }                                                               \
-    } while (0)
+    ARCH_DEP( Set_BEAR_Reg )( &(_regs)->bear,    (_regs), (_ip) )
 
+  #define SET_BEAR_EX_REG( _regs, _ip )                               \
+    ARCH_DEP( Set_BEAR_Reg )( &(_regs)->bear_ex, (_regs), (_ip) )
 
 #else
-  #define SET_BEAR_IP(  _regs, _n  )    do{}while(0)
-  #define SET_BEAR_REG( _regs, _ip )    do{}while(0)
+
+  #define SET_BEAR_REG(    _regs, _ip )
+  #define SET_BEAR_EX_REG( _regs, _ip )
+
 #endif
 
 /*-------------------------------------------------------------------*/
@@ -1323,38 +1380,98 @@ do {                                                                  \
          + (uintptr_t)(_aaddr)) \
          ^ (uintptr_t)((_addr) & TLB_PAGEMASK))
 
-/* Perform invalidation after storage key update.
- * If the REF or CHANGE bit is turned off for an absolute
- * address then we need to invalidate any cached entries
- * for that address on *all* CPUs.
- * FIXME: Synchronization, esp for the CHANGE bit, should
- * be tighter than what is provided here.
+#define MAIN_TO_ABS(_main)  ((U64)((BYTE*)(_main) - sysblk.mainstor))
+
+/* Perform invalidation after storage key update...
+ *
+ * If the REF or CHANGE bit is turned off for an absolute address,
+ * then we need to invalidate any cached entries for that address
+ * on *ALL* CPUs.
+ *
+ * FIXME: Synchronization, esp. for the CHANGE bit, should be
+ * tighter than what is provided here.
  */
-#define STORKEY_INVALIDATE(_regs, _n) \
- do { \
-   BYTE *mn; \
-   mn = (_regs)->mainstor + ((_n) & PAGEFRAME_PAGEMASK); \
-   ARCH_DEP( invalidate_tlbe )((_regs), mn); \
-   if (sysblk.cpus > 1) { \
-     int i; \
-     OBTAIN_INTLOCK ((_regs)); \
-     for (i = 0; i < sysblk.hicpu; i++) { \
-       if (IS_CPU_ONLINE(i) && i != (_regs)->cpuad) { \
-         if ( sysblk.waiting_mask & CPU_BIT(i) ) \
-           ARCH_DEP( invalidate_tlbe )(sysblk.regs[i], mn); \
-         else { \
-           ON_IC_INTERRUPT(sysblk.regs[i]); \
-           if (!sysblk.regs[i]->invalidate) { \
-             sysblk.regs[i]->invalidate = 1; \
-             sysblk.regs[i]->invalidate_main = mn; \
-           } else \
-             sysblk.regs[i]->invalidate_main = NULL; \
-         } \
-       } \
-     } \
-     RELEASE_INTLOCK((_regs)); \
-   } \
- } while (0)
+#define STORKEY_INVALIDATE_LOCKED( _regs, _n )                          \
+ do                                                                     \
+ {                                                                      \
+   BYTE* abs = (_regs)->mainstor + ((_n) & PAGEFRAME_PAGEMASK);         \
+                                                                        \
+   /* Do it for the current CPU first */                                \
+   ARCH_DEP( invalidate_tlbe )( (_regs), abs );                         \
+                                                                        \
+   if (sysblk.cpus > 1)                                                 \
+   {                                                                    \
+     int cpu;        /* CPU being examined */                           \
+     REGS* cregs;    /* register context for CPU being examined */      \
+                                                                        \
+     /* Do invalidate for all of the other online CPUs too */           \
+     for (cpu=0; cpu < sysblk.hicpu; cpu++)                             \
+     {                                                                  \
+       /* Skip our own CPU and CPUs which aren't online */              \
+       if (IS_CPU_ONLINE( cpu ) && cpu != (_regs)->cpuad)               \
+       {                                                                \
+         cregs = sysblk.regs[cpu];                                      \
+                                                                        \
+         /* Is this CPU waiting for an interrupt? */                    \
+         if (sysblk.waiting_mask & CPU_BIT( cpu ))                      \
+         {                                                              \
+           /* Yes, then we can do the invalidate right now... */        \
+           switch (cregs->arch_mode)                                    \
+           {                                                            \
+             case ARCH_370_IDX:                                         \
+             {                                                          \
+               abs = cregs->mainstor + ((_n) & PAGEFRAME_370_PAGEMASK); \
+               s370_invalidate_tlbe( cregs, abs );                      \
+               break;                                                   \
+             }                                                          \
+             case ARCH_390_IDX:                                         \
+             {                                                          \
+               abs = cregs->mainstor + ((_n) & PAGEFRAME_390_PAGEMASK); \
+               s390_invalidate_tlbe( cregs, abs );                      \
+               break;                                                   \
+             }                                                          \
+             case ARCH_900_IDX:                                         \
+             {                                                          \
+               abs = cregs->mainstor + ((_n) & PAGEFRAME_900_PAGEMASK); \
+               z900_invalidate_tlbe( cregs, abs );                      \
+               break;                                                   \
+             }                                                          \
+             default:                                                   \
+             {                                                          \
+               CRASH();                                                 \
+             }                                                          \
+           }                                                            \
+         }                                                              \
+         else /* Otherwise we need to schedule it ... */                \
+         {                                                              \
+           ON_IC_INTERRUPT( cregs );                                    \
+                                                                        \
+           if (!cregs->invalidate)                                      \
+           {                                                            \
+             cregs->invalidate = 1;                                     \
+             cregs->invalidate_main = abs;                              \
+           }                                                            \
+           else                                                         \
+           {                                                            \
+             cregs->invalidate_main = NULL;                             \
+           }                                                            \
+         }                                                              \
+       }                                                                \
+     }                                                                  \
+   }                                                                    \
+ }                                                                      \
+ while (0)
+
+#define STORKEY_INVALIDATE( _regs, _n )                                 \
+ do                                                                     \
+ {                                                                      \
+   OBTAIN_INTLOCK( (_regs) );                                           \
+   {                                                                    \
+      STORKEY_INVALIDATE_LOCKED( (_regs), (_n) );                       \
+   }                                                                    \
+   RELEASE_INTLOCK( (_regs) );                                          \
+ }                                                                      \
+ while (0)
 
 #if defined( INLINE_STORE_FETCH_ADDR_CHECK )
  #define FETCH_MAIN_ABSOLUTE(_addr, _regs, _len) \
@@ -1369,39 +1486,37 @@ do {                                                                  \
 /*-------------------------------------------------------------------*/
 
 #undef CONTRAN_INSTR_CHECK
-#undef CONTRAN_BRANCH_CHECK
-#undef CONTRAN_RELATIVE_BRANCH_CHECK
+#undef CONTRAN_INSTR_CHECK_IP
+#undef CONTRAN_BRANCH_CHECK_IP
+#undef CONTRAN_RELATIVE_BRANCH_CHECK_IP
 #undef TRAN_INSTR_CHECK
 #undef TRAN_FLOAT_INSTR_CHECK
 #undef TRAN_ACCESS_INSTR_CHECK
-#undef TRAN_NONRELATIVE_BRANCH_CHECK
-#undef TRAN_BRANCH_SET_MODE_CHECK
+#undef TRAN_NONRELATIVE_BRANCH_CHECK_IP
+#undef TRAN_BRANCH_SET_MODE_CHECK_IP
 #undef TRAN_SET_ADDRESSING_MODE_CHECK
 #undef TRAN_MISC_INSTR_CHECK
 #undef TRAN_EXECUTE_INSTR_CHECK
 #undef ALLOC_TXFMAP
 #undef FREE_TXFMAP
-#undef TXF_FETCHREF
-#undef TXF_STOREREF
 #undef TXF_MADDRL
 
 #if !defined( FEATURE_073_TRANSACT_EXEC_FACILITY )
 
   #define CONTRAN_INSTR_CHECK( _regs )
-  #define CONTRAN_BRANCH_CHECK( _regs, _m3, _i4 )
-  #define CONTRAN_RELATIVE_BRANCH_CHECK( _regs )
+  #define CONTRAN_INSTR_CHECK_IP( _regs )
+  #define CONTRAN_BRANCH_CHECK_IP( _regs, _m3, _i4 )
+  #define CONTRAN_RELATIVE_BRANCH_CHECK_IP( _regs )
   #define TRAN_INSTR_CHECK( _regs )
   #define TRAN_FLOAT_INSTR_CHECK( _regs )
   #define TRAN_ACCESS_INSTR_CHECK( _regs )
   #define TRAN_MISC_INSTR_CHECK( _regs )
-  #define TRAN_NONRELATIVE_BRANCH_CHECK( _regs, _r )
-  #define TRAN_BRANCH_SET_MODE_CHECK( _regs, _r2 )
+  #define TRAN_NONRELATIVE_BRANCH_CHECK_IP( _regs, _r )
+  #define TRAN_BRANCH_SET_MODE_CHECK_IP( _regs, _r2 )
   #define TRAN_SET_ADDRESSING_MODE_CHECK( _regs )
   #define TRAN_EXECUTE_INSTR_CHECK( _regs )
   #define ALLOC_TXFMAP( _regs )
   #define FREE_TXFMAP( _regs )
-  #define TXF_FETCHREF( _maddr, _len )
-  #define TXF_STOREREF( _maddr, _len )
 
   #define TXF_MADDRL( _vaddr, _len, _arn, _regs, _acctype, _maddr ) \
     /* Return the very same address as what was passed */ (_maddr)
@@ -1418,7 +1533,21 @@ do {                                                                  \
       }                                                                                 \
     } while (0)
 
-  #define CONTRAN_BRANCH_CHECK( _regs, _m3, _i4 )                                       \
+  #define CONTRAN_INSTR_CHECK_IP( _regs )                                               \
+    /* Restricted instruction in CONSTRAINED transaction mode */                        \
+    do {                                                                                \
+      if ((_regs)->txf_contran)                                                         \
+      {                                                                                 \
+        /* Since the instruction hasn't been decoded yet, regs->ip is still             \
+           pointing to the instruction so we use NEGATIVE "ABORT_RETRY_PGMCHK".         \
+           See the comments in the "abort_transaction" function in transact.c           \
+        */                                                                              \
+        (_regs)->txf_why |= TXF_WHY_CONTRAN_INSTR;                                      \
+        ABORT_TRANS( (_regs), -ABORT_RETRY_PGMCHK, TAC_INSTR );                         \
+      }                                                                                 \
+    } while (0)
+
+  #define CONTRAN_BRANCH_CHECK_IP( _regs, _m3, _i4 )                                    \
     /* Branches restricted in CONSTRAINED mode if mask zero or offset negative */       \
     do {                                                                                \
       if ((_regs)->txf_contran &&                                                       \
@@ -1427,12 +1556,16 @@ do {                                                                  \
         || (_i4) < 0                /* backward branches not allowed */                 \
       ))                                                                                \
       {                                                                                 \
+        /* Since the instruction hasn't been decoded yet, regs->ip is still             \
+           pointing to the instruction so we use NEGATIVE "ABORT_RETRY_PGMCHK".         \
+           See the comments in the "abort_transaction" function in transact.c           \
+        */                                                                              \
         (_regs)->txf_why |= TXF_WHY_CONTRAN_BRANCH;                                     \
-        ABORT_TRANS( (_regs), ABORT_RETRY_PGMCHK, TAC_INSTR );                          \
+        ABORT_TRANS( (_regs), -ABORT_RETRY_PGMCHK, TAC_INSTR );                         \
       }                                                                                 \
     } while (0)
 
-  #define CONTRAN_RELATIVE_BRANCH_CHECK( _regs )                                        \
+  #define CONTRAN_RELATIVE_BRANCH_CHECK_IP( _regs )                                     \
     /* Relative branches restricted in CONSTRAINED mode */                              \
     /* if the mask is zero or the offset is negative    */                              \
     do {                                                                                \
@@ -1442,8 +1575,12 @@ do {                                                                  \
         || (inst[2] & 0x80)                                                             \
       ))                                                                                \
       {                                                                                 \
+        /* Since the instruction hasn't been decoded yet, regs->ip is still             \
+           pointing to the instruction so we use NEGATIVE "ABORT_RETRY_PGMCHK".         \
+           See the comments in the "abort_transaction" function in transact.c           \
+        */                                                                              \
         (_regs)->txf_why |= TXF_WHY_CONTRAN_RELATIVE_BRANCH;                            \
-        ABORT_TRANS( (_regs), ABORT_RETRY_PGMCHK, TAC_INSTR );                          \
+        ABORT_TRANS( (_regs), -ABORT_RETRY_PGMCHK, TAC_INSTR );                         \
       }                                                                                 \
     } while (0)
 
@@ -1486,7 +1623,7 @@ do {                                                                  \
       }                                                                                 \
     } while (0)
 
-  #define TRAN_NONRELATIVE_BRANCH_CHECK( _regs, _r )                                    \
+  #define TRAN_NONRELATIVE_BRANCH_CHECK_IP( _regs, _r )                                 \
     /* BALR/BASR/BASSM are restricted when the branch     */                            \
     /* register is non-zero and BRANCH tracing is enabled */                            \
     do {                                                                                \
@@ -1495,12 +1632,16 @@ do {                                                                  \
           && ((_r) != 0 && ((_regs)->CR(12) & CR12_BRTRACE))                            \
       )                                                                                 \
       {                                                                                 \
+        /* Since the instruction hasn't been decoded yet, regs->ip is still             \
+           pointing to the instruction so we use NEGATIVE "ABORT_RETRY_PGMCHK".         \
+           See the comments in the "abort_transaction" function in transact.c           \
+        */                                                                              \
         (_regs)->txf_why |= TXF_WHY_TRAN_NONRELATIVE_BRANCH;                            \
-        ABORT_TRANS( (_regs), ABORT_RETRY_PGMCHK, TAC_INSTR );                          \
+        ABORT_TRANS( (_regs), -ABORT_RETRY_PGMCHK, TAC_INSTR );                         \
       }                                                                                 \
     } while (0)
 
-  #define TRAN_BRANCH_SET_MODE_CHECK( _regs, _r2 )                                      \
+  #define TRAN_BRANCH_SET_MODE_CHECK_IP( _regs, _r2 )                                   \
     /* BASSM/BSM are restricted if the r2 field */                                      \
     /* is non-zero and MODE tracing is enabled. */                                      \
     do {                                                                                \
@@ -1509,8 +1650,12 @@ do {                                                                  \
           && ((_r2) != 0 && ((_regs)->CR(12) & CR12_MTRACE))                            \
       )                                                                                 \
       {                                                                                 \
+        /* Since the instruction hasn't been decoded yet, regs->ip is still             \
+           pointing to the instruction so we use NEGATIVE "ABORT_RETRY_PGMCHK".         \
+           See the comments in the "abort_transaction" function in transact.c           \
+        */                                                                              \
         (_regs)->txf_why |= TXF_WHY_TRAN_BRANCH_SET_MODE;                               \
-        ABORT_TRANS( (_regs), ABORT_RETRY_PGMCHK, TAC_INSTR );                          \
+        ABORT_TRANS( (_regs), -ABORT_RETRY_PGMCHK, TAC_INSTR );                         \
       }                                                                                 \
     } while (0)
 
@@ -1546,14 +1691,8 @@ do {                                                                  \
       }                                                                                 \
     } while (0)
 
-  #define TXF_MADDRL(   _vaddr,   _len,   _arn,   _regs,   _acctype,   _maddr  ) \
+  #define TXF_MADDRL(   _vaddr,   _len,   _arn,   _regs,   _acctype,   _maddr  )        \
           txf_maddr_l( (_vaddr), (_len), (_arn), (_regs), (_acctype), (_maddr) )
-
-  #define TXF_FETCHREF( _maddr, _len ) \
-          TXF_MADDRL( 0, (_len), 0, NULL, ACC_READ, (_maddr) )
-
-  #define TXF_STOREREF( _maddr, _len ) \
-          TXF_MADDRL( 0, (_len), 0, NULL, ACC_WRITE, (_maddr) )
 
   #define ALLOC_TXFMAP( _regs )     alloc_txfmap( _regs )
   #define FREE_TXFMAP( _regs )      free_txfmap( _regs )
@@ -1563,93 +1702,157 @@ do {                                                                  \
 /*-------------------------------------------------------------------*/
 /*                     Instruction decoders                          */
 /*-------------------------------------------------------------------*/
-#include "instfmts.h"       /* (moved to separate #include header)   */
+
+#include "instfmts.h"     // (moved into separate #include header)
+
+/*-------------------------------------------------------------------*/
+/*                 SIE address translation macros                    */
 /*-------------------------------------------------------------------*/
 
-#undef SIE_TRANSLATE_ADDR
 #undef SIE_LOGICAL_TO_ABS
-#undef SIE_INTERCEPT
+#undef SIE_TRANSLATE_ADDR
 #undef SIE_TRANSLATE
 
 #if defined( _FEATURE_SIE )
 
-#define SIE_SET_VI(_who, _when, _why, _regs) \
-    { \
-        (_regs)->siebk->vi_who = (_who); \
-        (_regs)->siebk->vi_when = (_when); \
-        STORE_HW((_regs)->siebk->vi_why, (_why)); \
-        memset((_regs)->siebk->vi_zero, 0, 6); \
-    }
+  //-------------------------------------------------------------------
+  //   SIE_LOGICAL_TO_ABS:   SIE host virt  -->  SIE host abs
+  //   SIE_TRANSLATE_ADDR:   SIE host virt  -->  SIE host real; rc
+  //-------------------------------------------------------------------
 
-#if __GEN_ARCH == 900 || (__GEN_ARCH == 390 && !defined( _FEATURE_ZSIE ))
+  // --------------------------------------------------------------------------------
+  //          z/Arch running under z/VM, or ESA/390 running under VM/ESA
+  // --------------------------------------------------------------------------------
 
-#define SIE_TRANSLATE_ADDR(_addr, _arn, _regs, _acctype) \
-    ARCH_DEP( translate_addr )((_addr), (_arn), (_regs), (_acctype))
+  #if __GEN_ARCH == 900 || (__GEN_ARCH == 390 && !defined( _FEATURE_ZSIE ))
 
-#define SIE_LOGICAL_TO_ABS(_addr, _arn, _regs, _acctype, _akey) \
-  ( \
-    ARCH_DEP( logical_to_main )((_addr), (_arn), (_regs), (_acctype), (_akey)), \
-    (_regs)->dat.aaddr \
-  )
+    #define SIE_LOGICAL_TO_ABS( _addr, _arn, _regs, _acctype, _akey )                   \
+      (                                                                                 \
+        ARCH_DEP( logical_to_main_l )( (_addr), (_arn), (_regs), (_acctype), (_akey), 1 ), \
+        (_regs)->dat.aaddr   /* THIS IS THE ACTUAL VALUE THE MACRO RETURNS! */          \
+      )
 
-#elif __GEN_ARCH == 370 && defined( _FEATURE_SIE )
+    #define SIE_TRANSLATE_ADDR( _addr, _arn, _regs, _acctype )                          \
+                                                                                        \
+        ARCH_DEP( translate_addr )( (_addr), (_arn), (_regs), (_acctype) )
 
-#define SIE_TRANSLATE_ADDR(_addr, _arn, _regs, _acctype)   \
-    s390_translate_addr((_addr), (_arn), (_regs), (_acctype))
+  // --------------------------------------------------------------------------------
+  //                      S/370 running under VM/ESA
+  // --------------------------------------------------------------------------------
 
-#define SIE_LOGICAL_TO_ABS(_addr, _arn, _regs, _acctype, _akey) \
-  ( \
-    s390_logical_to_main((_addr), (_arn), (_regs), (_acctype), (_akey)), \
-    (_regs)->dat.aaddr \
-  )
+  #elif __GEN_ARCH == 370 && defined( _FEATURE_SIE )
 
-#else /* __GEN_ARCH == 390 && defined( _FEATURE_ZSIE ) */
+    #define SIE_LOGICAL_TO_ABS( _addr, _arn, _regs, _acctype, _akey )                   \
+      (                                                                                 \
+        s390_logical_to_main_l( (_addr), (_arn), (_regs), (_acctype), (_akey), 1 ),     \
+        (_regs)->dat.aaddr   /* THIS IS THE ACTUAL VALUE THE MACRO RETURNS! */          \
+      )
 
-#define SIE_TRANSLATE_ADDR(_addr, _arn, _regs, _acctype)   \
-    ( ((_regs)->arch_mode == ARCH_390_IDX) ?            \
-    s390_translate_addr((_addr), (_arn), (_regs), (_acctype)) : \
-    z900_translate_addr((_addr), (_arn), (_regs), (_acctype)) )
+    #define SIE_TRANSLATE_ADDR( _addr, _arn, _regs, _acctype )                          \
+                                                                                        \
+        s390_translate_addr( (_addr), (_arn), (_regs), (_acctype) )
 
-#define SIE_LOGICAL_TO_ABS(_addr, _arn, _regs, _acctype, _akey) \
-  ( \
-    (((_regs)->arch_mode == ARCH_390_IDX) \
-    ? s390_logical_to_main((_addr), (_arn), (_regs), (_acctype), (_akey)) \
-    : z900_logical_to_main((_addr), (_arn), (_regs), (_acctype), (_akey))), \
-    (_regs)->dat.aaddr \
-  )
+  // --------------------------------------------------------------------------------
+  //                      ESA/390 running under z/VM
+  // --------------------------------------------------------------------------------
 
-#endif
+  #else /* __GEN_ARCH == 390 && defined( _FEATURE_ZSIE ) */
 
-#define SIE_INTERCEPT(_regs) \
-do { \
-    if(SIE_MODE((_regs))) \
-    longjmp((_regs)->progjmp, SIE_INTERCEPT_INST); \
-} while(0)
+    #define SIE_LOGICAL_TO_ABS( _addr, _arn, _regs, _acctype, _akey )                   \
+      (                                                                                 \
+        ((ARCH_390_IDX == (_regs)->arch_mode)                                           \
+        ? s390_logical_to_main_l( (_addr), (_arn), (_regs), (_acctype), (_akey), 1 )    \
+        : z900_logical_to_main_l( (_addr), (_arn), (_regs), (_acctype), (_akey), 1 )),  \
+        (_regs)->dat.aaddr   /* THIS IS THE ACTUAL VALUE THE MACRO RETURNS! */          \
+      )
 
-#define SIE_TRANSLATE(_addr, _acctype, _regs) \
-do { \
-    if(SIE_MODE((_regs)) && !(_regs)->sie_pref) \
-    *(_addr) = SIE_LOGICAL_TO_ABS ((_regs)->sie_mso + *(_addr), \
-      USE_PRIMARY_SPACE, HOST(_regs), (_acctype), 0); \
-} while(0)
+    #define SIE_TRANSLATE_ADDR( _addr, _arn, _regs, _acctype )                          \
+      (                                                                                 \
+        (ARCH_390_IDX == (_regs)->arch_mode)                                            \
+        ? s390_translate_addr( (_addr), (_arn), (_regs), (_acctype) )                   \
+        : z900_translate_addr( (_addr), (_arn), (_regs), (_acctype) )                   \
+      )
 
-#else /* !defined( _FEATURE_SIE ) */
+  #endif // __GEN_ARCH == ...
 
-#define SIE_TRANSLATE_ADDR(_addr, _arn, _regs, _acctype)
-#define SIE_LOGICAL_TO_ABS(_addr, _arn, _regs, _acctype, _akey)
-#define SIE_INTERCEPT(_regs)
-#define SIE_TRANSLATE(_addr, _acctype, _regs)
+  // --------------------------------------------------------------------------------
+  //  SIE_TRANSLATE:  SIE guest abs  -->  SIE host abs   (or nop if not in SIE mode)
+  // --------------------------------------------------------------------------------
 
-#endif /* !defined( _FEATURE_SIE ) */
+  #define SIE_TRANSLATE( _addr, _acctype, _regs )                     \
+                                                                      \
+    do {                                                              \
+      if (SIE_MODE( (_regs) ) && !(_regs)->sie_pref) /* SIE mode? */  \
+        *(_addr) = SIE_LOGICAL_TO_ABS(  /* host virt --> host abs */  \
+           (_regs)->sie_mso + *(_addr), /* guest abs is host virt */  \
+           USE_PRIMARY_SPACE,           /* host primary virtual   */  \
+           HOST(_regs),                 /* host register context  */  \
+           (_acctype), 0 );             /* access type and skey   */  \
+    } while (0)
 
-#undef SIE_XC_INTERCEPT
-#if defined( FEATURE_MULTIPLE_CONTROLLED_DATA_SPACE )
-  #define SIE_XC_INTERCEPT(_regs) \
-    if(SIE_STATE_BIT_ON((_regs), MX, XC)) \
-       SIE_INTERCEPT((_regs))
-#else
-  #define SIE_XC_INTERCEPT(_regs)
-#endif
+#else // !defined( _FEATURE_SIE )
+
+  #define SIE_TRANSLATE_ADDR( _addr, _arn, _regs, _acctype )
+  #define SIE_LOGICAL_TO_ABS( _addr, _arn, _regs, _acctype, _akey )
+  #define SIE_TRANSLATE( _addr, _acctype, _regs )
+
+#endif // defined( _FEATURE_SIE )
+
+/*-------------------------------------------------------------------*/
+/*                     other SIE helper macros                       */
+/*-------------------------------------------------------------------*/
+
+#undef  SIE_INTERCEPT
+#undef  SIE_XC_INTERCEPT
+#undef  SIE_SET_VI
+
+#if defined( _FEATURE_SIE )
+
+  /*---------------------------------------------*/
+  /*      SIE intercept if SIE mode              */
+  /*---------------------------------------------*/
+  #define SIE_INTERCEPT( _regs )                                      \
+                                                                      \
+    do {                                                              \
+      if (SIE_MODE( _regs ))                                          \
+        longjmp( (_regs)->progjmp, SIE_INTERCEPT_INST );              \
+    }                                                                 \
+    while (0)
+
+  /*---------------------------------------------*/
+  /*        SIE intercept if XC mode guest       */
+  /*---------------------------------------------*/
+  #if defined( FEATURE_MULTIPLE_CONTROLLED_DATA_SPACE )
+    #define SIE_XC_INTERCEPT( _regs )                                 \
+                                                                      \
+      do {                                                            \
+        if (SIE_MODE( _regs ) && SIE_STATE_BIT_ON( (_regs), MX, XC )) \
+          longjmp( (_regs)->progjmp, SIE_INTERCEPT_INST );            \
+      }                                                               \
+      while (0)
+  #else
+    #define SIE_XC_INTERCEPT( _regs )
+  #endif
+
+  /*---------------------------------------------*/
+  /*     Set SIE Validity Intercept fields       */
+  /*---------------------------------------------*/
+  #define SIE_SET_VI( _who, _when, _why, _regs )                      \
+    do {                                                              \
+                   (_regs)->siebk->vi_who  = (_who);                  \
+                   (_regs)->siebk->vi_when = (_when);                 \
+        STORE_HW(  (_regs)->siebk->vi_why,   (_why)   );              \
+        memset(    (_regs)->siebk->vi_zero, 0, 6 );                   \
+    }                                                                 \
+    while (0)
+
+#else // !defined( _FEATURE_SIE )
+
+  #define SIE_INTERCEPT( _regs )
+  #define SIE_XC_INTERCEPT( _regs )
+  #define SIE_SET_VI( _who, _when, _why, _regs )
+
+#endif // defined( _FEATURE_SIE )
 
 /*-------------------------------------------------------------------*/
 /*                  Instruction serialization                        */
@@ -1699,37 +1902,34 @@ void channelset_reset(REGS *regs);
 #if defined( _370 )
 void s370_store_psw (REGS *regs, BYTE *addr);
 int  s370_load_psw (REGS *regs, BYTE *addr);
-void s370_process_trace (REGS *regs);
+void s370_process_trace( REGS* regs, BYTE* dest );
 #endif
 
 #if defined( _390 )
 int  s390_load_psw (REGS *regs, BYTE *addr);
 void s390_store_psw (REGS *regs, BYTE *addr);
-void s390_process_trace (REGS *regs);
+void s390_process_trace( REGS* regs, BYTE* dest );
 #endif
 
 #if defined( _900 )
 int  z900_load_psw (REGS *regs, BYTE *addr);
 void z900_store_psw (REGS *regs, BYTE *addr);
-void z900_process_trace (REGS *regs);
+void z900_process_trace( REGS* regs, BYTE* dest );
 #endif
 
 int cpu_init (int cpu, REGS *regs, REGS *hostregs);
 void ARCH_DEP( perform_io_interrupt ) (REGS *regs);
-void ARCH_DEP( checkstop_config )(void);
+void ARCH_DEP( checkstop_all_cpus )( REGS* regs );
+U64 make_psw64( REGS* regs, int arch /*370/390/900*/, bool bc );
 
-#if defined( _FEATURE_SIE )
-CPU_DLL_IMPORT void (ATTR_REGPARM(2) s370_program_interrupt) (REGS *regs, int code);
+#if defined( FEATURE_PER3 )
+CPU_DLL_IMPORT void ARCH_DEP( Set_BEAR_Reg )( U64* bear, REGS* regs, BYTE* ip );
 #endif
 
-#if defined( _FEATURE_ZSIE )
-CPU_DLL_IMPORT void (ATTR_REGPARM(2) s390_program_interrupt) (REGS *regs, int code);
-#endif
-
-CPU_DLL_IMPORT void (ATTR_REGPARM(2) ARCH_DEP( program_interrupt ))        ( REGS* regs, int code );
-CPU_DLL_IMPORT int                   ARCH_DEP( fix_program_interrupt_PSW ) ( REGS* regs );
-CPU_DLL_IMPORT void (ATTR_REGPARM(2) ARCH_DEP( trace_program_interrupt ))  ( REGS* regs, int pcode, int ilc );
-CPU_DLL_IMPORT void                  ARCH_DEP( trace_program_interrupt_ip )( REGS* regs, BYTE* ip, int pcode, int ilc );
+CPU_DLL_IMPORT void ARCH_DEP( SuccessfulBranch          )( REGS* regs, VADR vaddr );
+CPU_DLL_IMPORT void ARCH_DEP( SuccessfulRelativeBranch  )( REGS* regs, S64 offset );
+CPU_DLL_IMPORT int  ARCH_DEP( fix_program_interrupt_PSW )( REGS* regs );
+CPU_DLL_IMPORT void ARCH_DEP( trace_program_interrupt   )( REGS* regs, int pcode, int ilc );
 
 void *cpu_thread (void *cpu);
 DLL_EXPORT void copy_psw (REGS *regs, BYTE *addr);
@@ -2515,6 +2715,36 @@ DEF_INST( load_logical_and_zero_rightmost_byte );
 DEF_INST( load_and_zero_rightmost_byte );
 #endif
 
+#if defined( FEATURE_058_MISC_INSTR_EXT_FACILITY_2 )
+DEF_INST( branch_indirect_on_condition );
+DEF_INST( add_long_halfword );
+DEF_INST( subtract_long_halfword );
+DEF_INST( multiply_long_register );
+DEF_INST( multiply_long );
+DEF_INST( multiply_long_halfword );
+DEF_INST( multiply_single_register_cc );
+DEF_INST( multiply_single_cc );
+DEF_INST( multiply_single_long_register_cc );
+DEF_INST( multiply_single_long_cc );
+#endif
+
+#if defined( FEATURE_061_MISC_INSTR_EXT_FACILITY_3 )
+DEF_INST( and_register_with_complement );
+DEF_INST( and_register_long_with_complement );
+DEF_INST( nand_register );
+DEF_INST( nand_register_long );
+DEF_INST( not_xor_register );
+DEF_INST( not_xor_register_long );
+DEF_INST( nor_register );
+DEF_INST( nor_register_long );
+DEF_INST( or_register_with_complement );
+DEF_INST( or_register_long_with_complement );
+DEF_INST( select_register );
+DEF_INST( select_register_long );
+DEF_INST( select_fullword_high_register );
+DEF_INST( move_right_to_left );
+#endif
+
 #if defined( FEATURE_066_RES_REF_BITS_MULT_FACILITY )
 DEF_INST( reset_reference_bits_multiple );
 #endif
@@ -2543,6 +2773,10 @@ DEF_INST( nontransactional_store );
 DEF_INST( transaction_begin );
 #endif
 
+#if defined( FEATURE_074_STORE_HYPER_INFO_FACILITY )
+DEF_INST( store_hypervisor_information );
+#endif
+
 #if defined( FEATURE_076_MSA_EXTENSION_FACILITY_3 )
 DEF_INST( perform_cryptographic_key_management_operation );
 #endif
@@ -2552,6 +2786,10 @@ DEF_INST( perform_cryptographic_computation );
 DEF_INST( cipher_message_with_cipher_feedback );
 DEF_INST( cipher_message_with_output_feedback );
 DEF_INST( cipher_message_with_counter );
+#endif
+
+#if defined( FEATURE_145_INS_REF_BITS_MULT_FACILITY )
+DEF_INST( insert_reference_bits_multiple );
 #endif
 
 /*-------------------------------------------------------------------*/
@@ -2907,7 +3145,7 @@ DEF_INST( test_under_mask_high );
 DEF_INST( test_under_mask_low );
 #endif
 
-#if defined( FEATURE_INTERPRETIVE_EXECUTION )
+#if defined( FEATURE_SIE )
 DEF_INST( start_interpretive_execution );
 #endif
 
@@ -3164,6 +3402,10 @@ DEF_INST( branch_in_subspace_group );
 
 #if defined( FEATURE_TCPIP_EXTENSION )
 DEF_INST( tcpip );
+#endif
+
+#if defined( FEATURE_ZVM_ESSA )
+DEF_INST( extract_and_set_storage_attributes );
 #endif
 
 /*-------------------------------------------------------------------*/

@@ -1,4 +1,5 @@
 /* VERSION.C    (C) Copyright Roger Bowler, 1999-2012                */
+/*              (C) and others 2013-2021                             */
 /*              Hercules Version Display Module                      */
 /*                                                                   */
 /*   Released under "The Q Public License Version 1"                 */
@@ -166,8 +167,12 @@ static const char *build_info[] = {
      "Visual Studio 2013"
 #elif _MSC_VER == VS2015
      "Visual Studio 2015"
-#elif _MSC_VER >= VS2017  && _MSC_VER <= VS2017_5
+#elif _MSC_VER >= VS2017  && _MSC_VER < VS2019
      "Visual Studio 2017"
+#elif _MSC_VER >= VS2019  && _MSC_VER < VS2022
+     "Visual Studio 2019"
+#elif _MSC_VER >= VS2022
+     "Visual Studio 2022"
 #else
      "Visual C"
 #endif
@@ -694,18 +699,18 @@ static const char *build_info[] = {
 
 
 //---------------------------------------------------------------------
-// Fishtest...
+// Fishtest:  log use of certain Research/Workaround build options
 
-#if defined( FISHTEST_TXF_STATS )               // gather/track TXF metrics
-    "With    FISHTEST_TXF_STATS",
+#if defined( OPTION_OPTINST )                   // Doesn't really help much!
+    "With    \"Optimized\" instructions",
 #else
-    "Without FISHTEST_TXF_STATS",
+    "Without \"Optimized\" instructions",
 #endif
-
-#if defined( OPTION_TXF_SINGLE_THREAD )         // one transaction at a time
-    "With    OPTION_TXF_SINGLE_THREAD",
-#else
-    "Without OPTION_TXF_SINGLE_THREAD",
+#if defined( OPTION_USE_SKAIP_AS_LOCK )         // Use SKAIP as lock, not RCP
+    "With    OPTION_USE_SKAIP_AS_LOCK",
+#endif
+#if defined( OPTION_SIE2BK_FLD_COPY )           // SIE2BK 'fld' is NOT a mask
+    "With    OPTION_SIE2BK_FLD_COPY",
 #endif
 
 //---------------------------------------------------------------------
@@ -811,7 +816,7 @@ DLL_EXPORT void display_version( FILE* f, int httpfd, const char* prog )
     if (prog)  // called from e.g. "cgibin_debug_version_info()"?
     {
         char buf[256];
-        MSGBUF( buf, MSG( HHC01413, "I", prog, VERSION, VERS_MAJ, VERS_INT, VERS_MIN, VERS_BLD ));
+        MSGBUF( buf, MSG( HHC01413, "I", prog, VERSION ));
         display_str( f, httpfd, RTRIM( buf ));
         ++p; // (skip past first str)
     }
@@ -884,7 +889,7 @@ static void init_hercver_strings( const char* prog )
 
     // prog = Utility (HHC02499), NULL = Hercules (HHC01413).
     if (prog) MSGBUF( buf, MSG( HHC02499, "I",   prog,     VERSION ));
-    else      MSGBUF( buf, MSG( HHC01413, "I", "Hercules", VERSION, VERS_MAJ, VERS_INT, VERS_MIN, VERS_BLD ));
+    else      MSGBUF( buf, MSG( HHC01413, "I", "Hercules", VERSION ));
 
     APPEND_STR( strdup( RTRIM( buf )));
 

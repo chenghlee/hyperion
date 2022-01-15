@@ -1,4 +1,5 @@
 /* GENERAL3.C   (C) Copyright Roger Bowler, 1994-2012                */
+/*              (C) and others 2013-2021                             */
 /*         Hercules CPU Emulator - Additional General Instructions   */
 /*                                                                   */
 /*   Released under "The Q Public License Version 1"                 */
@@ -320,7 +321,7 @@ int     cc;                             /* Condition Code            */
 /*-------------------------------------------------------------------*/
 /* ECF6 CRB   - Compare and Branch Register                    [RRS] */
 /*-------------------------------------------------------------------*/
-DEF_INST(compare_and_branch_register)
+DEF_INST( compare_and_branch_register )
 {
 int     r1, r2;                         /* Register numbers          */
 int     m3;                             /* Mask bits                 */
@@ -328,9 +329,9 @@ int     b4;                             /* Base of effective addr    */
 VADR    effective_addr4;                /* Effective address         */
 int     cc;                             /* Comparison result         */
 
-    RRS_B(inst, regs, r1, r2, m3, b4, effective_addr4);
+    RRS_B( inst, regs, r1, r2, m3, b4, effective_addr4 );
 
-    CONTRAN_INSTR_CHECK( regs );
+    CONTRAN_INSTR_CHECK_IP( regs );
 
     /* Compare signed operands and set comparison result */
     cc = (S32)regs->GR_L(r1) < (S32)regs->GR_L(r2) ? 1 :
@@ -338,9 +339,12 @@ int     cc;                             /* Comparison result         */
 
     /* Branch to operand address if m3 mask bit is set */
     if ((0x8 >> cc) & m3)
-        SUCCESSFUL_BRANCH(regs, effective_addr4, 6);
+        SUCCESSFUL_BRANCH( regs, effective_addr4 );
     else
-        INST_UPDATE_PSW(regs, 6, 6);
+    {
+        /* Bump ip to next sequential instruction */
+        regs->ip += 6;
+    }
 
 } /* end DEF_INST(compare_and_branch_register) */
 
@@ -359,7 +363,7 @@ int     cc;                             /* Comparison result         */
 
     RRS_B(inst, regs, r1, r2, m3, b4, effective_addr4);
 
-    CONTRAN_INSTR_CHECK( regs );
+    CONTRAN_INSTR_CHECK_IP( regs );
 
     /* Compare signed operands and set comparison result */
     cc = (S64)regs->GR_G(r1) < (S64)regs->GR_G(r2) ? 1 :
@@ -367,9 +371,12 @@ int     cc;                             /* Comparison result         */
 
     /* Branch to operand address if m3 mask bit is set */
     if ((0x8 >> cc) & m3)
-        SUCCESSFUL_BRANCH(regs, effective_addr4, 6);
+        SUCCESSFUL_BRANCH( regs, effective_addr4 );
     else
-        INST_UPDATE_PSW(regs, 6, 6);
+    {
+        /* Bump ip to next sequential instruction */
+        regs->ip += 6;
+    }
 
 } /* end DEF_INST(compare_and_branch_long_register) */
 #endif /* defined( FEATURE_001_ZARCH_INSTALLED_FACILITY ) */
@@ -387,7 +394,7 @@ int     cc;                             /* Comparison result         */
 
     RIE_RRIM_B(inst, regs, r1, r2, i4, m3);
 
-    CONTRAN_BRANCH_CHECK( regs, m3, i4 );
+    CONTRAN_BRANCH_CHECK_IP( regs, m3, i4 );
 
     /* Compare signed operands and set comparison result */
     cc = (S32)regs->GR_L(r1) < (S32)regs->GR_L(r2) ? 1 :
@@ -395,9 +402,12 @@ int     cc;                             /* Comparison result         */
 
     /* Branch to immediate offset if m3 mask bit is set */
     if ((0x8 >> cc) & m3)
-        SUCCESSFUL_RELATIVE_BRANCH(regs, 2*i4, 6);
+        SUCCESSFUL_RELATIVE_BRANCH( regs, 2LL*i4 );
     else
-        INST_UPDATE_PSW(regs, 6, 6);
+    {
+        /* Bump ip to next sequential instruction */
+        regs->ip += 6;
+    }
 
 } /* end DEF_INST(compare_and_branch_relative_register) */
 
@@ -406,16 +416,16 @@ int     cc;                             /* Comparison result         */
 /*-------------------------------------------------------------------*/
 /* EC64 CGRJ  - Compare and Branch Relative Long Register    [RIE-b] */
 /*-------------------------------------------------------------------*/
-DEF_INST(compare_and_branch_relative_long_register)
+DEF_INST( compare_and_branch_relative_long_register )
 {
 int     r1, r2;                         /* Register numbers          */
 int     m3;                             /* Mask bits                 */
-S16     i4;                             /* 16-bit immediate offset   */
+S16     ri4;                            /* 16-bit relative offset    */
 int     cc;                             /* Comparison result         */
 
-    RIE_RRIM_B(inst, regs, r1, r2, i4, m3);
+    RIE_RRIM_B( inst, regs, r1, r2, ri4, m3 );
 
-    CONTRAN_BRANCH_CHECK( regs, m3, i4 );
+    CONTRAN_BRANCH_CHECK_IP( regs, m3, ri4 );
 
     /* Compare signed operands and set comparison result */
     cc = (S64)regs->GR_G(r1) < (S64)regs->GR_G(r2) ? 1 :
@@ -423,11 +433,14 @@ int     cc;                             /* Comparison result         */
 
     /* Branch to immediate offset if m3 mask bit is set */
     if ((0x8 >> cc) & m3)
-        SUCCESSFUL_RELATIVE_BRANCH(regs, 2*i4, 6);
+        SUCCESSFUL_RELATIVE_BRANCH( regs, 2LL*ri4 );
     else
-        INST_UPDATE_PSW(regs, 6, 6);
+    {
+        /* Bump ip to next sequential instruction */
+        regs->ip += 6;
+    }
 
-} /* end DEF_INST(compare_and_branch_relative_long_register) */
+} /* end DEF_INST( compare_and_branch_relative_long_register ) */
 #endif /* defined( FEATURE_001_ZARCH_INSTALLED_FACILITY ) */
 
 
@@ -631,7 +644,7 @@ BYTE    i2;                             /* Immediate value           */
 
     RIS_B(inst, regs, r1, i2, m3, b4, effective_addr4);
 
-    CONTRAN_INSTR_CHECK( regs );
+    CONTRAN_INSTR_CHECK_IP( regs );
 
     /* Compare signed operands and set comparison result */
     cc = (S32)regs->GR_L(r1) < (S32)(S8)i2 ? 1 :
@@ -639,9 +652,12 @@ BYTE    i2;                             /* Immediate value           */
 
     /* Branch to operand address if m3 mask bit is set */
     if ((0x8 >> cc) & m3)
-        SUCCESSFUL_BRANCH(regs, effective_addr4, 6);
+        SUCCESSFUL_BRANCH( regs, effective_addr4 );
     else
-        INST_UPDATE_PSW(regs, 6, 6);
+    {
+        /* Bump ip to next sequential instruction */
+        regs->ip += 6;
+    }
 
 } /* end DEF_INST(compare_immediate_and_branch) */
 
@@ -661,7 +677,7 @@ BYTE    i2;                             /* Immediate value           */
 
     RIS_B(inst, regs, r1, i2, m3, b4, effective_addr4);
 
-    CONTRAN_INSTR_CHECK( regs );
+    CONTRAN_INSTR_CHECK_IP( regs );
 
     /* Compare signed operands and set comparison result */
     cc = (S64)regs->GR_G(r1) < (S64)(S8)i2 ? 1 :
@@ -669,9 +685,12 @@ BYTE    i2;                             /* Immediate value           */
 
     /* Branch to operand address if m3 mask bit is set */
     if ((0x8 >> cc) & m3)
-        SUCCESSFUL_BRANCH(regs, effective_addr4, 6);
+        SUCCESSFUL_BRANCH( regs, effective_addr4 );
     else
-        INST_UPDATE_PSW(regs, 6, 6);
+    {
+        /* Bump ip to next sequential instruction */
+        regs->ip += 6;
+    }
 
 } /* end DEF_INST(compare_immediate_and_branch_long) */
 #endif /* defined( FEATURE_001_ZARCH_INSTALLED_FACILITY ) */
@@ -680,17 +699,17 @@ BYTE    i2;                             /* Immediate value           */
 /*-------------------------------------------------------------------*/
 /* EC7E CIJ   - Compare Immediate and Branch Relative        [RIE-c] */
 /*-------------------------------------------------------------------*/
-DEF_INST(compare_immediate_and_branch_relative)
+DEF_INST( compare_immediate_and_branch_relative )
 {
 int     r1;                             /* Register numbers          */
 int     m3;                             /* Mask bits                 */
 BYTE    i2;                             /* Immediate operand value   */
-S16     i4;                             /* 16-bit immediate offset   */
+S16     ri4;                            /* 16-bit relative offset    */
 int     cc;                             /* Comparison result         */
 
-    RIE_RMII_B(inst, regs, r1, i2, m3, i4);
+    RIE_RMII_B( inst, regs, r1, i2, m3, ri4 );
 
-    CONTRAN_BRANCH_CHECK( regs, m3, i4 );
+    CONTRAN_BRANCH_CHECK_IP( regs, m3, ri4 );
 
     /* Compare signed operands and set comparison result */
     cc = (S32)regs->GR_L(r1) < (S32)(S8)i2 ? 1 :
@@ -698,28 +717,31 @@ int     cc;                             /* Comparison result         */
 
     /* Branch to immediate offset if m3 mask bit is set */
     if ((0x8 >> cc) & m3)
-        SUCCESSFUL_RELATIVE_BRANCH(regs, 2*i4, 6);
+        SUCCESSFUL_RELATIVE_BRANCH( regs, 2LL*ri4 );
     else
-        INST_UPDATE_PSW(regs, 6, 6);
+    {
+        /* Bump ip to next sequential instruction */
+        regs->ip += 6;
+    }
 
-} /* end DEF_INST(compare_immediate_and_branch_relative) */
+} /* end DEF_INST( compare_immediate_and_branch_relative ) */
 
 
 #if defined( FEATURE_001_ZARCH_INSTALLED_FACILITY )
 /*-------------------------------------------------------------------*/
 /* EC7C CGIJ  - Compare Immediate and Branch Relative Long   [RIE-c] */
 /*-------------------------------------------------------------------*/
-DEF_INST(compare_immediate_and_branch_relative_long)
+DEF_INST( compare_immediate_and_branch_relative_long )
 {
 int     r1;                             /* Register numbers          */
 int     m3;                             /* Mask bits                 */
 BYTE    i2;                             /* Immediate operand value   */
-S16     i4;                             /* 16-bit immediate offset   */
+S16     ri4;                            /* 16-bit relative offset    */
 int     cc;                             /* Comparison result         */
 
-    RIE_RMII_B(inst, regs, r1, i2, m3, i4);
+    RIE_RMII_B( inst, regs, r1, i2, m3, ri4 );
 
-    CONTRAN_BRANCH_CHECK( regs, m3, i4 );
+    CONTRAN_BRANCH_CHECK_IP( regs, m3, ri4 );
 
     /* Compare signed operands and set comparison result */
     cc = (S64)regs->GR_G(r1) < (S64)(S8)i2 ? 1 :
@@ -727,11 +749,14 @@ int     cc;                             /* Comparison result         */
 
     /* Branch to immediate offset if m3 mask bit is set */
     if ((0x8 >> cc) & m3)
-        SUCCESSFUL_RELATIVE_BRANCH(regs, 2*i4, 6);
+        SUCCESSFUL_RELATIVE_BRANCH( regs, 2LL*ri4 );
     else
-        INST_UPDATE_PSW(regs, 6, 6);
+    {
+        /* Bump ip to next sequential instruction */
+        regs->ip += 6;
+    }
 
-} /* end DEF_INST(compare_immediate_and_branch_relative_long) */
+} /* end DEF_INST( compare_immediate_and_branch_relative_long ) */
 #endif /* defined( FEATURE_001_ZARCH_INSTALLED_FACILITY ) */
 
 
@@ -802,7 +827,7 @@ int     cc;                             /* Comparison result         */
 
     RRS_B(inst, regs, r1, r2, m3, b4, effective_addr4);
 
-    CONTRAN_INSTR_CHECK( regs );
+    CONTRAN_INSTR_CHECK_IP( regs );
 
     /* Compare unsigned operands and set comparison result */
     cc = regs->GR_L(r1) < regs->GR_L(r2) ? 1 :
@@ -810,9 +835,12 @@ int     cc;                             /* Comparison result         */
 
     /* Branch to operand address if m3 mask bit is set */
     if ((0x8 >> cc) & m3)
-        SUCCESSFUL_BRANCH(regs, effective_addr4, 6);
+        SUCCESSFUL_BRANCH( regs, effective_addr4 );
     else
-        INST_UPDATE_PSW(regs, 6, 6);
+    {
+        /* Bump ip to next sequential instruction */
+        regs->ip += 6;
+    }
 
 } /* end DEF_INST(compare_logical_and_branch_register) */
 
@@ -831,7 +859,7 @@ int     cc;                             /* Comparison result         */
 
     RRS_B(inst, regs, r1, r2, m3, b4, effective_addr4);
 
-    CONTRAN_INSTR_CHECK( regs );
+    CONTRAN_INSTR_CHECK_IP( regs );
 
     /* Compare unsigned operands and set comparison result */
     cc = regs->GR_G(r1) < regs->GR_G(r2) ? 1 :
@@ -839,9 +867,12 @@ int     cc;                             /* Comparison result         */
 
     /* Branch to operand address if m3 mask bit is set */
     if ((0x8 >> cc) & m3)
-        SUCCESSFUL_BRANCH(regs, effective_addr4, 6);
+        SUCCESSFUL_BRANCH( regs, effective_addr4 );
     else
-        INST_UPDATE_PSW(regs, 6, 6);
+    {
+        /* Bump ip to next sequential instruction */
+        regs->ip += 6;
+    }
 
 } /* end DEF_INST(compare_logical_and_branch_long_register) */
 #endif /* defined( FEATURE_001_ZARCH_INSTALLED_FACILITY ) */
@@ -854,12 +885,12 @@ DEF_INST(compare_logical_and_branch_relative_register)
 {
 int     r1, r2;                         /* Register numbers          */
 int     m3;                             /* Mask bits                 */
-S16     i4;                             /* 16-bit immediate offset   */
+S16     ri4;                            /* 16-bit relative offset    */
 int     cc;                             /* Comparison result         */
 
-    RIE_RRIM_B(inst, regs, r1, r2, i4, m3);
+    RIE_RRIM_B( inst, regs, r1, r2, ri4, m3 );
 
-    CONTRAN_BRANCH_CHECK( regs, m3, i4 );
+    CONTRAN_BRANCH_CHECK_IP( regs, m3, ri4 );
 
     /* Compare unsigned operands and set comparison result */
     cc = regs->GR_L(r1) < regs->GR_L(r2) ? 1 :
@@ -867,9 +898,12 @@ int     cc;                             /* Comparison result         */
 
     /* Branch to immediate offset if m3 mask bit is set */
     if ((0x8 >> cc) & m3)
-        SUCCESSFUL_RELATIVE_BRANCH(regs, 2*i4, 6);
+        SUCCESSFUL_RELATIVE_BRANCH( regs, 2LL*ri4 );
     else
-        INST_UPDATE_PSW(regs, 6, 6);
+    {
+        /* Bump ip to next sequential instruction */
+        regs->ip += 6;
+    }
 
 } /* end DEF_INST(compare_logical_and_branch_relative_register) */
 
@@ -882,12 +916,12 @@ DEF_INST(compare_logical_and_branch_relative_long_register)
 {
 int     r1, r2;                         /* Register numbers          */
 int     m3;                             /* Mask bits                 */
-S16     i4;                             /* 16-bit immediate offset   */
+S16     ri4;                            /* 16-bit relative offset    */
 int     cc;                             /* Comparison result         */
 
-    RIE_RRIM_B(inst, regs, r1, r2, i4, m3);
+    RIE_RRIM_B( inst, regs, r1, r2, ri4, m3 );
 
-    CONTRAN_BRANCH_CHECK( regs, m3, i4 );
+    CONTRAN_BRANCH_CHECK_IP( regs, m3, ri4 );
 
     /* Compare unsigned operands and set comparison result */
     cc = regs->GR_G(r1) < regs->GR_G(r2) ? 1 :
@@ -895,9 +929,12 @@ int     cc;                             /* Comparison result         */
 
     /* Branch to immediate offset if m3 mask bit is set */
     if ((0x8 >> cc) & m3)
-        SUCCESSFUL_RELATIVE_BRANCH(regs, 2*i4, 6);
+        SUCCESSFUL_RELATIVE_BRANCH( regs, 2LL*ri4 );
     else
-        INST_UPDATE_PSW(regs, 6, 6);
+    {
+        /* Bump ip to next sequential instruction */
+        regs->ip += 6;
+    }
 
 } /* end DEF_INST(compare_logical_and_branch_relative_long_register) */
 #endif /* defined( FEATURE_001_ZARCH_INSTALLED_FACILITY ) */
@@ -969,7 +1006,7 @@ BYTE    i2;                             /* Immediate value           */
 
     RIS_B(inst, regs, r1, i2, m3, b4, effective_addr4);
 
-    CONTRAN_INSTR_CHECK( regs );
+    CONTRAN_INSTR_CHECK_IP( regs );
 
     /* Compare unsigned operands and set comparison result */
     cc = regs->GR_L(r1) < i2 ? 1 :
@@ -977,9 +1014,12 @@ BYTE    i2;                             /* Immediate value           */
 
     /* Branch to operand address if m3 mask bit is set */
     if ((0x8 >> cc) & m3)
-        SUCCESSFUL_BRANCH(regs, effective_addr4, 6);
+        SUCCESSFUL_BRANCH( regs, effective_addr4 );
     else
-        INST_UPDATE_PSW(regs, 6, 6);
+    {
+        /* Bump ip to next sequential instruction */
+        regs->ip += 6;
+    }
 
 } /* end DEF_INST(compare_logical_immediate_and_branch) */
 
@@ -999,7 +1039,7 @@ BYTE    i2;                             /* Immediate value           */
 
     RIS_B(inst, regs, r1, i2, m3, b4, effective_addr4);
 
-    CONTRAN_INSTR_CHECK( regs );
+    CONTRAN_INSTR_CHECK_IP( regs );
 
     /* Compare unsigned operands and set comparison result */
     cc = regs->GR_G(r1) < i2 ? 1 :
@@ -1007,9 +1047,12 @@ BYTE    i2;                             /* Immediate value           */
 
     /* Branch to operand address if m3 mask bit is set */
     if ((0x8 >> cc) & m3)
-        SUCCESSFUL_BRANCH(regs, effective_addr4, 6);
+        SUCCESSFUL_BRANCH( regs, effective_addr4 );
     else
-        INST_UPDATE_PSW(regs, 6, 6);
+    {
+        /* Bump ip to next sequential instruction */
+        regs->ip += 6;
+    }
 
 } /* end DEF_INST(compare_logical_immediate_and_branch_long) */
 #endif /* defined( FEATURE_001_ZARCH_INSTALLED_FACILITY ) */
@@ -1018,17 +1061,17 @@ BYTE    i2;                             /* Immediate value           */
 /*-------------------------------------------------------------------*/
 /* EC7F CLIJ  - Compare Logical Immediate and Branch Rel.    [RIE-c] */
 /*-------------------------------------------------------------------*/
-DEF_INST(compare_logical_immediate_and_branch_relative)
+DEF_INST( compare_logical_immediate_and_branch_relative )
 {
 int     r1;                             /* Register number           */
 int     m3;                             /* Mask bits                 */
 BYTE    i2;                             /* Immediate operand value   */
-S16     i4;                             /* 16-bit immediate offset   */
+S16     ri4;                            /* 16-bit relative offset    */
 int     cc;                             /* Comparison result         */
 
-    RIE_RMII_B(inst, regs, r1, i2, m3, i4);
+    RIE_RMII_B( inst, regs, r1, i2, m3, ri4 );
 
-    CONTRAN_BRANCH_CHECK( regs, m3, i4 );
+    CONTRAN_BRANCH_CHECK_IP( regs, m3, ri4 );
 
     /* Compare unsigned operands and set comparison result */
     cc = regs->GR_L(r1) < i2 ? 1 :
@@ -1036,28 +1079,31 @@ int     cc;                             /* Comparison result         */
 
     /* Branch to immediate offset if m3 mask bit is set */
     if ((0x8 >> cc) & m3)
-        SUCCESSFUL_RELATIVE_BRANCH(regs, 2*i4, 6);
+        SUCCESSFUL_RELATIVE_BRANCH( regs, 2LL*ri4 );
     else
-        INST_UPDATE_PSW(regs, 6, 6);
+    {
+        /* Bump ip to next sequential instruction */
+        regs->ip += 6;
+    }
 
-} /* end DEF_INST(compare_logical_immediate_and_branch_relative) */
+} /* end DEF_INST( compare_logical_immediate_and_branch_relative ) */
 
 
 #if defined( FEATURE_001_ZARCH_INSTALLED_FACILITY )
 /*-------------------------------------------------------------------*/
 /* EC7D CLGIJ - Compare Logical Immed and Branch Rel. Long   [RIE-c] */
 /*-------------------------------------------------------------------*/
-DEF_INST(compare_logical_immediate_and_branch_relative_long)
+DEF_INST( compare_logical_immediate_and_branch_relative_long )
 {
 int     r1;                             /* Register number           */
 int     m3;                             /* Mask bits                 */
 BYTE    i2;                             /* Immediate operand value   */
-S16     i4;                             /* 16-bit immediate offset   */
+S16     ri4;                            /* 16-bit relative offset    */
 int     cc;                             /* Comparison result         */
 
-    RIE_RMII_B(inst, regs, r1, i2, m3, i4);
+    RIE_RMII_B( inst, regs, r1, i2, m3, ri4 );
 
-    CONTRAN_BRANCH_CHECK( regs, m3, i4 );
+    CONTRAN_BRANCH_CHECK_IP( regs, m3, ri4 );
 
     /* Compare unsigned operands and set comparison result */
     cc = regs->GR_G(r1) < i2 ? 1 :
@@ -1065,11 +1111,14 @@ int     cc;                             /* Comparison result         */
 
     /* Branch to immediate offset if m3 mask bit is set */
     if ((0x8 >> cc) & m3)
-        SUCCESSFUL_RELATIVE_BRANCH(regs, 2*i4, 6);
+        SUCCESSFUL_RELATIVE_BRANCH( regs, 2LL*ri4 );
     else
-        INST_UPDATE_PSW(regs, 6, 6);
+    {
+        /* Bump ip to next sequential instruction */
+        regs->ip += 6;
+    }
 
-} /* end DEF_INST(compare_logical_immediate_and_branch_relative_long) */
+} /* end DEF_INST( compare_logical_immediate_and_branch_relative_long ) */
 #endif /* defined( FEATURE_001_ZARCH_INSTALLED_FACILITY ) */
 
 
@@ -1786,7 +1835,37 @@ S32     n;                              /* 32-bit operand values     */
 
 } /* end DEF_INST(multiply_halfword_y) */
 
+#endif /* defined( FEATURE_034_GEN_INST_EXTN_FACILITY ) */
 
+
+#if defined ( FEATURE_058_MISC_INSTR_EXT_FACILITY_2 )
+/*-------------------------------------------------------------------*/
+/* E33C MGH   - Multiple Long Halfword  (64 <- 16)           [RXY-a] */
+/*-------------------------------------------------------------------*/
+DEF_INST( multiply_long_halfword )
+{
+int     r1;                             /* Value of R field          */
+int     b2;                             /* Base of effective addr    */
+VADR    effective_addr2;                /* Effective address         */
+S64     resulthi;                       /* high 64-bits of result    */
+S16     op2;                            /* 16-bit operand-2 value    */
+
+    RXY( inst, regs, r1, b2, effective_addr2 );
+
+    /* Load signed 16-bit operand-2 value */
+    op2 = ARCH_DEP( vfetch2 )( effective_addr2, b2, regs );
+
+    /* Multiply R1 register by n, ignore leftmost 64 bits of
+       result, and place rightmost 64 bits in R1 register */
+    mul_signed_long( &resulthi,
+                     &(regs->GR_G(r1)),
+                       regs->GR_G(r1),
+                       op2 );
+}
+#endif /* defined( FEATURE_058_MISC_INSTR_EXT_FACILITY_2 ) */
+
+
+#if defined( FEATURE_034_GEN_INST_EXTN_FACILITY )
 /*-------------------------------------------------------------------*/
 /* C2x1 MSFI  - Multiply Single Immediate Fullword           [RIL-a] */
 /*-------------------------------------------------------------------*/
@@ -1847,7 +1926,58 @@ U32     n;                              /* 32-bit operand values     */
 
 } /* end DEF_INST(multiply_y) */
 
+#endif /* defined( FEATURE_034_GEN_INST_EXTN_FACILITY ) */
 
+
+#if defined( FEATURE_058_MISC_INSTR_EXT_FACILITY_2 )
+/*-------------------------------------------------------------------*/
+/* B9EC MGRK  - Multiply Long Register  (128 <- 64)          [RRF-a] */
+/*-------------------------------------------------------------------*/
+DEF_INST( multiply_long_register )
+{
+int     r1, r2, r3;                     /* Value of R fields         */
+
+    RRR( inst, regs, r1, r2, r3 );
+
+    ODD_CHECK( r1, regs );
+
+    /* Multiply r2 by r3 and place result in r1 and r1+1 */
+    mul_signed_long( &(regs->GR_G(r1)),
+                     &(regs->GR_G(r1+1)),
+                       regs->GR_G(r3),
+                       regs->GR_G(r2) );
+}
+#endif /* defined( FEATURE_058_MISC_INSTR_EXT_FACILITY_2 ) */
+
+
+#if defined( FEATURE_058_MISC_INSTR_EXT_FACILITY_2 )
+/*-------------------------------------------------------------------*/
+/* E384 MG    - Multiply Long  (128 <- 64)                   [RXY-a] */
+/*-------------------------------------------------------------------*/
+DEF_INST( multiply_long )
+{
+int     r1;                             /* Value of R field          */
+int     b2;                             /* Base of effective addr    */
+VADR    effective_addr2;                /* Effective address         */
+S64     op2;                            /* Fetched operand-2 value   */
+
+    RXY( inst, regs, r1, b2, effective_addr2 );
+
+    ODD_CHECK( r1, regs );
+
+    /* Fetch 64-bit second operand value from storage */
+    op2 = ARCH_DEP( vfetch8 )( effective_addr2, b2, regs );
+
+    /* Multiply r1+1 by op2 and place result in r1 and r1+1 */
+    mul_signed_long( &(regs->GR_G(r1)),
+                     &(regs->GR_G(r1+1)),
+                       regs->GR_G(r1+1),
+                       op2 );
+}
+#endif /* defined( FEATURE_058_MISC_INSTR_EXT_FACILITY_2 ) */
+
+
+#if defined( FEATURE_034_GEN_INST_EXTN_FACILITY )
 /*-------------------------------------------------------------------*/
 /* E336 PFD   - Prefetch Data                                [RXY-b] */
 /*-------------------------------------------------------------------*/
@@ -1874,13 +2004,12 @@ VADR    effective_addr2;                /* Effective address         */
 
     RIL_A(inst, regs, m1, effective_addr2);
 
-    CONTRAN_INSTR_CHECK( regs );
-
 #if defined( FEATURE_073_TRANSACT_EXEC_FACILITY )
-    /* This instruction is restricted in transaction execution
-       mode when the m1 field is either 6 or 7. */
-    if (m1 == 6 || m1 == 7)
-        TRAN_INSTR_CHECK( regs );
+    if (FACILITY_ENABLED( HERC_TXF_RESTRICT_2, regs ))
+    {
+        if (m1 == 6 || m1 == 7)
+            TRAN_INSTR_CHECK( regs );
+    }
 #endif
 
     /* On Hercules the Prefetch Data instruction acts as a no-op */
@@ -2293,23 +2422,26 @@ U32     i2;                             /* 32-bit operand value      */
 /*-------------------------------------------------------------------*/
 /* CCx6 BRCTH - Branch Relative on Count High                [RIL-b] */
 /*-------------------------------------------------------------------*/
-DEF_INST(branch_relative_on_count_high)
+DEF_INST( branch_relative_on_count_high )
 {
 int     r1;                             /* Register number           */
-int     opcd;                           /* Opcode                    */
-S32     i2;                             /* 32-bit operand value      */
+U8      xop;                            /* Extended opcode           */
+S32     ri2;                            /* 32-bit relative operand   */
 
-    RIL_B(inst, regs, r1, opcd, i2);
+    RIL_B( inst, regs, r1, xop, ri2 );
 
-    CONTRAN_INSTR_CHECK( regs );
+    CONTRAN_INSTR_CHECK_IP( regs );
 
     /* Subtract 1 from the R1 operand and branch if non-zero */
-    if ( --(regs->GR_H(r1)) )
-        SUCCESSFUL_RELATIVE_BRANCH_LONG(regs, 2LL*i2);
+    if (--(regs->GR_H( r1 )))
+        SUCCESSFUL_RELATIVE_BRANCH( regs, 2LL*ri2 );
     else
-        INST_UPDATE_PSW(regs, 6, 6);
+    {
+        /* Bump ip to next sequential instruction */
+        regs->ip += 6;
+    }
 
-} /* end DEF_INST(branch_relative_on_count_high) */
+} /* end DEF_INST( branch_relative_on_count_high ) */
 
 
 /*-------------------------------------------------------------------*/
@@ -2718,6 +2850,9 @@ BYTE    opcode;                         /* 2nd byte of opcode        */
 
     RSY(inst, regs, r1, r3, b2, effective_addr2);
 
+    /* Program check if operand not on fullword boundary */
+    FW_CHECK( effective_addr2, regs );
+
     /* Extract second byte of instruction opcode */
     opcode = inst[5];
 
@@ -2805,6 +2940,9 @@ int     rc;                             /* Return code               */
 BYTE    opcode;                         /* 2nd byte of opcode        */
 
     RSY(inst, regs, r1, r3, b2, effective_addr2);
+
+    /* Program check if operand not on doubleword boundary */
+    DW_CHECK( effective_addr2, regs );
 
     /* Extract second byte of instruction opcode */
     opcode = inst[5];
@@ -3119,17 +3257,20 @@ int     r1;                             /* Value of R field          */
 int     m3;                             /* Value of M field          */
 int     b2;                             /* Base of effective addr    */
 VADR    effective_addr2;                /* Effective address         */
+U32     data;
 
     RSY(inst, regs, r1, m3, b2, effective_addr2);
+
+    /* TXF requires storage reference regardless of cc */
+    data = ARCH_DEP(vfetch4) ( effective_addr2, b2, regs );
 
     /* Test M3 mask bit corresponding to condition code */
     if (m3 & (0x08 >> regs->psw.cc))
     {
         /* Load R1 register bits 32-63 from second operand */
-        regs->GR_L(r1) = ARCH_DEP(vfetch4) ( effective_addr2, b2, regs );
+        regs->GR_L(r1) = data;
     }
-
-} /* end DEF_INST(load_on_condition) */
+}
 
 
 #if defined( FEATURE_001_ZARCH_INSTALLED_FACILITY )
@@ -3142,17 +3283,20 @@ int     r1;                             /* Value of R field          */
 int     m3;                             /* Value of M field          */
 int     b2;                             /* Base of effective addr    */
 VADR    effective_addr2;                /* Effective address         */
+U64     data;
 
     RSY(inst, regs, r1, m3, b2, effective_addr2);
+
+    /* TXF requires storage reference regardless of cc */
+    data = ARCH_DEP(vfetch8) ( effective_addr2, b2, regs );
 
     /* Test M3 mask bit corresponding to condition code */
     if (m3 & (0x08 >> regs->psw.cc))
     {
         /* Load R1 register bits 0-63 from second operand */
-        regs->GR_G(r1) = ARCH_DEP(vfetch8) ( effective_addr2, b2, regs );
+        regs->GR_G(r1) = data;
     }
-
-} /* end DEF_INST(load_on_condition_long) */
+}
 #endif /* defined( FEATURE_001_ZARCH_INSTALLED_FACILITY ) */
 
 
@@ -3174,8 +3318,12 @@ VADR    effective_addr2;                /* Effective address         */
         /* Store R1 register bits 32-63 at operand address */
         ARCH_DEP(vstore4) ( regs->GR_L(r1), effective_addr2, b2, regs );
     }
-
-} /* end DEF_INST(store_on_condition) */
+#if defined( FEATURE_073_TRANSACT_EXEC_FACILITY )
+    else
+        /* TXF requires storage reference regardless of cc */
+        MADDRL( effective_addr2, 4, b2, regs, ACCTYPE_WRITE_SKP, regs->psw.pkey );
+#endif
+}
 
 
 #if defined( FEATURE_001_ZARCH_INSTALLED_FACILITY )
@@ -3197,15 +3345,90 @@ VADR    effective_addr2;                /* Effective address         */
         /* Store R1 register bits 0-63 at operand address */
         ARCH_DEP(vstore8) ( regs->GR_G(r1), effective_addr2, b2, regs );
     }
-
-} /* end DEF_INST(store_on_condition_long) */
+#if defined( FEATURE_073_TRANSACT_EXEC_FACILITY )
+    else
+        /* TXF requires storage reference regardless of cc */
+        MADDRL( effective_addr2, 8, b2, regs, ACCTYPE_WRITE_SKP, regs->psw.pkey );
+#endif
+}
 #endif /* defined( FEATURE_001_ZARCH_INSTALLED_FACILITY ) */
 
 #endif /* defined( FEATURE_045_LOAD_STORE_ON_COND_FACILITY_1 )*/
 
 
-#if defined( FEATURE_045_DISTINCT_OPERANDS_FACILITY )
+#if defined( FEATURE_061_MISC_INSTR_EXT_FACILITY_3 )
+/*-------------------------------------------------------------------*/
+/* B9F0 SELR  - Select Register (32)                         [RRF-a] */
+/*-------------------------------------------------------------------*/
+DEF_INST( select_register )
+{
+int     r1, r2, r3;                     /* Value of R fields         */
+BYTE    m4;                             /* Value of M field          */
 
+    RRF_RM( inst, regs, r1, r2, r3, m4 );
+
+    /* Test M4 mask bit corresponding to condition code */
+    if (m4 & (0x08 >> regs->psw.cc))
+    {
+        /* Load R1 bits 32-63 with R2 bits 32-63 */
+        regs->GR_L(r1) = regs->GR_L(r2);
+    }
+    else
+    {
+        /* Load R1 bits 32-63 with R3 bits 32-63 */
+        regs->GR_L(r1) = regs->GR_L(r3);
+    }
+}
+
+/*-------------------------------------------------------------------*/
+/* B9E3 SELGR - Select Register Long (64)                    [RRF-a] */
+/*-------------------------------------------------------------------*/
+DEF_INST( select_register_long )
+{
+int     r1, r2, r3;                     /* Value of R fields         */
+BYTE    m4;                             /* Value of M field          */
+
+    RRF_RM( inst, regs, r1, r2, r3, m4 );
+
+    /* Test M4 mask bit corresponding to condition code */
+    if (m4 & (0x08 >> regs->psw.cc))
+    {
+        /* Load R1 bits 0-63 with R2 bits 0-63 */
+        regs->GR_G(r1) = regs->GR_G(r2);
+    }
+    else
+    {
+        /* Load R1 bits 0-63 with R3 bits 0-63 */
+        regs->GR_G(r1) = regs->GR_G(r3);
+    }
+}
+
+/*-------------------------------------------------------------------*/
+/* B9C0 SELFHR - Select Fullword High Register (32)          [RRF-a] */
+/*-------------------------------------------------------------------*/
+DEF_INST( select_fullword_high_register )
+{
+int     r1, r2, r3;                     /* Value of R fields         */
+BYTE    m4;                             /* Value of M field          */
+
+    RRF_RM( inst, regs, r1, r2, r3, m4 );
+
+    /* Test M4 mask bit corresponding to condition code */
+    if (m4 & (0x08 >> regs->psw.cc))
+    {
+        /* Load R1 bits 0-31 with R2 bits 0-31 */
+        regs->GR_H(r1) = regs->GR_H(r2);
+    }
+    else
+    {
+        /* Load R1 bits 0-31 with R3 bits 0-31 */
+        regs->GR_H(r1) = regs->GR_H(r3);
+    }
+}
+#endif /* defined( FEATURE_061_MISC_INSTR_EXT_FACILITY_3 ) */
+
+
+#if defined( FEATURE_045_DISTINCT_OPERANDS_FACILITY )
 /*-------------------------------------------------------------------*/
 /* B9F8 ARK   - Add Distinct Register                        [RRF-a] */
 /*-------------------------------------------------------------------*/
@@ -3701,19 +3924,42 @@ int     r1, r2, r3;                     /* Values of R fields        */
 /*-------------------------------------------------------------------*/
 DEF_INST(population_count)
 {
+BYTE    m3;                             /* Optional m3 mask field    */
 int     r1, r2;                         /* Values of R fields        */
 int     i;                              /* Loop counter              */
 U64     n;                              /* Contents of R2 register   */
-U64     result;                         /* Result counter            */
+U64     result = 0;                     /* Result counter            */
 U64     mask = 0x0101010101010101ULL;   /* Bit mask                  */
 
-    RRE(inst, regs, r1, r2);
+    RRF_M( inst, regs, r1, r2, m3 );
 
     /* Load the value to be counted from the R2 register */
     n = regs->GR_G(r2);
 
+#if defined( FEATURE_061_MISC_INSTR_EXT_FACILITY_3 )
+
+    if (FACILITY_ENABLED( 061_MISC_INSTR_EXT_3, regs ) && (m3 & 0x08))
+    {
+        /* The following algorithm works best when most bits are 0
+           and works the same for all data sizes, using 3 arithmetic
+           operations and 1 comparison/branch per "1" bit.
+        */
+        for (; n; result++)
+            n &= n - 1;
+
+        /* Load the result into the R1 register */
+        regs->GR_G(r1) = result;
+
+        /* Set condition code 0 if result is zero, or 1 if non-zero */
+        regs->psw.cc = (result == 0) ? 0 : 1;
+        return;
+    }
+
+#endif /* defined( FEATURE_061_MISC_INSTR_EXT_FACILITY_3 ) */
+
     /* Count the number of 1 bits in each byte */
-    for (i = 0, result = 0; i < 8; i++) {
+    for (i=0; i < 8; i++)
+    {
         result += n & mask;
         n >>= 1;
     }
@@ -4092,15 +4338,19 @@ DEF_INST( load_high_on_condition)
 int     r1, m3;                         /* Register number, mask     */
 int     b2;                             /* Base of effective addr    */
 VADR    effective_addr2;                /* Effective address         */
+U32     data;
 
     /* Decode instruction */
     RSY( inst, regs, r1, m3, b2, effective_addr2 );
+
+    /* TXF requires storage reference regardless of cc */
+    data = ARCH_DEP( vfetch4 )( effective_addr2, b2, regs );
 
     /* Test M3 mask bit corresponding to condition code */
     if (m3 & (0x08 >> regs->psw.cc))
     {
         /* Load R1 register bits 0-31 from second operand */
-        regs->GR_H( r1 ) = ARCH_DEP( vfetch4 )( effective_addr2, b2, regs );
+        regs->GR_H( r1 ) = data;
     }
 }
 
@@ -4123,6 +4373,11 @@ VADR    effective_addr2;                /* Effective address         */
         /* Store R1 register bits 0-31 at second operand address */
         ARCH_DEP( vstore4 )( regs->GR_H( r1 ), effective_addr2, b2, regs );
     }
+#if defined( FEATURE_073_TRANSACT_EXEC_FACILITY )
+    else
+        /* TXF requires storage reference regardless of cc */
+        MADDRL( effective_addr2, 4, b2, regs, ACCTYPE_WRITE_SKP, regs->psw.pkey );
+#endif
 }
 #endif /* defined( FEATURE_001_ZARCH_INSTALLED_FACILITY ) */
 #endif /* defined( FEATURE_053_LOAD_STORE_ON_COND_FACILITY_2 ) */

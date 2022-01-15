@@ -1,6 +1,7 @@
 /* OPCODE.C     (C) Copyright Jan Jaeger, 2000-2012                  */
 /*              (C) Copyright Roger Bowler, 2010-2011                */
 /*              (C) Copyright TurboHercules, SAS 2010-2011           */
+/*              (C) and others 2013-2021                             */
 /*              Instruction decoding functions                       */
 /*                                                                   */
 /*   Released under "The Q Public License Version 1"                 */
@@ -593,6 +594,36 @@ DISABLE_GCC_UNUSED_FUNCTION_WARNING;
  UNDEF_INST( load_and_zero_rightmost_byte );
 #endif
 
+#if !defined( FEATURE_058_MISC_INSTR_EXT_FACILITY_2 )
+ UNDEF_INST( branch_indirect_on_condition )
+ UNDEF_INST( add_long_halfword )
+ UNDEF_INST( subtract_long_halfword )
+ UNDEF_INST( multiply_long_register )
+ UNDEF_INST( multiply_long )
+ UNDEF_INST( multiply_long_halfword )
+ UNDEF_INST( multiply_single_register_cc )
+ UNDEF_INST( multiply_single_cc )
+ UNDEF_INST( multiply_single_long_register_cc )
+ UNDEF_INST( multiply_single_long_cc )
+#endif
+
+#if !defined( FEATURE_061_MISC_INSTR_EXT_FACILITY_3 )
+ UNDEF_INST( and_register_with_complement )
+ UNDEF_INST( and_register_long_with_complement )
+ UNDEF_INST( nand_register )
+ UNDEF_INST( nand_register_long )
+ UNDEF_INST( not_xor_register )
+ UNDEF_INST( not_xor_register_long )
+ UNDEF_INST( nor_register )
+ UNDEF_INST( nor_register_long )
+ UNDEF_INST( or_register_with_complement )
+ UNDEF_INST( or_register_long_with_complement )
+ UNDEF_INST( select_register )
+ UNDEF_INST( select_register_long )
+ UNDEF_INST( select_fullword_high_register )
+ UNDEF_INST( move_right_to_left )
+#endif
+
 #if !defined( FEATURE_066_RES_REF_BITS_MULT_FACILITY )
  UNDEF_INST( reset_reference_bits_multiple )
 #endif
@@ -621,6 +652,10 @@ DISABLE_GCC_UNUSED_FUNCTION_WARNING;
   UNDEF_INST( extract_transaction_nesting_depth )
 #endif
 
+#if !defined( FEATURE_074_STORE_HYPER_INFO_FACILITY )
+ UNDEF_INST( store_hypervisor_information )
+#endif
+
 #if !defined( FEATURE_076_MSA_EXTENSION_FACILITY_3 ) || defined( DYNINST_076_MSA_EXTENSION_FACILITY_3 )
  UNDEF_INST( perform_cryptographic_key_management_operation )
 #endif
@@ -630,6 +665,10 @@ DISABLE_GCC_UNUSED_FUNCTION_WARNING;
  UNDEF_INST( cipher_message_with_output_feedback )
  UNDEF_INST( cipher_message_with_counter )
  UNDEF_INST( perform_cryptographic_computation )
+#endif
+
+#if !defined( FEATURE_145_INS_REF_BITS_MULT_FACILITY )
+ UNDEF_INST( insert_reference_bits_multiple )
 #endif
 
 /*-------------------------------------------------------------------*/
@@ -988,7 +1027,7 @@ DISABLE_GCC_UNUSED_FUNCTION_WARNING;
  UNDEF_INST( test_under_mask_low )
 #endif /*!defined( FEATURE_IMMEDIATE_AND_RELATIVE )*/
 
-#if !defined( FEATURE_INTERPRETIVE_EXECUTION )
+#if !defined( FEATURE_SIE )
  UNDEF_INST( start_interpretive_execution )
 #endif
 
@@ -1264,6 +1303,10 @@ DISABLE_GCC_UNUSED_FUNCTION_WARNING;
 
 #if !defined( FEATURE_TCPIP_EXTENSION )
  UNDEF_INST( tcpip )
+#endif
+
+#if !defined( FEATURE_ZVM_ESSA )
+ UNDEF_INST( extract_and_set_storage_attributes )
 #endif
 
 /*----------------------------------------------------------------------------*/
@@ -1594,7 +1637,7 @@ static int iprint_ ## _asmfmt( BYTE inst[], char mnemonic[], char* prtbuf )   \
     while (*iname++);       /* Find start of instruction's name   */          \
                                                                               \
     /* Format the instruction's assembler operands */                         \
-    snprintf( opers, sizeof( opers ), ## __VA_ARGS__ );                       \
+    MSGBUF (opers, ## __VA_ARGS__ );                                          \
                                                                               \
     /* Print assembler mnemonic + operands and full name of instruction */    \
     return sprintf( prtbuf, "%-5s %-19s    %s", mnemonic, opers, iname );     \
@@ -1711,6 +1754,14 @@ int r1,r2,r3;
     r1 = inst[3] >> 4;
     r2 = inst[3] & 0x0F;
     IPRINT_PRINT("%d,%d,%d",r1,r2,r3)
+
+IPRINT_FUNC( ASMFMT_RRF_A );
+int r3,m4,r1,r2;
+    r3 = inst[2] >> 4;
+    m4 = inst[2] & 0x0F;
+    r1 = inst[3] >> 4;
+    r2 = inst[3] & 0x0F;
+    IPRINT_PRINT("%d,%d,%d,%d",r1,r2,r3,m4)
 
 IPRINT_FUNC( ASMFMT_RX );
 int r1,x2,b2,d2;
@@ -2693,7 +2744,7 @@ static INSTR_FUNC gen_opcode_b2xx[256][NUM_INSTR_TAB_PTRS] =
  /*B253*/ GENx___x___x___ ,
  /*B254*/ GENx___x390x900 ( "MVPG"      , RRE  , ASMFMT_RRE      , move_page                                           ),
  /*B255*/ GENx37Xx390x900 ( "MVST"      , RRE  , ASMFMT_RRE      , move_string                                         ),
- /*B256*/ GENx___x___x___ ,
+ /*B256*/ GENx___x___x900 ( "STHYI"     , RRE  , ASMFMT_RRE      , store_hypervisor_information                        ),
  /*B257*/ GENx37Xx390x900 ( "CUSE"      , RRE  , ASMFMT_RRE      , compare_until_substring_equal                       ),
  /*B258*/ GENx___x390x900 ( "BSG"       , RRE  , ASMFMT_RRE      , branch_in_subspace_group                            ),
  /*B259*/ GENx___x390x900 ( "IESBE"     , RRE  , ASMFMT_RRE      , invalidate_expanded_storage_block_entry             ),
@@ -3227,10 +3278,10 @@ static INSTR_FUNC gen_opcode_b9xx[256][NUM_INSTR_TAB_PTRS] =
  /*B961*/ GENx___x___x900 ( "CLGRT"     , RRF_c, ASMFMT_RRF_M3   , compare_logical_and_trap_long_register              ),
  /*B962*/ GENx___x___x___ ,
  /*B963*/ GENx___x___x___ ,
- /*B964*/ GENx___x___x___ ,
- /*B965*/ GENx___x___x___ ,
- /*B966*/ GENx___x___x___ ,
- /*B967*/ GENx___x___x___ ,
+ /*B964*/ GENx___x___x900 ( "NNGRK"     , RRF_a, ASMFMT_RRR      , nand_register_long                                  ),
+ /*B965*/ GENx___x___x900 ( "OCGRK"     , RRF_a, ASMFMT_RRR      , or_register_long_with_complement                    ),
+ /*B966*/ GENx___x___x900 ( "NOGRK"     , RRF_a, ASMFMT_RRR      , nor_register_long                                   ),
+ /*B967*/ GENx___x___x900 ( "NXGRK"     , RRF_a, ASMFMT_RRR      , not_xor_register_long                               ),
  /*B968*/ GENx___x___x___ ,
  /*B969*/ GENx___x___x___ ,
  /*B96A*/ GENx___x___x___ ,
@@ -3243,10 +3294,10 @@ static INSTR_FUNC gen_opcode_b9xx[256][NUM_INSTR_TAB_PTRS] =
  /*B971*/ GENx___x___x___ ,
  /*B972*/ GENx37Xx390x900 ( "CRT"       , RRF_c, ASMFMT_RRF_M3   , compare_and_trap_register                           ),
  /*B973*/ GENx37Xx390x900 ( "CLRT"      , RRF_c, ASMFMT_RRF_M3   , compare_logical_and_trap_register                   ),
- /*B974*/ GENx___x___x___ ,
- /*B975*/ GENx___x___x___ ,
- /*B976*/ GENx___x___x___ ,
- /*B977*/ GENx___x___x___ ,
+ /*B974*/ GENx___x___x900 ( "NNRK"      , RRF_a, ASMFMT_RRR      , nand_register                                       ),
+ /*B975*/ GENx___x___x900 ( "OCRK"      , RRF_a, ASMFMT_RRR      , or_register_with_complement                         ),
+ /*B976*/ GENx___x___x900 ( "NORK"      , RRF_a, ASMFMT_RRR      , nor_register                                        ),
+ /*B977*/ GENx___x___x900 ( "NXRK"      , RRF_a, ASMFMT_RRR      , not_xor_register                                    ),
  /*B978*/ GENx___x___x___ ,
  /*B979*/ GENx___x___x___ ,
  /*B97A*/ GENx___x___x___ ,
@@ -3298,8 +3349,8 @@ static INSTR_FUNC gen_opcode_b9xx[256][NUM_INSTR_TAB_PTRS] =
  /*B9A8*/ GENx___x___x___ ,
  /*B9A9*/ GENx___x___x___ ,
  /*B9AA*/ GENx___x___x900 ( "LPTEA"     , RRF_b, ASMFMT_RRF_RM   , load_page_table_entry_address                       ),
- /*B9AB*/ GENx___x___x___ , /* ESSA - Extract and Set Storage Attributes */
- /*B9AC*/ GENx___x___x___ ,
+ /*B9AB*/ GENx___x___x900 ( "ESSA "     , RRF_c, ASMFMT_RRF_M    , extract_and_set_storage_attributes                  ),
+ /*B9AC*/ GENx___x___x900 ( "IRBM"      , RRE  , ASMFMT_RRE      , insert_reference_bits_multiple                      ),
  /*B9AD*/ GENx___x___x___ ,
  /*B9AE*/ GENx___x___x900 ( "RRBM"      , RRE  , ASMFMT_RRE      , reset_reference_bits_multiple                       ),
  /*B9AF*/ GENx___x___x900 ( "PFMF"      , RRE  , ASMFMT_RRE      , perform_frame_management_function                   ),
@@ -3319,7 +3370,7 @@ static INSTR_FUNC gen_opcode_b9xx[256][NUM_INSTR_TAB_PTRS] =
  /*B9BD*/ GENx37Xx390x900 ( "TRTRE"     , RRF_c, ASMFMT_RRF_M3   , translate_and_test_reverse_extended                 ),
  /*B9BE*/ GENx37Xx390x900 ( "SRSTU"     , RRE  , ASMFMT_RRE      , search_string_unicode                               ),
  /*B9BF*/ GENx37Xx390x900 ( "TRTE"      , RRF_c, ASMFMT_RRF_M3   , translate_and_test_extended                         ),
- /*B9C0*/ GENx___x___x___ ,
+ /*B9C0*/ GENx___x___x900 ( "SELFHR"    , RRF_a, ASMFMT_RRF_A    , select_fullword_high_register                       ),
  /*B9C1*/ GENx___x___x___ ,
  /*B9C2*/ GENx___x___x___ ,
  /*B9C3*/ GENx___x___x___ ,
@@ -3354,25 +3405,25 @@ static INSTR_FUNC gen_opcode_b9xx[256][NUM_INSTR_TAB_PTRS] =
  /*B9E0*/ GENx___x___x900 ( "LOCFHR"    , RRF_c, ASMFMT_RRF_M3   , load_high_on_condition_register                     ),
  /*B9E1*/ GENx___x___x900 ( "POPCNT"    , RRF_c, ASMFMT_RRE      , population_count                                    ),
  /*B9E2*/ GENx___x___x900 ( "LOCGR"     , RRF_c, ASMFMT_RRF_M3   , load_on_condition_long_register                     ),
- /*B9E3*/ GENx___x___x___ ,
+ /*B9E3*/ GENx___x___x900 ( "SELGR"     , RRF_a, ASMFMT_RRF_A    , select_register_long                                ),
  /*B9E4*/ GENx___x___x900 ( "NGRK"      , RRF_a, ASMFMT_RRR      , and_distinct_long_register                          ),
- /*B9E5*/ GENx___x___x___ ,
+ /*B9E5*/ GENx___x___x900 ( "NCGRK"     , RRF_a, ASMFMT_RRR      , and_register_long_with_complement                                ),
  /*B9E6*/ GENx___x___x900 ( "OGRK"      , RRF_a, ASMFMT_RRR      , or_distinct_long_register                           ),
  /*B9E7*/ GENx___x___x900 ( "XGRK"      , RRF_a, ASMFMT_RRR      , exclusive_or_distinct_long_register                 ),
  /*B9E8*/ GENx___x___x900 ( "AGRK"      , RRF_a, ASMFMT_RRR      , add_distinct_long_register                          ),
  /*B9E9*/ GENx___x___x900 ( "SGRK"      , RRF_a, ASMFMT_RRR      , subtract_distinct_long_register                     ),
  /*B9EA*/ GENx___x___x900 ( "ALGRK"     , RRF_a, ASMFMT_RRR      , add_logical_distinct_long_register                  ),
  /*B9EB*/ GENx___x___x900 ( "SLGRK"     , RRF_a, ASMFMT_RRR      , subtract_logical_distinct_long_register             ),
- /*B9EC*/ GENx___x___x___ ,
- /*B9ED*/ GENx___x___x___ ,
+ /*B9EC*/ GENx___x___x900 ( "MGRK"      , RRF_a, ASMFMT_RRR      , multiply_long_register                              ),
+ /*B9ED*/ GENx___x___x900 ( "MSGRKC"    , RRF_a, ASMFMT_RRR      , multiply_single_long_register_cc                    ),
  /*B9EE*/ GENx___x___x___ ,
  /*B9EF*/ GENx___x___x___ ,
- /*B9F0*/ GENx___x___x___ ,
+ /*B9F0*/ GENx___x___x900 ( "SELR"      , RRF_a, ASMFMT_RRF_A    , select_register                                     ),
  /*B9F1*/ GENx___x___x___ ,
  /*B9F2*/ GENx37Xx390x900 ( "LOCR"      , RRF_c, ASMFMT_RRF_M3   , load_on_condition_register                          ),
  /*B9F3*/ GENx___x___x___ ,
  /*B9F4*/ GENx37Xx390x900 ( "NRK"       , RRF_a, ASMFMT_RRR      , and_distinct_register                               ),
- /*B9F5*/ GENx___x___x___ ,
+ /*B9F5*/ GENx___x___x900 ( "NCRK"      , RRF_a, ASMFMT_RRR      , and_register_with_complement                        ),
  /*B9F6*/ GENx37Xx390x900 ( "ORK"       , RRF_a, ASMFMT_RRR      , or_distinct_register                                ),
  /*B9F7*/ GENx37Xx390x900 ( "XRK"       , RRF_a, ASMFMT_RRR      , exclusive_or_distinct_register                      ),
  /*B9F8*/ GENx37Xx390x900 ( "ARK"       , RRF_a, ASMFMT_RRR      , add_distinct_register                               ),
@@ -3380,7 +3431,7 @@ static INSTR_FUNC gen_opcode_b9xx[256][NUM_INSTR_TAB_PTRS] =
  /*B9FA*/ GENx37Xx390x900 ( "ALRK"      , RRF_a, ASMFMT_RRR      , add_logical_distinct_register                       ),
  /*B9FB*/ GENx37Xx390x900 ( "SLRK"      , RRF_a, ASMFMT_RRR      , subtract_logical_distinct_register                  ),
  /*B9FC*/ GENx___x___x___ ,
- /*B9FD*/ GENx___x___x___ ,
+ /*B9FD*/ GENx___x___x900 ( "MSRKC"     , RRF_a, ASMFMT_RRR      , multiply_single_register_cc                         ),
  /*B9FE*/ GENx___x___x___ ,
  /*B9FF*/ GENx___x___x___
 };
@@ -3563,11 +3614,11 @@ static INSTR_FUNC gen_opcode_e3xx[256][NUM_INSTR_TAB_PTRS] =
  /*E335*/ GENx___x___x___ ,
  /*E336*/ GENx37Xx390x900 ( "PFD"       , RXY_b, ASMFMT_RXY      , prefetch_data                                       ),
  /*E337*/ GENx___x___x___ ,
- /*E338*/ GENx___x___x___ ,
- /*E339*/ GENx___x___x___ ,
+ /*E338*/ GENx___x___x900 ( "AGH"       , RXY_a, ASMFMT_RXY      , add_long_halfword                                   ),
+ /*E339*/ GENx___x___x900 ( "SGH"       , RXY_a, ASMFMT_RXY      , subtract_long_halfword                              ),
  /*E33A*/ GENx___x___x900 ( "LLZRGF"    , RXY_a, ASMFMT_RXY      , load_logical_and_zero_rightmost_byte                ),
  /*E33B*/ GENx___x___x900 ( "LZRF"      , RXY_a, ASMFMT_RXY      , load_and_zero_rightmost_byte                        ),
- /*E33C*/ GENx___x___x___ ,
+ /*E33C*/ GENx___x___x900 ( "MGH"       , RXY_a, ASMFMT_RXY      , multiply_long_halfword                              ),
  /*E33D*/ GENx___x___x___ ,
  /*E33E*/ GENx37Xx390x900 ( "STRV"      , RXY_a, ASMFMT_RXY      , store_reversed                                      ),
  /*E33F*/ GENx37Xx390x900 ( "STRVH"     , RXY_a, ASMFMT_RXY      , store_reversed_half                                 ),
@@ -3578,7 +3629,7 @@ static INSTR_FUNC gen_opcode_e3xx[256][NUM_INSTR_TAB_PTRS] =
  /*E344*/ GENx___x___x___ ,
  /*E345*/ GENx___x___x___ ,
  /*E346*/ GENx___x___x900 ( "BCTG"      , RXY_a, ASMFMT_RXY      , branch_on_count_long                                ),
- /*E347*/ GENx___x___x___ ,
+ /*E347*/ GENx___x___x900 ( "BIC"       , RXY_b, ASMFMT_RXY      , branch_indirect_on_condition                        ),
  /*E348*/ GENx___x___x___ ,
  /*E349*/ GENx___x___x___ ,
  /*E34A*/ GENx___x___x___ ,
@@ -3590,7 +3641,7 @@ static INSTR_FUNC gen_opcode_e3xx[256][NUM_INSTR_TAB_PTRS] =
  /*E350*/ GENx37Xx___x900 ( "STY"       , RXY_a, ASMFMT_RXY      , store_y                                             ),
  /*E351*/ GENx37Xx___x900 ( "MSY"       , RXY_a, ASMFMT_RXY      , multiply_single_y                                   ),
  /*E352*/ GENx___x___x___ ,
- /*E353*/ GENx___x___x___ ,
+ /*E353*/ GENx___x___x900 ( "MSC"       , RXY_a, ASMFMT_RXY      , multiply_single_cc                                  ),
  /*E354*/ GENx37Xx___x900 ( "NY"        , RXY_a, ASMFMT_RXY      , and_y                                               ),
  /*E355*/ GENx37Xx___x900 ( "CLY"       , RXY_a, ASMFMT_RXY      , compare_logical_y                                   ),
  /*E356*/ GENx37Xx___x900 ( "OY"        , RXY_a, ASMFMT_RXY      , or_y                                                ),
@@ -3638,8 +3689,8 @@ static INSTR_FUNC gen_opcode_e3xx[256][NUM_INSTR_TAB_PTRS] =
  /*E380*/ GENx___x___x900 ( "NG"        , RXY_a, ASMFMT_RXY      , and_long                                            ),
  /*E381*/ GENx___x___x900 ( "OG"        , RXY_a, ASMFMT_RXY      , or_long                                             ),
  /*E382*/ GENx___x___x900 ( "XG"        , RXY_a, ASMFMT_RXY      , exclusive_or_long                                   ),
- /*E383*/ GENx___x___x___ ,
- /*E384*/ GENx___x___x___ ,
+ /*E383*/ GENx___x___x900 ( "MSGC"      , RXY_a, ASMFMT_RXY      , multiply_single_long_cc                             ),
+ /*E384*/ GENx___x___x900 ( "MG"        , RXY_a, ASMFMT_RXY      , multiply_long                                       ),
  /*E385*/ GENx___x___x900 ( "LGAT"      , RXY_a, ASMFMT_RXY      , load_long_and_trap                                  ),
  /*E386*/ GENx___x___x900 ( "MLG"       , RXY_a, ASMFMT_RXY      , multiply_logical_long                               ),
  /*E387*/ GENx___x___x900 ( "DLG"       , RXY_a, ASMFMT_RXY      , divide_logical_long                                 ),
@@ -3770,6 +3821,8 @@ static INSTR_FUNC gen_opcode_e5xx[256][NUM_INSTR_TAB_PTRS] =
  /*E500*/ GENx370x390x900 ( "LASP"      , SSE  , ASMFMT_SSE      , load_address_space_parameters                       ),
  /*E501*/ GENx370x390x900 ( "TPROT"     , SSE  , ASMFMT_SSE      , test_protection                                     ),
 
+
+
 /*-------------------------------------------------------------------*/
 /*       The following opcode has been re-used in z/Arch             */
 /*-------------------------------------------------------------------*/
@@ -3780,6 +3833,8 @@ static INSTR_FUNC gen_opcode_e5xx[256][NUM_INSTR_TAB_PTRS] =
 
 /*-------------------------------------------------------------------*/
 
+
+
  /*E503*/ GENx370x390x900 ( "Assist"    , SSE  , ASMFMT_SSE      , svc_assist                                          ),
  /*E504*/ GENx370x390x900 ( "Assist"    , SSE  , ASMFMT_SSE      , obtain_local_lock                                   ),
  /*E505*/ GENx370x390x900 ( "Assist"    , SSE  , ASMFMT_SSE      , release_local_lock                                  ),
@@ -3787,7 +3842,21 @@ static INSTR_FUNC gen_opcode_e5xx[256][NUM_INSTR_TAB_PTRS] =
  /*E507*/ GENx370x390x900 ( "Assist"    , SSE  , ASMFMT_SSE      , release_cms_lock                                    ),
  /*E508*/ GENx370x___x___ ( "Assist"    , SSE  , ASMFMT_SSE      , trace_svc_interruption                              ),
  /*E509*/ GENx370x___x___ ( "Assist"    , SSE  , ASMFMT_SSE      , trace_program_interruption                          ),
- /*E50A*/ GENx370x___x___ ( "Assist"    , SSE  , ASMFMT_SSE      , trace_initial_srb_dispatch                          ),
+
+
+
+/*-------------------------------------------------------------------*/
+/*       The following opcode has been re-used in z/Arch             */
+/*-------------------------------------------------------------------*/
+
+#define s370_move_right_to_left     s370_trace_initial_srb_dispatch
+
+ /*E50A*/ GENx370x___x900 ( "MVCRL"     , SSE  , ASMFMT_SSE      , move_right_to_left                                  ),
+
+/*-------------------------------------------------------------------*/
+
+
+
  /*E50B*/ GENx370x___x___ ( "Assist"    , SSE  , ASMFMT_SSE      , trace_io_interruption                               ),
  /*E50C*/ GENx370x___x___ ( "Assist"    , SSE  , ASMFMT_SSE      , trace_task_dispatch                                 ),
  /*E50D*/ GENx370x___x___ ( "Assist"    , SSE  , ASMFMT_SSE      , trace_svc_return                                    ),

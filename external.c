@@ -1,4 +1,5 @@
 /* EXTERNAL.C   (C) Copyright Roger Bowler, 1999-2012                */
+/*              (C) and others 2013-2021                             */
 /*              ESA/390 External Interrupt and Timer                 */
 /*                                                                   */
 /*   Released under "The Q Public License Version 1"                 */
@@ -59,7 +60,7 @@ int     rc;
     {
         /* Point to SIE copy of PSA in state descriptor */
         psa = (void*)(HOSTREGS->mainstor + SIE_STATE(regs) + SIE_IP_PSA_OFFSET);
-        STORAGE_KEY(SIE_STATE(regs), HOSTREGS) |= (STORKEY_REF | STORKEY_CHANGE);
+        ARCH_DEP( or_storage_key )( SIE_STATE( regs ), (STORKEY_REF | STORKEY_CHANGE) );
     }
     else
 #endif /*defined(_FEATURE_SIE)*/
@@ -70,7 +71,7 @@ int     rc;
         SIE_TRANSLATE(&pfx, ACCTYPE_SIE, regs);
 #endif /*defined(_FEATURE_EXPEDITED_SIE_SUBSET)*/
         psa = (void*)(regs->mainstor + pfx);
-        STORAGE_KEY(pfx, regs) |= (STORKEY_REF | STORKEY_CHANGE);
+        ARCH_DEP( or_storage_key )( pfx, (STORKEY_REF | STORKEY_CHANGE) );
     }
 
     /* Store the interrupt code in the PSW */
@@ -103,9 +104,9 @@ int     rc;
 #if defined( FEATURE_073_TRANSACT_EXEC_FACILITY )
         /* Abort any active transaction and then return back to here
            to continue with external interrupt processing */
-        if (HOSTREGS->txf_tnd)
+        if (regs->txf_tnd)
         {
-            PTT_TXF( "*TXF EI", 0, 0, HOSTREGS->txf_tnd );
+            PTT_TXF( "*TXF EI", 0, 0, regs->txf_tnd );
             regs->txf_why |= TXF_WHY_EXT_INT;
             ABORT_TRANS( regs, ABORT_RETRY_RETURN, TAC_EXT );
         }
@@ -125,7 +126,7 @@ int     rc;
 
 #if defined(FEATURE_INTERVAL_TIMER)
     /* Ensure the interval timer is uptodate */
-    ARCH_DEP(store_int_timer_nolock) (regs);
+    ARCH_DEP( store_int_timer_locked )( regs );
 #endif
     RELEASE_INTLOCK(regs);
 
@@ -281,7 +282,7 @@ U16     servcode;      /* Service Signal or Block I/O Interrupt code */
 
     /* External interrupt if TOD clock exceeds clock comparator */
     if (1
-        && tod_clock( regs ) > regs->clkc
+        && get_tod_clock( regs ) > regs->clkc
         && OPEN_IC_CLKC( regs )
     )
     {
@@ -396,9 +397,7 @@ U16     servcode;      /* Service Signal or Block I/O Interrupt code */
                 /* Point to 2nd page of PSA in main storage */
                 servpadr=APPLY_PREFIXING(VM_BLOCKIO_INT_PARM,regs->PX);
 
-                STORAGE_KEY(servpadr, regs)
-                    |= (STORKEY_REF | STORKEY_CHANGE);
-
+                ARCH_DEP( or_storage_key )( servpadr, (STORKEY_REF | STORKEY_CHANGE) );
 #if 0
                 /* Store the 64-bit interrupt parameter */
                 LOGMSG( "Saving 64-bit Block I/O interrupt parm at "
@@ -407,7 +406,6 @@ U16     servcode;      /* Service Signal or Block I/O Interrupt code */
                     sysblk.bioparm
                 );
 #endif
-
                 STORE_DW(regs->mainstor + servpadr,sysblk.bioparm);
                 psa = (void*)(regs->mainstor + regs->PX);
             }
@@ -528,13 +526,13 @@ int     i;                              /* Array subscript           */
 PSA     *sspsa;                         /* -> Store status area      */
 
     /* Set reference and change bits */
-    STORAGE_KEY(aaddr, ssreg) |= (STORKEY_REF | STORKEY_CHANGE);
+    ARCH_DEP( or_storage_key )( aaddr, (STORKEY_REF | STORKEY_CHANGE) );
 
 #if defined( FEATURE_001_ZARCH_INSTALLED_FACILITY )
 
     /* The ESAME PSA is two pages in size */
     if(!aaddr)
-        STORAGE_KEY(aaddr + 4096, ssreg) |= (STORKEY_REF | STORKEY_CHANGE);
+        ARCH_DEP( or_storage_key )( aaddr + 4096, (STORKEY_REF | STORKEY_CHANGE) );
 
     /* For store status at address, we must adjust the PSA offset */
     /* ZZ THIS TEST IS NOT CONCLUSIVE */
@@ -548,7 +546,7 @@ PSA     *sspsa;                         /* -> Store status area      */
     sspsa = (void*)(ssreg->mainstor + aaddr);
 
     /* Store CPU timer in bytes 216-223 */
-    STORE_DW(sspsa->storeptmr, cpu_timer(ssreg));
+    STORE_DW(sspsa->storeptmr, get_cpu_timer(ssreg));
 
     /* Store clock comparator in bytes 224-231 */
 #if defined( FEATURE_001_ZARCH_INSTALLED_FACILITY )
@@ -638,6 +636,7 @@ void store_status (REGS *ssreg, U64 aaddr)
             z900_store_status (ssreg, aaddr);
             break;
 #endif
+        default: CRASH();
     }
 }
 #endif /*!defined(_GEN_ARCH)*/

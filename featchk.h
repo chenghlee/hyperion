@@ -1,4 +1,5 @@
 /* FEATCHK.H    (C) Copyright Jan Jaeger, 2000-2012                  */
+/*              (C) and others 2013-2021                             */
 /*              Feature definition consistency checks                */
 /*                                                                   */
 /*   Released under "The Q Public License Version 1"                 */
@@ -355,6 +356,10 @@
  #define    _FEATURE_080_DFP_PACK_CONV_FACILITY
 #endif
 
+#if defined( FEATURE_081_PPA_IN_ORDER_FACILITY )
+ #define    _FEATURE_081_PPA_IN_ORDER_FACILITY
+#endif
+
 #if defined( FEATURE_129_ZVECTOR_FACILITY )
  #define    _FEATURE_129_ZVECTOR_FACILITY
 #endif
@@ -433,6 +438,22 @@
 
 #if defined( FEATURE_2K_STORAGE_KEYS )
  #define    _FEATURE_2K_STORAGE_KEYS
+#endif
+
+#if defined( FEATURE_4K_STORAGE_KEYS )
+ #define    _FEATURE_4K_STORAGE_KEYS
+#endif
+
+#if defined( FEATURE_ADDRESS_LIMIT_CHECKING )
+ #define    _FEATURE_ADDRESS_LIMIT_CHECKING
+#endif
+
+#if defined( FEATURE_BASIC_STORAGE_KEYS )
+ #define    _FEATURE_BASIC_STORAGE_KEYS
+#endif
+
+#if defined( FEATURE_EXTENDED_STORAGE_KEYS )
+ #define    _FEATURE_EXTENDED_STORAGE_KEYS
 #endif
 
 #if defined( FEATURE_370_EXTENSION )
@@ -575,6 +596,10 @@
  #define    _FEATURE_TCPIP_EXTENSION
 #endif
 
+#if defined( FEATURE_ZVM_ESSA )
+ #define    _FEATURE_ZVM_ESSA
+#endif
+
 /*-------------------------------------------------------------------*/
 /*                     PROGRAMMING NOTE                              */
 /*-------------------------------------------------------------------*/
@@ -585,12 +610,11 @@
 /* of code pertaining to SIE appears to be an exception to the rule. */
 /*-------------------------------------------------------------------*/
 
-#if defined(   FEATURE_INTERPRETIVE_EXECUTION )
-
-  #define     _FEATURE_SIE    // (370/390 SIE)
+#if defined(   FEATURE_SIE )
+  #define     _FEATURE_SIE    // (370/390/900 SIE)
 
   #if defined( FEATURE_001_ZARCH_INSTALLED_FACILITY )
-    #define   _FEATURE_ZSIE   // (z/Arch SIE)
+    #define   _FEATURE_ZSIE   // (900 SIE)
   #endif
 
   #if defined( FEATURE_PROTECTION_INTERCEPTION_CONTROL )
@@ -601,43 +625,6 @@
     #define   _FEATURE_STORAGE_KEY_ASSIST
   #endif
 
-#endif
-
-/*-------------------------------------------------------------------*/
-
-#undef  _VSTORE_C_STATIC
-#define _VSTORE_C_STATIC            static inline
-
-#undef  _VFETCH_C_STATIC
-#define _VFETCH_C_STATIC            static inline
-
-#undef  _VSTORE_FULL_C_STATIC
-#define _VSTORE_FULL_C_STATIC       static
-
-/*-------------------------------------------------------------------*/
-/*        Memory accessing and dynamic translation #defines          */
-/*-------------------------------------------------------------------*/
-/* Ordinarily #defines related to DLL_IMPORT, DLL_EXPORT and extern  */
-/* are performed within the 'hexterns.h' header in coordination with */
-/* the source member and loadable module itself (see e.g. hsccmd.c   */
-/* _HSCCMD_C_ and _HENGINE_DLL_ handshaking with hexterns.h header). */
-/* Since guest memory accessing and dynamic address translation are  */
-/* common to across ALL build architectures however (and we wish to  */
-/* declare such functions 'static inline' for speed, which requires  */
-/* that they all be declared identically across all architectures),  */
-/* it's easier and more reliable to do the #defines here instead.    */
-/*-------------------------------------------------------------------*/
-
-#undef     _LOGICAL_C_STATIC
-
-#ifndef    _DAT_C
- #ifndef   _HENGINE_DLL_
-  #define  _LOGICAL_C_STATIC        DLL_IMPORT
- #else
-  #define  _LOGICAL_C_STATIC        extern
- #endif
-#else
- #define   _LOGICAL_C_STATIC        DLL_EXPORT
 #endif
 
 /*-------------------------------------------------------------------*/
@@ -782,7 +769,7 @@
 /*                   Facility-bit FEATUREs                           */
 /*-------------------------------------------------------------------*/
 
-#if defined( FEATURE_001_ZARCH_INSTALLED_FACILITY ) && defined( FEATURE_INTERPRETIVE_EXECUTION ) \
+#if defined( FEATURE_001_ZARCH_INSTALLED_FACILITY ) && defined( FEATURE_SIE ) \
 && !defined( _FEATURE_SIE )
  #error z/Arch SIE requires ESA/390 SIE too
 #endif
@@ -950,6 +937,10 @@
  #error Storage Keys must be either 2K or 4K
 #endif
 
+#if !defined( FEATURE_BASIC_STORAGE_KEYS ) && !defined( FEATURE_EXTENDED_STORAGE_KEYS )
+ #error FEATURE_BASIC_STORAGE_KEYS and/or FEATURE_EXTENDED_STORAGE_KEYS must be defined
+#endif
+
 #if defined( FEATURE_370_EXTENSION ) && !defined( OPTION_370_MODE )
  #error S/370 Extensions feature requires OPTION_370_MODE
 #endif
@@ -1031,7 +1022,7 @@
  #error Move page facility cannot be defined with 2K Storage keys
 #endif
 
-#if defined( FEATURE_MULTIPLE_CONTROLLED_DATA_SPACE ) && !defined( FEATURE_INTERPRETIVE_EXECUTION )
+#if defined( FEATURE_MULTIPLE_CONTROLLED_DATA_SPACE ) && !defined( FEATURE_SIE )
  #error MCDS is only supported with SIE
 #endif
 
@@ -1055,11 +1046,11 @@
  #error FEATURE_PER1 cannot be defined if FEATURE_PER2 or FEATURE_PER3 is defined
 #endif
 
-#if defined( FEATURE_PROTECTION_INTERCEPTION_CONTROL ) && !defined( FEATURE_INTERPRETIVE_EXECUTION )
+#if defined( FEATURE_PROTECTION_INTERCEPTION_CONTROL ) && !defined( FEATURE_SIE )
  #error Protection Interception Control is only supported with SIE
 #endif
 
-#if defined( FEATURE_REGION_RELOCATE ) && !defined( FEATURE_INTERPRETIVE_EXECUTION )
+#if defined( FEATURE_REGION_RELOCATE ) && !defined( FEATURE_SIE )
  #error Region Relocate Facility only supported with SIE
 #endif
 
@@ -1079,7 +1070,7 @@
  #error SCSI IPL requires FEATURE_HARDWARE_LOADER
 #endif
 
-#if defined( FEATURE_STORAGE_KEY_ASSIST ) && !defined( FEATURE_INTERPRETIVE_EXECUTION )
+#if defined( FEATURE_STORAGE_KEY_ASSIST ) && !defined( FEATURE_SIE )
  #error Storage Key assist only supported with SIE
 #endif
 
@@ -1087,6 +1078,6 @@
  #error VM Standard Block I/O DIAGNOSE 0x250 requires FEATURE_EMULATE_VM
 #endif
 
-#endif /* !defined( FEATALL_CHECKALL ) */
+#endif /* !defined( FEATCHK_DO_DEFINES ) */
 
 /* end of FEATCHK.H */

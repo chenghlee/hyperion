@@ -1,5 +1,6 @@
 /* GENERAL2.C   (C) Copyright Roger Bowler, 1994-2012                */
 /*              (C) Copyright Jan Jaeger, 1999-2012                  */
+/*              (C) and others 2013-2021                             */
 /*              Hercules CPU Emulator - Instructions N-Z             */
 /*                                                                   */
 /*   Released under "The Q Public License Version 1"                 */
@@ -40,7 +41,6 @@
 #include "hercules.h"
 #include "opcode.h"
 #include "inline.h"
-#include "clock.h"
 
 /* When an operation code has unused operand(s) (IPK, e.g.), it will */
 /* attract  a diagnostic for a set, but unused variable.  Fixing the */
@@ -89,7 +89,7 @@ DEF_INST(or_immediate)
 BYTE    i2;                             /* Immediate operand byte    */
 int     b1;                             /* Base of effective addr    */
 VADR    effective_addr1;                /* Effective address         */
-BYTE   *dest;                         /* Pointer to target byte      */
+BYTE   *dest;                           /* Pointer to target byte    */
 
     SI(inst, regs, i2, b1, effective_addr1);
 
@@ -182,7 +182,7 @@ int     cc = 0;                         /* Condition code            */
                  if ( (*dest1++ |= *source2++) )
                      cc = 1;
         }
-        *sk1 |= (STORKEY_REF | STORKEY_CHANGE);
+        ARCH_DEP( or_storage_key_by_ptr )( sk1, (STORKEY_REF | STORKEY_CHANGE) );
     }
     else
     {
@@ -263,8 +263,8 @@ int     cc = 0;                         /* Condition code            */
                         cc = 1;
             }
         }
-        *sk1 |= (STORKEY_REF | STORKEY_CHANGE);
-        *sk2 |= (STORKEY_REF | STORKEY_CHANGE);
+        ARCH_DEP( or_storage_key_by_ptr )( sk1, (STORKEY_REF | STORKEY_CHANGE) );
+        ARCH_DEP( or_storage_key_by_ptr )( sk2, (STORKEY_REF | STORKEY_CHANGE) );
     }
 
     regs->psw.cc = cc;
@@ -982,7 +982,6 @@ U32    *p1, *p2 = NULL;                 /* Mainstor pointers         */
 
     RS( inst, regs, r1, r3, b2, effective_addr2 );
 
-    TRAN_ACCESS_INSTR_CHECK( regs );
     FW_CHECK( effective_addr2, regs );
 
     /* Calculate number of regs to store */
@@ -1074,7 +1073,10 @@ ETOD    ETOD;                           /* Extended TOD clock        */
 
     S( inst, regs, b2, effective_addr2 );
 
-    TRAN_INSTR_CHECK( regs );
+#if defined( FEATURE_073_TRANSACT_EXEC_FACILITY )
+    if (FACILITY_ENABLED( HERC_TXF_RESTRICT_3, regs ))
+        TRAN_INSTR_CHECK( regs );
+#endif
 
 #if defined( _FEATURE_SIE )
 
@@ -1133,7 +1135,10 @@ ETOD    ETOD;                           /* Extended clock work area  */
 
     S(inst, regs, b2, effective_addr2);
 
-    TRAN_INSTR_CHECK( regs );
+#if defined( FEATURE_073_TRANSACT_EXEC_FACILITY )
+    if (FACILITY_ENABLED( HERC_TXF_RESTRICT_3, regs ))
+        TRAN_INSTR_CHECK( regs );
+#endif
 
 #if defined( _FEATURE_SIE )
     if(SIE_STATE_BIT_ON(regs, IC2, STCK))
@@ -1357,7 +1362,7 @@ U32     n;                              /* 32-bit operand values     */
   DEF_INST(1F ## r1 ## r2) \
   { \
     UNREFERENCED(inst); \
-    INST_UPDATE_PSW(regs, 2, 0); \
+    INST_UPDATE_PSW(regs, 2, 2); \
     regs->psw.cc = sub_logical(&(regs->GR_L(0x ## r1)), regs->GR_L(0x ## r1), regs->GR_L(0x ## r2)); \
   }
 #define SLRgenr2(r1) \
@@ -1480,7 +1485,7 @@ int     rc;                             /* Return code               */
     SIE_TRANSLATE(&px, ACCTYPE_WRITE, regs);
 
     /* Set the main storage reference and change bits */
-    STORAGE_KEY(px, regs) |= (STORKEY_REF | STORKEY_CHANGE);
+    ARCH_DEP( or_storage_key )( px, (STORKEY_REF | STORKEY_CHANGE) );
 
     /* Use the I-byte to set the SVC interruption code */
     regs->psw.intcode = i;
@@ -2186,7 +2191,10 @@ DEF_INST(convert_utf8_to_utf32)
 
   RRF_M(inst, regs, r1, r2, m3);
 
-  TRAN_INSTR_CHECK( regs );
+#if defined( FEATURE_073_TRANSACT_EXEC_FACILITY )
+    if (FACILITY_ENABLED( HERC_TXF_RESTRICT_1, regs ))
+        TRAN_INSTR_CHECK( regs );
+#endif
   ODD2_CHECK(r1, r2, regs);
 
   /* Get paramaters */
@@ -2429,7 +2437,10 @@ DEF_INST(convert_utf16_to_utf32)
 
   RRF_M(inst, regs, r1, r2, m3);
 
-  TRAN_INSTR_CHECK( regs );
+#if defined( FEATURE_073_TRANSACT_EXEC_FACILITY )
+    if (FACILITY_ENABLED( HERC_TXF_RESTRICT_1, regs ))
+        TRAN_INSTR_CHECK( regs );
+#endif
   ODD2_CHECK(r1, r2, regs);
 
   /* Get paramaters */
@@ -2539,7 +2550,10 @@ DEF_INST(convert_utf32_to_utf8)
 
   RRE(inst, regs, r1, r2);
 
-  TRAN_INSTR_CHECK( regs );
+#if defined( FEATURE_073_TRANSACT_EXEC_FACILITY )
+    if (FACILITY_ENABLED( HERC_TXF_RESTRICT_1, regs ))
+        TRAN_INSTR_CHECK( regs );
+#endif
   ODD2_CHECK(r1, r2, regs);
 
   /* Get paramaters */
@@ -2678,7 +2692,10 @@ DEF_INST(convert_utf32_to_utf16)
 
   RRE(inst, regs, r1, r2);
 
-  TRAN_INSTR_CHECK( regs );
+#if defined( FEATURE_073_TRANSACT_EXEC_FACILITY )
+    if (FACILITY_ENABLED( HERC_TXF_RESTRICT_1, regs ))
+        TRAN_INSTR_CHECK( regs );
+#endif
   ODD2_CHECK(r1, r2, regs);
 
   /* Get paramaters */

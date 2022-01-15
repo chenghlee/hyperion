@@ -13,10 +13,10 @@
 /* instructions described in the manual GA22-7079-01.                */
 /*-------------------------------------------------------------------*/
 
-/*              Instruction decode rework - Jan Jaeger               */
-/*              Correct address wraparound - Jan Jaeger              */
-/*              Add dummy assist instruction - Jay Maynard,          */
-/*                  suggested by Brandon Hill                        */
+/*           Instruction decode rework - Jan Jaeger                  */
+/*           Correct address wraparound - Jan Jaeger                 */
+/*           Add dummy assist instruction - Jay Maynard,             */
+/*               suggested by Brandon Hill                           */
 
 #include "hstdinc.h"
 
@@ -26,6 +26,7 @@
 #include "hercules.h"
 #include "opcode.h"
 #include "inline.h"
+#include "ecpsvm.h"
 
 DISABLE_GCC_UNUSED_SET_WARNING;
 
@@ -57,8 +58,26 @@ DISABLE_GCC_UNUSED_SET_WARNING;
 
 #endif /*!defined(_ASSIST_C)*/
 
+/* The macro below allows each assist instruction to execute in a virtual
+   machine. Per GA22-7072-0, these assist instructions must co-exist with
+   ECPS:VM if present (whether enabled or disabled), so that MVS running
+   as a guest of VM can use these assists. This is the "Virtual Machine
+   Extended Facility Assist" feature, also known as "370E" in VM. The macro
+   will allow execution of these privileged assist instructions when the
+   real PSW is in the problem state -- if and only if the guest virtual
+   machine PSW is in the virtual supervisor state (ECPSVM_CR6_VIRTPROB=0)
+   and the 370E feature is enabled (ECPS_CR6_VMMVSAS=1).  Otherwise, the
+   PRIV_CHECK macro is invoked to cause a privileged operation exception.
+*/
+#define GUEST_CHECK( ) \
+    if (PROBSTATE( &regs->psw )) \
+    { \
+        if ((regs->CR_L(6) & (ECPSVM_CR6_VIRTPROB + ECPSVM_CR6_VMMVSAS)) != ECPSVM_CR6_VMMVSAS) \
+           PRIV_CHECK( regs ); \
+    }
 
-#if !defined(FEATURE_S390_DAT) && !defined(FEATURE_001_ZARCH_INSTALLED_FACILITY)
+#if !defined( FEATURE_S390_DAT ) && !defined( FEATURE_001_ZARCH_INSTALLED_FACILITY )
+
 /*-------------------------------------------------------------------*/
 /* E502       - Page Fix                                       [SSE] */
 /*-------------------------------------------------------------------*/
@@ -67,16 +86,31 @@ DEF_INST(fix_page)
 int     b1, b2;                         /* Values of base field      */
 VADR    effective_addr1,
         effective_addr2;                /* Effective addresses       */
+RADR    mplp;
 
-    SSE(inst, regs, b1, effective_addr1, b2, effective_addr2);
+#define MPLPFAL  0x34
 
-    PRIV_CHECK(regs);
+    SSE( inst, regs, b1, effective_addr1, b2, effective_addr2 );
 
-    PTT_ERR("*E502 PGFIX",effective_addr1,effective_addr2,regs->psw.IA_L);
-    /*INCOMPLETE*/
+    GUEST_CHECK();
 
+    /* The Page Fix assist cannot return via the PTT_ERR( ) method as used
+       in most of the other assists here.  Per GA22-7079-1 "IBM System/370
+       Assists for MVS", this assist must NOT exit to the next sequential
+       instruction.  Instead, we follow the "simplified execution path"
+       described on page 3 of that documentation for Fix Page.
+    */
+    regs->GR_L(14) = PSW_IA_FROM_IP(regs, 0);
+
+    mplp = ARCH_DEP( vfetch4 )( (effective_addr2 & ADDRESS_MAXWRAP( regs )),
+        USE_INST_SPACE, regs );
+
+    regs->GR_L(15) = ARCH_DEP( vfetch4 )( (( mplp+MPLPFAL ) & ADDRESS_MAXWRAP( regs )),
+        USE_INST_SPACE, regs );
+
+    SET_PSW_IA_AND_MAYBE_IP( regs, regs->GR_L(15) );
 }
-#endif /*!defined(FEATURE_S390_DAT) && !defined(FEATURE_001_ZARCH_INSTALLED_FACILITY)*/
+#endif /* !defined( FEATURE_S390_DAT ) && !defined( FEATURE_001_ZARCH_INSTALLED_FACILITY ) */
 
 
 /*-------------------------------------------------------------------*/
@@ -90,12 +124,11 @@ VADR    effective_addr1,
 
     SSE(inst, regs, b1, effective_addr1, b2, effective_addr2);
 
-    PRIV_CHECK(regs);
+    GUEST_CHECK( );
 
-    PTT_ERR("*E503 SVCA",effective_addr1,effective_addr2,regs->psw.IA_L);
+    PTT_ERR( "*E503 SVCA", effective_addr1, effective_addr2, regs->psw.IA_L );
     /*INCOMPLETE: NO ACTION IS TAKEN, THE SVC IS UNASSISTED
                   AND MVS WILL HAVE TO HANDLE THE SITUATION*/
-
 }
 
 
@@ -104,22 +137,23 @@ VADR    effective_addr1,
 /*-------------------------------------------------------------------*/
 DEF_INST(obtain_local_lock)
 {
-int     b1, b2;                         /* Values of base field      */
-VADR    effective_addr1,
-        effective_addr2;                /* Effective addresses       */
-VADR    ascb_addr;                      /* Virtual address of ASCB   */
-VADR    lock_addr;                      /* Virtual addr of ASCBLOCK  */
-U32     hlhi_word;                      /* Highest lock held word    */
-VADR    lit_addr;                       /* Virtual address of lock
+    int     b1, b2;                     /* Values of base field      */
+    VADR    effective_addr1,
+            effective_addr2;            /* Effective addresses       */
+    VADR    ascb_addr;                  /* Virtual address of ASCB   */
+    U32     hlhi_word;                  /* Highest lock held word    */
+    VADR    lit_addr;                   /* Virtual address of lock
                                            interface table           */
-U32     lock;                           /* Lock value                */
-U32     lcpa;                           /* Logical CPU address       */
-VADR    newia;                          /* Unsuccessful branch addr  */
-int     acc_mode = 0;                   /* access mode to use        */
+    U32     lcpa;                       /* Logical CPU address       */
+    VADR    newia;                      /* Unsuccessful branch addr  */
+    BYTE   *mainstor;                   /* mainstor address          */
+    U32     old;                        /* old value                 */
+    U32     new;                        /* new value                 */
+    int     acc_mode = 0;               /* access mode to use        */
 
     SSE(inst, regs, b1, effective_addr1, b2, effective_addr2);
 
-    PRIV_CHECK(regs);
+    GUEST_CHECK( );
 
     /* Specification exception if operands are not on word boundary */
     if ((effective_addr1 & 0x00000003) || (effective_addr2 & 0x00000003))
@@ -127,64 +161,62 @@ int     acc_mode = 0;                   /* access mode to use        */
 
     PERFORM_SERIALIZATION(regs);
 
-    /* Obtain main-storage access lock */
+    /* MAINLOCK may be required if cmpxchg assists unavailable */
     OBTAIN_MAINLOCK(regs);
-
-    if (ACCESS_REGISTER_MODE(&regs->psw))
-        acc_mode = USE_PRIMARY_SPACE;
-
-    /* Load ASCB address from first operand location */
-    ascb_addr = ARCH_DEP(vfetch4) ( effective_addr1, acc_mode, regs );
-
-    /* Load locks held bits from second operand location */
-    hlhi_word = ARCH_DEP(vfetch4) ( effective_addr2, acc_mode, regs );
-
-    /* Fetch our logical CPU address from PSALCPUA */
-    lcpa = ARCH_DEP(vfetch4) ( effective_addr2 - 4, acc_mode, regs );
-
-    lock_addr = (ascb_addr + ASCBLOCK) & ADDRESS_MAXWRAP(regs);
-
-    /* Fetch the local lock from the ASCB */
-    lock = ARCH_DEP(vfetch4) ( lock_addr, acc_mode, regs );
-
-    /* Obtain the local lock if not already held by any CPU */
-    if (lock == 0
-        && (hlhi_word & PSALCLLI) == 0)
     {
-        /* Store the unchanged value into the second operand to
-           ensure suppression in the event of an access exception */
-        ARCH_DEP(vstore4) ( hlhi_word, effective_addr2, acc_mode, regs );
+        if (ACCESS_REGISTER_MODE(&regs->psw))
+            acc_mode = USE_PRIMARY_SPACE;
 
-        /* Store our logical CPU address in ASCBLOCK */
-        ARCH_DEP(vstore4) ( lcpa, lock_addr, acc_mode, regs );
+        /* Load ASCB address from first operand location */
+        ascb_addr = ARCH_DEP(vfetch4) ( effective_addr1, acc_mode, regs );
 
-        /* Set the local lock held bit in the second operand */
-        hlhi_word |= PSALCLLI;
-        ARCH_DEP(vstore4) ( hlhi_word, effective_addr2, acc_mode, regs );
+        /* Load locks held bits from second operand location */
+        hlhi_word = ARCH_DEP(vfetch4) ( effective_addr2, acc_mode, regs );
 
-        /* Set register 13 to zero to indicate lock obtained */
-        regs->GR_L(13) = 0;
+        /* Fetch our logical CPU address from PSALCPUA */
+        lcpa = ARCH_DEP(vfetch4) ( effective_addr2 - 4, acc_mode, regs );
+
+        /* Get mainstor address of ASCBLOCK word */
+        mainstor = MADDRL (ascb_addr + ASCBLOCK, 4, b2, regs, ACCTYPE_WRITE, regs->psw.pkey);
+
+        /* The lock word should contain 0; use this as our compare value.
+           Swap in the CPU address in lpca */
+        old = 0;
+        new = CSWAP32(lcpa);
+
+        /* Try exchanging values; cmpxchg4 returns 0=success, !0=failure */
+        if (!cmpxchg4( &old, new, mainstor ))
+        {
+            /* Store the unchanged value into the second operand to
+            ensure suppression in the event of an access exception */
+            ARCH_DEP(vstore4) ( hlhi_word, effective_addr2, acc_mode, regs );
+
+            /* Set the local lock held bit in the second operand */
+            hlhi_word |= PSALCLLI;
+            ARCH_DEP(vstore4) ( hlhi_word, effective_addr2, acc_mode, regs );
+
+            /* Set register 13 to zero to indicate lock obtained */
+            regs->GR_L(13) = 0;
+        }
+        else
+        {
+            /* Fetch the lock interface table address from the
+            second word of the second operand, and load the
+            new instruction address and amode from LITOLOC */
+            lit_addr = ARCH_DEP(vfetch4) ( effective_addr2 + 4, acc_mode, regs ) + LITOLOC;
+            lit_addr &= ADDRESS_MAXWRAP(regs);
+            newia = ARCH_DEP(vfetch4) ( lit_addr, acc_mode, regs );
+
+            /* Save the link information in register 12 */
+            regs->GR_L(12) = PSW_IA_FROM_IP(regs, 0);
+
+            /* Copy LITOLOC into register 13 to signify obtain failure */
+            regs->GR_L(13) = newia;
+
+            /* Update the PSW instruction address */
+            SET_PSW_IA_AND_MAYBE_IP(regs, newia);
+        }
     }
-    else
-    {
-        /* Fetch the lock interface table address from the
-           second word of the second operand, and load the
-           new instruction address and amode from LITOLOC */
-        lit_addr = ARCH_DEP(vfetch4) ( effective_addr2 + 4, acc_mode, regs ) + LITOLOC;
-        lit_addr &= ADDRESS_MAXWRAP(regs);
-        newia = ARCH_DEP(vfetch4) ( lit_addr, acc_mode, regs );
-
-        /* Save the link information in register 12 */
-        regs->GR_L(12) = PSW_IA(regs, 0);
-
-        /* Copy LITOLOC into register 13 to signify obtain failure */
-        regs->GR_L(13) = newia;
-
-        /* Update the PSW instruction address */
-        UPD_PSW_IA(regs, newia);
-    }
-
-    /* Release main-storage access lock */
     RELEASE_MAINLOCK(regs);
 
     PERFORM_SERIALIZATION(regs);
@@ -214,14 +246,14 @@ int     acc_mode = 0;                   /* access mode to use        */
 
     SSE(inst, regs, b1, effective_addr1, b2, effective_addr2);
 
-    PRIV_CHECK(regs);
+    GUEST_CHECK( );
 
     /* Specification exception if operands are not on word boundary */
     if ((effective_addr1 & 0x00000003) || (effective_addr2 & 0x00000003))
         ARCH_DEP(program_interrupt) (regs, PGM_SPECIFICATION_EXCEPTION);
 
     /* Obtain main-storage access lock */
-    OBTAIN_MAINLOCK(regs);
+    OBTAIN_MAINLOCK_UNCONDITIONAL(regs);
 
     if (ACCESS_REGISTER_MODE(&regs->psw))
         acc_mode = USE_PRIMARY_SPACE;
@@ -251,12 +283,12 @@ int     acc_mode = 0;                   /* access mode to use        */
            ensure suppression in the event of an access exception */
         ARCH_DEP(vstore4) ( hlhi_word, effective_addr2, acc_mode, regs );
 
-        /* Set the local lock to zero */
-        ARCH_DEP(vstore4) ( 0, lock_addr, acc_mode, regs );
-
         /* Clear the local lock held bit in the second operand */
         hlhi_word &= ~PSALCLLI;
         ARCH_DEP(vstore4) ( hlhi_word, effective_addr2, acc_mode, regs );
+
+        /* Set the local lock to zero */
+        ARCH_DEP(vstore4) ( 0, lock_addr, acc_mode, regs );
 
         /* Set register 13 to zero to indicate lock released */
         regs->GR_L(13) = 0;
@@ -271,17 +303,17 @@ int     acc_mode = 0;                   /* access mode to use        */
         newia = ARCH_DEP(vfetch4) ( lit_addr, acc_mode, regs );
 
         /* Save the link information in register 12 */
-        regs->GR_L(12) = PSW_IA(regs, 0);
+        regs->GR_L(12) = PSW_IA_FROM_IP(regs, 0);
 
         /* Copy LITRLOC into register 13 to signify release failure */
         regs->GR_L(13) = newia;
 
         /* Update the PSW instruction address */
-        UPD_PSW_IA(regs, newia);
+        SET_PSW_IA_AND_MAYBE_IP(regs, newia);
     }
 
     /* Release main-storage access lock */
-    RELEASE_MAINLOCK(regs);
+    RELEASE_MAINLOCK_UNCONDITIONAL(regs);
 
 } /* end function release_local_lock */
 
@@ -291,22 +323,26 @@ int     acc_mode = 0;                   /* access mode to use        */
 /*-------------------------------------------------------------------*/
 DEF_INST(obtain_cms_lock)
 {
-int     b1, b2;                         /* Values of base field      */
-VADR    effective_addr1,
-        effective_addr2;                /* Effective addresses       */
-VADR    ascb_addr;                      /* Virtual address of ASCB   */
-U32     hlhi_word;                      /* Highest lock held word    */
-VADR    lit_addr;                       /* Virtual address of lock
+    int     b1, b2;                     /* Values of base field      */
+    VADR    effective_addr1,
+            effective_addr2;            /* Effective addresses       */
+    VADR    ascb_addr;                  /* Virtual address of ASCB   */
+    U32     hlhi_word;                  /* Highest lock held word    */
+    VADR    lit_addr;                   /* Virtual address of lock
                                            interface table           */
-VADR    lock_addr;                      /* Lock address              */
-int     lock_arn;                       /* Lock access register      */
-U32     lock;                           /* Lock value                */
-VADR    newia;                          /* Unsuccessful branch addr  */
-int     acc_mode = 0;                   /* access mode to use        */
+    VADR    lock_addr;                  /* Lock address              */
+    int     lock_arn;                   /* Lock access register      */
+    U32     lock;                       /* Lock value                */
+    VADR    newia;                      /* Unsuccessful branch addr  */
+    BYTE   *mainstor;                   /* mainstor address          */
+    U32     old;                        /* old value                 */
+    U32     new;                        /* new value                 */
+    U32     locked = 0;                 /* status of cmpxchg4 result */
+    int     acc_mode = 0;               /* access mode to use        */
 
     SSE(inst, regs, b1, effective_addr1, b2, effective_addr2);
 
-    PRIV_CHECK(regs);
+    GUEST_CHECK( );
 
     /* Specification exception if operands are not on word boundary */
     if ((effective_addr1 & 0x00000003) || (effective_addr2 & 0x00000003))
@@ -318,60 +354,72 @@ int     acc_mode = 0;                   /* access mode to use        */
     lock_addr = regs->GR_L(11) & ADDRESS_MAXWRAP(regs);
     lock_arn = 11;
 
-    /* Obtain main-storage access lock */
+    /* MAINLOCK may be required if cmpxchg assists unavailable */
     OBTAIN_MAINLOCK(regs);
-
-    if (ACCESS_REGISTER_MODE(&regs->psw))
-        acc_mode = USE_PRIMARY_SPACE;
-
-    /* Load ASCB address from first operand location */
-    ascb_addr = ARCH_DEP(vfetch4) ( effective_addr1, acc_mode, regs );
-
-    /* Load locks held bits from second operand location */
-    hlhi_word = ARCH_DEP(vfetch4) ( effective_addr2, acc_mode, regs );
-
-    /* Fetch the lock addressed by general register 11 */
-    lock = ARCH_DEP(vfetch4) ( lock_addr, acc_mode, regs );
-
-    /* Obtain the lock if not held by any ASCB, and if this CPU
-       holds the local lock and does not hold a CMS lock */
-    if (lock == 0
-        && (hlhi_word & (PSALCLLI | PSACMSLI)) == PSALCLLI)
     {
-        /* Store the unchanged value into the second operand to
-           ensure suppression in the event of an access exception */
-        ARCH_DEP(vstore4) ( hlhi_word, effective_addr2, acc_mode, regs );
+        if (ACCESS_REGISTER_MODE(&regs->psw))
+            acc_mode = USE_PRIMARY_SPACE;
 
-        /* Store the ASCB address in the CMS lock */
-        ARCH_DEP(vstore4) ( ascb_addr, lock_addr, acc_mode, regs );
+        /* Load ASCB address from first operand location */
+        ascb_addr = ARCH_DEP(vfetch4) ( effective_addr1, acc_mode, regs );
 
-        /* Set the CMS lock held bit in the second operand */
-        hlhi_word |= PSACMSLI;
-        ARCH_DEP(vstore4) ( hlhi_word, effective_addr2, acc_mode, regs );
+        /* Load locks held bits from second operand location */
+        hlhi_word = ARCH_DEP(vfetch4) ( effective_addr2, acc_mode, regs );
 
-        /* Set register 13 to zero to indicate lock obtained */
-        regs->GR_L(13) = 0;
+        /* Fetch the lock addressed by general register 11 */
+        lock = ARCH_DEP(vfetch4) ( lock_addr, acc_mode, regs );
+
+        /* Validate that the address space meets criteria to obtain the CMS lock:
+             the target lock word pointed to by GR11 must be 0,
+             the LOCAL lock *must* be held on this CPU,
+             and the CMS lock must *not* be held on this CPU.  */
+        if (lock == 0
+            && (hlhi_word & (PSALCLLI | PSACMSLI)) == PSALCLLI)
+        {
+            /* Get mainstor address of lock word */
+            mainstor = MADDRL (lock_addr, 4, b2, regs, ACCTYPE_WRITE, regs->psw.pkey);
+
+            /* The lock word should contain 0; use this as our compare value.
+            Swap in the ASCB address from instruction operand 1            */
+            old = 0;
+            new = CSWAP32(ascb_addr);
+
+            /* Try exchanging values; cmpxchg4 returns 0=success, !0=failure */
+            locked = !cmpxchg4( &old, new, mainstor );
+        }
+
+        if (locked)
+        {
+            /* Store the unchanged value into the second operand to
+            ensure suppression in the event of an access exception */
+            ARCH_DEP(vstore4) ( hlhi_word, effective_addr2, acc_mode, regs );
+
+            /* Set the CMS lock held bit in the second operand */
+            hlhi_word |= PSACMSLI;
+            ARCH_DEP(vstore4) ( hlhi_word, effective_addr2, acc_mode, regs );
+
+            /* Set register 13 to zero to indicate lock obtained */
+            regs->GR_L(13) = 0;
+        }
+        else
+        {
+            /* Fetch the lock interface table address from the
+            second word of the second operand, and load the
+            new instruction address and amode from LITOCMS */
+            lit_addr = ARCH_DEP(vfetch4) ( effective_addr2 + 4, acc_mode, regs ) + LITOCMS;
+            lit_addr &= ADDRESS_MAXWRAP(regs);
+            newia = ARCH_DEP(vfetch4) ( lit_addr, acc_mode, regs );
+
+            /* Save the link information in register 12 */
+            regs->GR_L(12) = PSW_IA_FROM_IP(regs, 0);
+
+            /* Copy LITOCMS into register 13 to signify obtain failure */
+            regs->GR_L(13) = newia;
+
+            /* Update the PSW instruction address */
+            SET_PSW_IA_AND_MAYBE_IP(regs, newia);
+        }
     }
-    else
-    {
-        /* Fetch the lock interface table address from the
-           second word of the second operand, and load the
-           new instruction address and amode from LITOCMS */
-        lit_addr = ARCH_DEP(vfetch4) ( effective_addr2 + 4, acc_mode, regs ) + LITOCMS;
-        lit_addr &= ADDRESS_MAXWRAP(regs);
-        newia = ARCH_DEP(vfetch4) ( lit_addr, acc_mode, regs );
-
-        /* Save the link information in register 12 */
-        regs->GR_L(12) = PSW_IA(regs, 0);
-
-        /* Copy LITOCMS into register 13 to signify obtain failure */
-        regs->GR_L(13) = newia;
-
-        /* Update the PSW instruction address */
-        UPD_PSW_IA(regs, newia);
-    }
-
-    /* Release main-storage access lock */
     RELEASE_MAINLOCK(regs);
 
     PERFORM_SERIALIZATION(regs);
@@ -400,7 +448,7 @@ int     acc_mode = 0;                   /* access mode to use        */
 
     SSE(inst, regs, b1, effective_addr1, b2, effective_addr2);
 
-    PRIV_CHECK(regs);
+    GUEST_CHECK( );
 
     /* Specification exception if operands are not on word boundary */
     if ((effective_addr1 & 0x00000003) || (effective_addr2 & 0x00000003))
@@ -411,7 +459,7 @@ int     acc_mode = 0;                   /* access mode to use        */
     lock_arn = 11;
 
     /* Obtain main-storage access lock */
-    OBTAIN_MAINLOCK(regs);
+    OBTAIN_MAINLOCK_UNCONDITIONAL(regs);
 
     if (ACCESS_REGISTER_MODE(&regs->psw))
         acc_mode = USE_PRIMARY_SPACE;
@@ -436,12 +484,12 @@ int     acc_mode = 0;                   /* access mode to use        */
            ensure suppression in the event of an access exception */
         ARCH_DEP(vstore4) ( hlhi_word, effective_addr2, acc_mode, regs );
 
-        /* Set the CMS lock to zero */
-        ARCH_DEP(vstore4) ( 0, lock_addr, acc_mode, regs );
-
         /* Clear the CMS lock held bit in the second operand */
         hlhi_word &= ~PSACMSLI;
         ARCH_DEP(vstore4) ( hlhi_word, effective_addr2, acc_mode, regs );
+
+        /* Set the CMS lock to zero */
+        ARCH_DEP(vstore4) ( 0, lock_addr, acc_mode, regs );
 
         /* Set register 13 to zero to indicate lock released */
         regs->GR_L(13) = 0;
@@ -456,17 +504,17 @@ int     acc_mode = 0;                   /* access mode to use        */
         newia = ARCH_DEP(vfetch4) ( lit_addr, acc_mode, regs );
 
         /* Save the link information in register 12 */
-        regs->GR_L(12) = PSW_IA(regs, 0);
+        regs->GR_L(12) = PSW_IA_FROM_IP(regs, 0);
 
         /* Copy LITRCMS into register 13 to signify release failure */
         regs->GR_L(13) = newia;
 
         /* Update the PSW instruction address */
-        UPD_PSW_IA(regs, newia);
+        SET_PSW_IA_AND_MAYBE_IP(regs, newia);
     }
 
     /* Release main-storage access lock */
-    RELEASE_MAINLOCK(regs);
+    RELEASE_MAINLOCK_UNCONDITIONAL(regs);
 
 } /* end function release_cms_lock */
 
@@ -483,7 +531,7 @@ VADR    effective_addr1,
 
     SSE(inst, regs, b1, effective_addr1, b2, effective_addr2);
 
-    PRIV_CHECK(regs);
+    GUEST_CHECK( );
 
     /* Specification exception if operands are not on word boundary */
     if ((effective_addr1 & 0x00000003) || (effective_addr2 & 0x00000003))
@@ -491,7 +539,6 @@ VADR    effective_addr1,
 
     PTT_ERR("*E508 TRSVC",effective_addr1,effective_addr2,regs->psw.IA_L);
     /*INCOMPLETE: NO TRACE ENTRY IS GENERATED*/
-
 }
 
 
@@ -506,7 +553,7 @@ VADR    effective_addr1,
 
     SSE(inst, regs, b1, effective_addr1, b2, effective_addr2);
 
-    PRIV_CHECK(regs);
+    GUEST_CHECK( );
 
     /* Specification exception if operands are not on word boundary */
     if ((effective_addr1 & 0x00000003) || (effective_addr2 & 0x00000003))
@@ -514,7 +561,6 @@ VADR    effective_addr1,
 
     PTT_ERR("*E509 TRPGM",effective_addr1,effective_addr2,regs->psw.IA_L);
     /*INCOMPLETE: NO TRACE ENTRY IS GENERATED*/
-
 }
 
 
@@ -529,7 +575,7 @@ VADR    effective_addr1,
 
     SSE(inst, regs, b1, effective_addr1, b2, effective_addr2);
 
-    PRIV_CHECK(regs);
+    GUEST_CHECK( );
 
     /* Specification exception if operands are not on word boundary */
     if ((effective_addr1 & 0x00000003) || (effective_addr2 & 0x00000003))
@@ -537,7 +583,6 @@ VADR    effective_addr1,
 
     PTT_ERR("*E50A TRSRB",effective_addr1,effective_addr2,regs->psw.IA_L);
     /*INCOMPLETE: NO TRACE ENTRY IS GENERATED*/
-
 }
 
 
@@ -552,7 +597,7 @@ VADR    effective_addr1,
 
     SSE(inst, regs, b1, effective_addr1, b2, effective_addr2);
 
-    PRIV_CHECK(regs);
+    GUEST_CHECK( );
 
     /* Specification exception if operands are not on word boundary */
     if ((effective_addr1 & 0x00000003) || (effective_addr2 & 0x00000003))
@@ -560,7 +605,6 @@ VADR    effective_addr1,
 
     PTT_ERR("*E50B TRIO",effective_addr1,effective_addr2,regs->psw.IA_L);
     /*INCOMPLETE: NO TRACE ENTRY IS GENERATED*/
-
 }
 
 
@@ -575,7 +619,7 @@ VADR    effective_addr1,
 
     SSE(inst, regs, b1, effective_addr1, b2, effective_addr2);
 
-    PRIV_CHECK(regs);
+    GUEST_CHECK( );
 
     /* Specification exception if operands are not on word boundary */
     if ((effective_addr1 & 0x00000003) || (effective_addr2 & 0x00000003))
@@ -583,7 +627,6 @@ VADR    effective_addr1,
 
     PTT_ERR("*E50C TRTSK",effective_addr1,effective_addr2,regs->psw.IA_L);
     /*INCOMPLETE: NO TRACE ENTRY IS GENERATED*/
-
 }
 
 
@@ -598,7 +641,7 @@ VADR    effective_addr1,
 
     SSE(inst, regs, b1, effective_addr1, b2, effective_addr2);
 
-    PRIV_CHECK(regs);
+    GUEST_CHECK( );
 
     /* Specification exception if operands are not on word boundary */
     if ((effective_addr1 & 0x00000003) || (effective_addr2 & 0x00000003))
@@ -606,7 +649,6 @@ VADR    effective_addr1,
 
     PTT_ERR("*E50D TRRTN",effective_addr1,effective_addr2,regs->psw.IA_L);
     /*INCOMPLETE: NO TRACE ENTRY IS GENERATED*/
-
 }
 #endif /*!defined(FEATURE_TRACING)*/
 

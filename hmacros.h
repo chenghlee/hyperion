@@ -45,6 +45,15 @@
 #define ROUND_UP(x,b)       ((x)?((((x)+((b)-1))/(b))*(b)):(b))
 
 /*-------------------------------------------------------------------*/
+/*         Ensure start-end range stays within limits                */
+/*-------------------------------------------------------------------*/
+#define LIMIT_RANGE( _start, _end, _limit )                           \
+    do {                                                              \
+        if ((_end) > (_limit) && ((_end) - (_limit) + 1) > (_start))  \
+            (_end) = ((_start) + (_limit) - 1);                       \
+    } while(0)
+
+/*-------------------------------------------------------------------*/
 /*      Define min/max macros                                        */
 /*-------------------------------------------------------------------*/
 #if !defined(min)
@@ -400,8 +409,14 @@ typedef int CMPFUNC(const void*, const void*);
  (HOST(_regs)->prevcount + HOST(_regs)->instcount)
 
 /*-------------------------------------------------------------------*/
-/*      Obtain/Release mainlock                                      */
-/*      mainlock is only obtained by a CPU thread                    */
+/*                  Obtain/Release mainlock                          */
+/*-------------------------------------------------------------------*/
+/*  mainlock is only obtained by a CPU thread. PROGRAMMING NOTE:     */
+/*  The below #defines for OBTAIN_MAINLOCK and RELEASE_MAINLOCK      */
+/*  MIGHT be overridden/nullified by machdep.h if atomic assists     */
+/*  are available, since normally, that is the only reason for       */
+/*  needing to obtain mainlock in the first place: because you       */
+/*  need to do something atomically (e.g. need to do cmpxchg).       */
 /*-------------------------------------------------------------------*/
 
 #define OBTAIN_MAINLOCK_UNCONDITIONAL(_regs) \
@@ -582,8 +597,8 @@ typedef int CMPFUNC(const void*, const void*);
           {                                                                         \
               VERIFY( getresuid( &sysblk.ruid, &sysblk.euid, &sysblk.suid ) == 0 ); \
               VERIFY( getresgid( &sysblk.rgid, &sysblk.egid, &sysblk.sgid ) == 0 ); \
-              VERIFY( setresuid(  sysblk.ruid,  sysblk.ruid,  sysblk.euid ) == 0 ); \
               VERIFY( setresgid(  sysblk.rgid,  sysblk.rgid,  sysblk.egid ) == 0 ); \
+              VERIFY( setresuid(  sysblk.ruid,  sysblk.ruid,  sysblk.euid ) == 0 ); \
           }                                                                         \
           while(0)
 
@@ -610,8 +625,8 @@ typedef int CMPFUNC(const void*, const void*);
                                                                                     \
           do                                                                        \
           {                                                                         \
-              VERIFY( setresuid( sysblk.ruid, sysblk.ruid, sysblk.ruid ) == 0 );    \
               VERIFY( setresgid( sysblk.rgid, sysblk.rgid, sysblk.rgid ) == 0 );    \
+              VERIFY( setresuid( sysblk.ruid, sysblk.ruid, sysblk.ruid ) == 0 );    \
           }                                                                         \
           while(0)
 
@@ -626,8 +641,8 @@ typedef int CMPFUNC(const void*, const void*);
               sysblk.rgid = getgid();                               \
               sysblk.egid = getegid();                              \
                                                                     \
-              VERIFY( setreuid( sysblk.euid, sysblk.ruid ) == 0 );  \
               VERIFY( setregid( sysblk.egid, sysblk.rgid ) == 0 );  \
+              VERIFY( setreuid( sysblk.euid, sysblk.ruid ) == 0 );  \
           }                                                         \
           while(0)
 
@@ -636,8 +651,8 @@ typedef int CMPFUNC(const void*, const void*);
                                                                     \
           do                                                        \
           {                                                         \
-              VERIFY( setreuid( sysblk.ruid, sysblk.euid ) == 0 );  \
               VERIFY( setregid( sysblk.rgid, sysblk.egid ) == 0 );  \
+              VERIFY( setreuid( sysblk.ruid, sysblk.euid ) == 0 );  \
           }                                                         \
           while(0)
 
@@ -656,8 +671,8 @@ typedef int CMPFUNC(const void*, const void*);
                                                                     \
           do                                                        \
           {                                                         \
-              VERIFY( setuid( sysblk.ruid ) == 0 );                 \
               VERIFY( setgid( sysblk.rgid ) == 0 );                 \
+              VERIFY( setuid( sysblk.ruid ) == 0 );                 \
           }                                                         \
           while(0)
 

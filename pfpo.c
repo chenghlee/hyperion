@@ -8,6 +8,8 @@
 /*              (c) Copyright Bernard van der Helm, 2009-2011        */
 /*              Noordwijkerhout, The Netherlands                     */
 
+/*              (C) Copyright Bob Wood, 2018-2021                    */
+
 /*-------------------------------------------------------------------*/
 /* This module implements the Perform Floating Point Operation       */
 /* instruction described in the manual SA22-7832-05.                 */
@@ -20,7 +22,6 @@
 
 #include "hercules.h"
 #include "opcode.h"
-#include "inline.h"
 
 #include "decimal128.h"
 #include "decimal64.h"
@@ -250,7 +251,7 @@ void arraydiv(unsigned int *ltab,int divisor,int ntab,unsigned int *rem)
     dividend = work1 / divisort;
     ltab[i] = (unsigned int)(dividend & 0x00000000ffffffffll);
     temp1 = work1 % divisort;
-    if (i < ntab)
+    if ((i + 1 ) < ntab)
       work1 = (temp1 << 32) + (unsigned long long)ltab[i + 1];
   }
   *rem = (unsigned int)temp1;
@@ -830,7 +831,7 @@ int dfl2hflbfl(unsigned int * dfltab,unsigned int * hfltab,int dflwords,int hflw
   int rx;
   int rbit;
   int ndigit;
-  int maxdigit;
+  int maxdigit = 0;
   int maxbits;
   int numbits;
   int expword2 = 0;
@@ -2225,6 +2226,7 @@ DEF_INST(perform_floating_point_operation)
   i6 = FPR2I(6);
 
     E(inst, regs);
+    CONTRAN_INSTR_CHECK( regs );
 
    gr0 = (S64)regs->GR_G(0);
    FPC = regs->fpc;

@@ -1,4 +1,5 @@
 /* IPL.C        (C) Copyright Roger Bowler, 1999-2012                */
+/*              (C) and others 2013-2021                             */
 /*              ESA/390 Initial Program Loader                       */
 /*                                                                   */
 /*   Released under "The Q Public License Version 1"                 */
@@ -462,7 +463,7 @@ int rc;
     }
 
     /* Set Main Storage Reference and Update bits */
-    STORAGE_KEY(regs->PX, regs) |= (STORKEY_REF | STORKEY_CHANGE);
+    ARCH_DEP( or_storage_key )( regs->PX, (STORKEY_REF | STORKEY_CHANGE) );
     sysblk.main_clear = sysblk.xpnd_clear = 0;
 
     /* Build the IPL CCW at location 0 */
@@ -624,7 +625,7 @@ int i, rc = 0;                          /* Array subscript           */
     PTT_TXF( "TXF CPURES", 0, 0, regs->txf_tnd );
     /* EXIT SILENTLY from transactional execution mode */
     regs->txf_tnd = 0;
-    regs->txf_caborts = 0;
+    regs->txf_aborts = 0;
     regs->txf_contran = false;
     regs->txf_UPGM_abort = false;
 #endif
@@ -659,22 +660,23 @@ int i, rc = 0;                          /* Array subscript           */
     }
 
 #ifdef FEATURE_INTERVAL_TIMER
-    ARCH_DEP(store_int_timer_nolock) (regs);
+    ARCH_DEP( store_int_timer_locked )( regs );
 #endif
 
-   if(regs->host && GUESTREGS)
-   {
-        rc = ARCH_DEP(cpu_reset)(GUESTREGS);
+    if (regs->host && GUESTREGS)
+    {
+        rc = cpu_reset( GUESTREGS );
+
         /* CPU state of SIE copy cannot be controlled */
         GUESTREGS->opinterv = 0;
         GUESTREGS->cpustate = CPUSTATE_STARTED;
-   }
+    }
 
     /* Re-initialize the facilities list for this CPU */
     init_cpu_facilities( regs );
 
     /* Ensure CPU ID is accurate in case archmode changed */
-    setCpuIdregs( regs, -1, -1, -1, -1 );
+    setCpuIdregs( regs, -1, -1, -1, -1, true );
 
    return rc;
 } /* end function cpu_reset */
@@ -684,7 +686,7 @@ int i, rc = 0;                          /* Array subscript           */
 /*-------------------------------------------------------------------*/
 int ARCH_DEP( initial_cpu_reset )( REGS* regs )
 {
-    int rc1 = 0, rc;
+    int rc = 0;
 
     /* Clear reset pending indicators */
     regs->sigp_ini_reset = regs->sigp_reset = 0;
@@ -704,7 +706,7 @@ int ARCH_DEP( initial_cpu_reset )( REGS* regs )
     regs->psa      = (PSA_3XX*)regs->mainstor;
 
     /* Perform a CPU reset (after setting PSA) */
-    rc1 = ARCH_DEP( cpu_reset )( regs );
+    rc = ARCH_DEP( cpu_reset )( regs );
 
     regs->todpr  = 0;
     regs->clkc   = 0;
@@ -712,7 +714,7 @@ int ARCH_DEP( initial_cpu_reset )( REGS* regs )
     PTT_TXF( "TXF ICPURES", 0, 0, regs->txf_tnd );
     /* EXIT SILENTLY from transactional execution mode */
     regs->txf_tnd = 0;
-    regs->txf_caborts = 0;
+    regs->txf_aborts = 0;
     regs->txf_contran = false;
     regs->txf_UPGM_abort = false;
 #endif
@@ -751,10 +753,13 @@ int ARCH_DEP( initial_cpu_reset )( REGS* regs )
 #endif
 
     if (regs->host && GUESTREGS)
-        if ((rc = ARCH_DEP( initial_cpu_reset )( GUESTREGS )) != 0)
-            rc1 = rc;
+    {
+        int rc2 = initial_cpu_reset( GUESTREGS );
+        if (rc2 != 0)
+            rc = rc2;
+    }
 
-    return rc1;
+    return rc;
 } /* end function initial_cpu_reset */
 
 /*-------------------------------------------------------------------*/
@@ -827,7 +832,7 @@ int ARCH_DEP( initial_cpu_reset )( REGS* regs )
 
 int load_ipl( U16 lcss, U16 devnum, int cpu, int clear )
 {
-    int rc;
+    int rc = 0;
 
     switch ( sysblk.arch_mode )
     {
@@ -841,7 +846,7 @@ int load_ipl( U16 lcss, U16 devnum, int cpu, int clear )
         /* NOTE: z/Arch always starts out in ESA390 mode */
         case ARCH_900_IDX: rc = s390_load_ipl( lcss, devnum, cpu, clear ); break;
 #endif
-        default: rc = -1; break;
+        default: CRASH();
     }
 
     return rc;
@@ -873,7 +878,7 @@ void initial_cpu_reset_all()
 /*-------------------------------------------------------------------*/
 int initial_cpu_reset( REGS* regs )
 {
-    int rc;
+    int rc = 0;
 
     switch ( regs->arch_mode )
     {
@@ -886,7 +891,7 @@ int initial_cpu_reset( REGS* regs )
 #if defined(_900)
         case ARCH_900_IDX: rc = z900_initial_cpu_reset( regs ); break;
 #endif
-        default: rc = -1; break;
+        default: CRASH();
     }
 
     return rc;
@@ -897,7 +902,7 @@ int initial_cpu_reset( REGS* regs )
 /*-------------------------------------------------------------------*/
 int system_reset( const int target_mode, const bool clear, const bool ipl, const int cpu )
 {
-    int rc;
+    int rc = 0;
 
     switch ( sysblk.arch_mode )
     {
@@ -910,7 +915,7 @@ int system_reset( const int target_mode, const bool clear, const bool ipl, const
 #if defined( _900 )
         case ARCH_900_IDX: rc = z900_system_reset( target_mode, clear, ipl, cpu ); break;
 #endif
-        default: rc = -1; break;
+        default: CRASH();
     }
 
     return rc;
@@ -921,7 +926,7 @@ int system_reset( const int target_mode, const bool clear, const bool ipl, const
 /*-------------------------------------------------------------------*/
 int cpu_reset (REGS *regs)
 {
-    int rc;
+    int rc = 0;
 
     switch (regs->arch_mode)
     {
@@ -940,9 +945,7 @@ int cpu_reset (REGS *regs)
             rc = z900_cpu_reset (regs);
             break;
 #endif
-        default:
-            rc = -1;
-            break;
+        default: CRASH();
     }
 
     return (rc);

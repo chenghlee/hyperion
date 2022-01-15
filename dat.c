@@ -1,20 +1,12 @@
 /* DAT.C        (C) Copyright Roger Bowler, 1999-2012                */
-/*              Hercules Supported DAT Functions                     */
+/*              (C) and others 2013-2021                             */
+/*              Dynamic Address Translation                          */
 /*                                                                   */
 /*   Released under "The Q Public License Version 1"                 */
 /*   (http://www.hercules-390.org/herclic.html) as modifications to  */
 /*   Hercules.                                                       */
 
 /* z/Architecture support - (C) Copyright Jan Jaeger, 1999-2012      */
-
-#include "hstdinc.h"
-
-#define _DAT_C
-#define _HENGINE_DLL_
-
-#include "hercules.h"
-#include "opcode.h"
-#include "inline.h"
 
 /*-------------------------------------------------------------------*/
 /* This module implements the DAT, ALET, and ASN translation         */
@@ -33,7 +25,231 @@
 /*      ESAME ASN authorization and ALET translation - Roger Bowler  */
 /*-------------------------------------------------------------------*/
 
-#if defined(FEATURE_DUAL_ADDRESS_SPACE)
+#include "hstdinc.h"
+
+#define _DAT_C
+#define _HENGINE_DLL_
+
+#include "hercules.h"
+#include "opcode.h"
+#include "inline.h"
+
+//-------------------------------------------------------------------
+//                      ARCH_DEP() code
+//-------------------------------------------------------------------
+// ARCH_DEP (build-architecture / FEATURE-dependent) functions here.
+// All BUILD architecture dependent (ARCH_DEP) function are compiled
+// multiple times (once for each defined build architecture) and each
+// time they are compiled with a different set of FEATURE_XXX defines
+// appropriate for that architecture. Use #ifdef FEATURE_XXX guards
+// to check whether the current BUILD architecture has that given
+// feature #defined for it or not. WARNING: Do NOT use _FEATURE_XXX.
+// The underscore feature #defines mean something else entirely. Only
+// test for FEATURE_XXX. (WITHOUT the underscore)
+//-------------------------------------------------------------------
+
+extern inline void ARCH_DEP( purge_tlb )( REGS* regs );
+extern inline void ARCH_DEP( purge_tlb_all )( REGS* regs, U16 cpuad );
+extern inline void ARCH_DEP( purge_tlbe_all )( REGS* regs, RADR pfra, U16 cpuad );
+
+#if defined( FEATURE_ACCESS_REGISTERS )
+extern inline void ARCH_DEP( purge_alb )( REGS* regs );
+extern inline void ARCH_DEP( purge_alb_all )( REGS* regs );
+#endif
+
+#if defined( FEATURE_DUAL_ADDRESS_SPACE )
+extern inline bool ARCH_DEP( authorize_asn )( U16 ax, U32 aste[], int atemask, REGS* regs );
+#endif
+
+extern inline BYTE* ARCH_DEP( maddr_l )( VADR addr, size_t len, const int arn, REGS* regs, const int acctype, const BYTE akey );
+
+/*-------------------------------------------------------------------*/
+/*                     update_psw_ia                                 */
+/*-------------------------------------------------------------------*/
+void ARCH_DEP( update_psw_ia )( REGS* regs, int n )
+{
+    regs->psw.IA += n;
+    regs->psw.IA &= ADDRESS_MAXWRAP( regs );
+    PTT_PGM( "PGM IA+-sie", regs->psw.IA, regs->instinvalid, n );
+}
+
+/*-------------------------------------------------------------------*/
+/*                     update_guest_psw_ia                           */
+/*-------------------------------------------------------------------*/
+void ARCH_DEP( update_guest_psw_ia )( REGS* regs, int n )
+{
+    switch (GUESTREGS->arch_mode)
+    {
+    case ARCH_370_IDX: s370_update_psw_ia( GUESTREGS, n ); break;
+    case ARCH_390_IDX: s390_update_psw_ia( GUESTREGS, n ); break;
+    case ARCH_900_IDX: z900_update_psw_ia( GUESTREGS, n ); break;
+    default: CRASH();
+    }
+}
+
+/*-------------------------------------------------------------------*/
+/*                   set_aea_common                                  */
+/*-------------------------------------------------------------------*/
+void ARCH_DEP( set_aea_common )( REGS* regs )
+{
+    SET_AEA_COMMON( regs );
+}
+
+/*-------------------------------------------------------------------*/
+/*                   set_guest_aea_common                            */
+/*-------------------------------------------------------------------*/
+void ARCH_DEP( set_guest_aea_common )( REGS* regs )
+{
+    switch (GUESTREGS->arch_mode)
+    {
+    case ARCH_370_IDX: s370_set_aea_common( GUESTREGS ); break;
+    case ARCH_390_IDX: s390_set_aea_common( GUESTREGS ); break;
+    case ARCH_900_IDX: z900_set_aea_common( GUESTREGS ); break;
+    default: CRASH();
+    }
+}
+
+/*-------------------------------------------------------------------*/
+/*                     invalidate_aia                                */
+/*-------------------------------------------------------------------*/
+void ARCH_DEP( invalidate_aia )( REGS* regs )
+{
+    INVALIDATE_AIA( regs );
+}
+/*-------------------------------------------------------------------*/
+/*                     set_ic_mask                                   */
+/*-------------------------------------------------------------------*/
+void ARCH_DEP( set_ic_mask )( REGS* regs )
+{
+    SET_IC_MASK( regs );
+}
+/*-------------------------------------------------------------------*/
+/*                     set_aea_mode                                  */
+/*-------------------------------------------------------------------*/
+void ARCH_DEP( set_aea_mode )( REGS* regs )
+{
+    SET_AEA_MODE( regs );
+}
+
+/*-------------------------------------------------------------------*/
+/*                   invalidate_guest_aia                            */
+/*-------------------------------------------------------------------*/
+void ARCH_DEP( invalidate_guest_aia )( REGS* regs )
+{
+    switch (GUESTREGS->arch_mode)
+    {
+    case ARCH_370_IDX: s370_invalidate_aia( GUESTREGS ); break;
+    case ARCH_390_IDX: s390_invalidate_aia( GUESTREGS ); break;
+    case ARCH_900_IDX: z900_invalidate_aia( GUESTREGS ); break;
+    default: CRASH();
+    }
+}
+
+/*-------------------------------------------------------------------*/
+/*                   set_guest_ic_mask                               */
+/*-------------------------------------------------------------------*/
+void ARCH_DEP( set_guest_ic_mask )( REGS* regs )
+{
+    switch (GUESTREGS->arch_mode)
+    {
+    case ARCH_370_IDX: s370_set_ic_mask( GUESTREGS ); break;
+    case ARCH_390_IDX: s390_set_ic_mask( GUESTREGS ); break;
+    case ARCH_900_IDX: z900_set_ic_mask( GUESTREGS ); break;
+    default: CRASH();
+    }
+}
+
+/*-------------------------------------------------------------------*/
+/*                   set_guest_aea_mode                              */
+/*-------------------------------------------------------------------*/
+void ARCH_DEP( set_guest_aea_mode )( REGS* regs )
+{
+    switch (GUESTREGS->arch_mode)
+    {
+    case ARCH_370_IDX: s370_set_aea_mode( GUESTREGS ); break;
+    case ARCH_390_IDX: s390_set_aea_mode( GUESTREGS ); break;
+    case ARCH_900_IDX: z900_set_aea_mode( GUESTREGS ); break;
+    default: CRASH();
+    }
+}
+
+/*-------------------------------------------------------------------*/
+/*                      do_purge_tlb                                 */
+/*-------------------------------------------------------------------*/
+void ARCH_DEP( do_purge_tlb )( REGS* regs )
+{
+    INVALIDATE_AIA( regs );
+
+    if (((++regs->tlbID) & TLBID_BYTEMASK) == 0)
+    {
+        memset( &regs->tlb.vaddr, 0, TLBN * sizeof( DW ));
+        regs->tlbID = 1;
+    }
+}
+
+/*-------------------------------------------------------------------*/
+/* Purge entire translation lookaside buffer for this CPU            */
+/*-------------------------------------------------------------------*/
+void ARCH_DEP( purge_tlb )( REGS* regs )
+{
+    /* Do it for the current architecture first */
+    ARCH_DEP( do_purge_tlb )( regs );
+
+#if defined( _FEATURE_SIE )
+
+    /* Also clear the guest registers in the SIE copy */
+    if (regs->host && GUESTREGS)
+    {
+        switch (GUESTREGS->arch_mode)
+        {
+        case ARCH_370_IDX: s370_do_purge_tlb( GUESTREGS ); break;
+        case ARCH_390_IDX: s390_do_purge_tlb( GUESTREGS ); break;
+        case ARCH_900_IDX: z900_do_purge_tlb( GUESTREGS ); break;
+        default: CRASH();
+        }
+    }
+#endif // defined( _FEATURE_SIE )
+}
+
+
+#if defined( FEATURE_ACCESS_REGISTERS )
+/*-------------------------------------------------------------------*/
+/*                 purge_alb helper function                         */
+/*-------------------------------------------------------------------*/
+void ARCH_DEP( do_purge_alb )( REGS* regs )
+{
+    int  i;
+    for (i=1; i < 16; i++)
+        if (regs->AEA_AR(i) >= CR_ALB_OFFSET)
+            regs->AEA_AR(i) = 0;
+}
+
+/*-------------------------------------------------------------------*/
+/* Purge the ART lookaside buffer for this CPU                       */
+/*-------------------------------------------------------------------*/
+void ARCH_DEP( purge_alb )( REGS* regs )
+{
+    /* Do it for the current architecture first */
+    ARCH_DEP( do_purge_alb )( regs );
+
+#if defined( _FEATURE_SIE )
+    /* Also clear the guest registers in the SIE copy */
+    if (regs->host && GUESTREGS)
+    {
+        switch (GUESTREGS->arch_mode)
+        {
+        case ARCH_370_IDX: /* No access regs for 370! */   break;
+        case ARCH_390_IDX: s390_do_purge_alb( GUESTREGS ); break;
+        case ARCH_900_IDX: z900_do_purge_alb( GUESTREGS ); break;
+        default: CRASH();
+        }
+    }
+#endif // defined( _FEATURE_SIE )
+}
+#endif /* defined( FEATURE_ACCESS_REGISTERS ) */
+
+
+#if defined( FEATURE_DUAL_ADDRESS_SPACE )
 /*-------------------------------------------------------------------*/
 /* Translate ASN to produce address-space control parameters         */
 /*                                                                   */
@@ -61,8 +277,7 @@
 /*      translation specification exceptions, in which case the      */
 /*      function does not return.                                    */
 /*-------------------------------------------------------------------*/
-U16 ARCH_DEP(translate_asn) (U16 asn, REGS *regs,
-                                                U32 *asteo, U32 aste[])
+U16 ARCH_DEP( translate_asn )( U16 asn, REGS* regs, U32* asteo, U32 aste[] )
 {
 U32     afte_addr;                      /* Address of AFTE           */
 U32     afte;                           /* ASN first table entry     */
@@ -89,7 +304,7 @@ int     i;                              /* Array subscript           */
     if (afte & AFTE_INVALID)
         goto asn_afx_tran_excp;
 
-  #if !defined(FEATURE_001_ZARCH_INSTALLED_FACILITY)
+#if !defined( FEATURE_001_ZARCH_INSTALLED_FACILITY )
     /* ASN translation specification exception if reserved bits set */
     if (!ASF_ENABLED(regs)) {
         if (afte & AFTE_RESV_0)
@@ -98,7 +313,7 @@ int     i;                              /* Array subscript           */
         if (afte & AFTE_RESV_1)
               goto asn_asn_tran_spec_excp;
     }
-  #endif /*!defined(FEATURE_001_ZARCH_INSTALLED_FACILITY)*/
+#endif
 
     /* [3.9.3.2] Use AFTE and ASX to obtain real address of ASTE */
     if (!ASF_ENABLED(regs)) {
@@ -139,16 +354,16 @@ int     i;                              /* Array subscript           */
     if (aste[0] & ASTE0_INVALID)
         goto asn_asx_tran_excp;
 
-  #if !defined(FEATURE_001_ZARCH_INSTALLED_FACILITY)
+#if !defined( FEATURE_001_ZARCH_INSTALLED_FACILITY )
     /* Check the reserved bits in first two words of ASTE */
     if ((aste[0] & ASTE0_RESV) || (aste[1] & ASTE1_RESV)
         || ((aste[0] & ASTE0_BASE)
-          #ifdef FEATURE_SUBSPACE_GROUP
+#ifdef FEATURE_SUBSPACE_GROUP
             && !ASF_ENABLED(regs)
-          #endif /*FEATURE_SUBSPACE_GROUP*/
+#endif
             ))
         goto asn_asn_tran_spec_excp;
-  #endif /*!defined(FEATURE_001_ZARCH_INSTALLED_FACILITY)*/
+#endif
 
     return 0;
 
@@ -157,11 +372,11 @@ asn_addr_excp:
     code = PGM_ADDRESSING_EXCEPTION;
     goto asn_prog_check;
 
-#if !defined(FEATURE_001_ZARCH_INSTALLED_FACILITY)
+#if !defined( FEATURE_001_ZARCH_INSTALLED_FACILITY )
 asn_asn_tran_spec_excp:
     code = PGM_ASN_TRANSLATION_SPECIFICATION_EXCEPTION;
     goto asn_prog_check;
-#endif /*!defined(FEATURE_001_ZARCH_INSTALLED_FACILITY)*/
+#endif
 
 asn_prog_check:
     regs->program_interrupt (regs, code);
@@ -178,97 +393,10 @@ asn_asx_tran_excp:
     return code;
 
 } /* end function translate_asn */
-#endif /*defined(FEATURE_DUAL_ADDRESS_SPACE)*/
+#endif /* defined( FEATURE_DUAL_ADDRESS_SPACE ) */
 
 
-#if defined(FEATURE_DUAL_ADDRESS_SPACE)
-/*-------------------------------------------------------------------*/
-/* Perform ASN authorization process                                 */
-/*                                                                   */
-/* Input:                                                            */
-/*      ax      Authorization index                                  */
-/*      aste    Pointer to 16-word area containing a copy of the     */
-/*              ASN second table entry associated with the ASN       */
-/*      atemask Specifies which authority bit to test in the ATE:    */
-/*              ATE_PRIMARY (for PT instruction)                     */
-/*              ATE_SECONDARY (for PR, SSAR, and LASP instructions,  */
-/*                             and all access register translations) */
-/*      regs    Pointer to the CPU register context                  */
-/*                                                                   */
-/* Operation:                                                        */
-/*      The AX is used to select an entry in the authority table     */
-/*      pointed to by the ASTE, and an authorization bit in the ATE  */
-/*      is tested.  For ATE_PRIMARY (X'80'), the P bit is tested.    */
-/*      For ATE_SECONDARY (X'40'), the S bit is tested.              */
-/*      Authorization is successful if the ATE falls within the      */
-/*      authority table limit and the tested bit value is 1.         */
-/*                                                                   */
-/* Output:                                                           */
-/*      If authorization is successful, the return value is zero.    */
-/*      If authorization is unsuccessful, the return value is 1.     */
-/*                                                                   */
-/*      A program check may be generated for addressing exception    */
-/*      if the authority table entry address is invalid, and in      */
-/*      this case the function does not return.                      */
-/*-------------------------------------------------------------------*/
-int ARCH_DEP(authorize_asn) (U16 ax, U32 aste[],
-                                               int atemask, REGS *regs)
-{
-RADR    ato;                            /* Authority table origin    */
-int     atl;                            /* Authority table length    */
-BYTE    ate;                            /* Authority table entry     */
-
-    /* [3.10.3.1] Authority table lookup */
-
-    /* Isolate the authority table origin and length */
-    ato = aste[0] & ASTE0_ATO;
-    atl = aste[1] & ASTE1_ATL;
-
-    /* Authorization fails if AX is outside table */
-    if ((ax & 0xFFF0) > atl)
-        return 1;
-
-    /* Calculate the address of the byte in the authority
-       table which contains the 2 bit entry for this AX */
-    ato += (ax >> 2);
-
-    /* Ignore carry into bit position 0 */
-    ato &= 0x7FFFFFFF;
-
-    /* Addressing exception if ATE is outside main storage */
-    if (ato > regs->mainlim)
-        goto auth_addr_excp;
-
-    /* Load the byte containing the authority table entry
-       and shift the entry into the leftmost 2 bits */
-    ato = APPLY_PREFIXING (ato, regs->PX);
-
-    SIE_TRANSLATE(&ato, ACCTYPE_SIE, regs);
-
-    ate = regs->mainstor[ato];
-    ate <<= ((ax & 0x03)*2);
-
-    /* Set the main storage reference bit */
-    STORAGE_KEY(ato, regs) |= STORKEY_REF;
-
-    /* Authorization fails if the specified bit (either X'80' or
-       X'40' of the 2 bit authority table entry) is zero */
-    if ((ate & atemask) == 0)
-        return 1;
-
-    /* Exit with successful return code */
-    return 0;
-
-/* Conditions which always cause program check */
-auth_addr_excp:
-    regs->program_interrupt (regs, PGM_ADDRESSING_EXCEPTION);
-    return 1;
-
-} /* end function authorize_asn */
-#endif /*defined(FEATURE_DUAL_ADDRESS_SPACE)*/
-
-
-#if defined(FEATURE_ACCESS_REGISTERS)
+#if defined( FEATURE_ACCESS_REGISTERS )
 /*-------------------------------------------------------------------*/
 /* Translate an ALET to produce the corresponding ASTE               */
 /*                                                                   */
@@ -294,18 +422,8 @@ auth_addr_excp:
 /*      If successful, the ASTE is copied into the 16-word area,     */
 /*      the real address of the ASTE is stored into the word pointed */
 /*      word pointed to by asteop, and the return value is zero;     */
-#if defined( OPTION_GH275_PIC12_FIX )
-/*                                                                   */
-/*      regs->dat.pvtaddr is set to 1 if the private address space   */
-/*      bit in the ALE is set, otherwise it is set to zero.          */
-/*                                                                   */
-/*      regs->dat.protect is set to 2 if the fetch-only bit in the   */
-/*      ALE is set and acctype specifies write access, otherwise     */
-/*      it is set to zero.                                           */
-#else
 /*      regs->dat.protect is set to 2 if the fetch-only bit          */
 /*      in the ALE is set, otherwise it is set to zero.              */
-#endif
 /*                                                                   */
 /*      If unsuccessful, the return value is a non-zero exception    */
 /*      code in the range X'0028' through X'002D' (this is to allow  */
@@ -317,8 +435,8 @@ auth_addr_excp:
 /*      translation specification exceptions, in which case the      */
 /*      function does not return.                                    */
 /*-------------------------------------------------------------------*/
-U16 ARCH_DEP(translate_alet) (U32 alet, U16 eax,
-            int acctype, REGS *regs, U32 *asteo, U32 aste[])
+U16 ARCH_DEP( translate_alet )( U32 alet, U16 eax, int acctype,
+                                REGS* regs, U32* asteo, U32 aste[] )
 {
 U32     cb;                             /* DUCT or PASTE address     */
 U32     ald;                            /* Access-list designation   */
@@ -330,11 +448,7 @@ U32     abs;                            /* Absolute address          */
 BYTE   *mn;                             /* Mainstor address          */
 int     i;                              /* Array subscript           */
 
-#if defined( OPTION_GH275_PIC12_FIX )
-    regs->dat.pvtaddr = regs->dat.protect = 0;
-#else // (original code)
     regs->dat.protect = 0;
-#endif
 
     /* [5.8.4.3] Check the reserved bits in the ALET */
     if ( alet & ALET_RESV )
@@ -434,16 +548,16 @@ int     i;                              /* Array subscript           */
         if ((ale[0] & ALE0_PRIVATE)
                 && (ale[0] & ALE0_ALEAX) != eax)
         {
-          #if !defined(FEATURE_001_ZARCH_INSTALLED_FACILITY)
+#if !defined( FEATURE_001_ZARCH_INSTALLED_FACILITY )
             /* Check the reserved bits in first two words of ASTE */
             if ((aste[0] & ASTE0_RESV) || (aste[1] & ASTE1_RESV)
                 || ((aste[0] & ASTE0_BASE)
-                      #ifdef FEATURE_SUBSPACE_GROUP
+#ifdef FEATURE_SUBSPACE_GROUP
                         && !ASF_ENABLED(regs)
-                      #endif /*FEATURE_SUBSPACE_GROUP*/
+#endif
                    ))
                 goto alet_asn_tran_spec_excp;
-          #endif /*!defined(FEATURE_001_ZARCH_INSTALLED_FACILITY)*/
+#endif
 
             /* Perform extended authorization */
             if (ARCH_DEP(authorize_asn)(eax, aste, ATE_SECONDARY, regs) != 0)
@@ -452,25 +566,12 @@ int     i;                              /* Array subscript           */
 
     } /* end if(!ACC_SPECIAL_ART) */
 
-#if defined( OPTION_GH275_PIC12_FIX )
-
-    /* Check for private space */
-    if (ale[0] & ALE0_PRIVATE)
-        regs->dat.pvtaddr = 1;
-
     /* [5.8.4.8] Check for access-list controlled protection */
     if (ale[0] & ALE0_FETCHONLY)
     {
         if (acctype & (ACC_WRITE|ACC_CHECK))
             regs->dat.protect = 2;
     }
-
-#else // (original code)
-
-    /* [5.8.4.8] Check for access-list controlled protection */
-    if (ale[0] & ALE0_FETCHONLY)
-        regs->dat.protect = 2;
-#endif
 
     /* Return the ASTE origin address */
     *asteo = aste_addr;
@@ -482,11 +583,11 @@ alet_addr_excp:
     regs->dat.xcode = PGM_ADDRESSING_EXCEPTION;
     goto alet_prog_check;
 
-#if !defined(FEATURE_001_ZARCH_INSTALLED_FACILITY)
+#if !defined( FEATURE_001_ZARCH_INSTALLED_FACILITY )
 alet_asn_tran_spec_excp:
     regs->dat.xcode = PGM_ASN_TRANSLATION_SPECIFICATION_EXCEPTION;
     goto alet_prog_check;
-#endif /*!defined(FEATURE_001_ZARCH_INSTALLED_FACILITY)*/
+#endif
 
 alet_prog_check:
     regs->program_interrupt (regs, regs->dat.xcode);
@@ -517,42 +618,7 @@ ext_auth_excp:
     return regs->dat.xcode;
 
 } /* end function translate_alet */
-#endif /*defined(FEATURE_ACCESS_REGISTERS)*/
-
-
-#if defined(FEATURE_ACCESS_REGISTERS)
-/*-------------------------------------------------------------------*/
-/* Purge the ART lookaside buffer                                    */
-/*-------------------------------------------------------------------*/
-void ARCH_DEP(purge_alb) (REGS *regs)
-{
-int i;
-
-    for(i = 1; i < 16; i++)
-        if(regs->AEA_AR(i) >= CR_ALB_OFFSET)
-            regs->AEA_AR(i) = 0;
-
-    if(regs->host && GUESTREGS)
-        for(i = 1; i < 16; i++)
-            if(GUESTREGS->AEA_AR(i) >= CR_ALB_OFFSET)
-                GUESTREGS->AEA_AR(i) = 0;
-
-} /* end function purge_alb */
-
-/*-------------------------------------------------------------------*/
-/* Purge the ART lookaside buffer for all CPUs                       */
-/*-------------------------------------------------------------------*/
-void ARCH_DEP(purge_alb_all) ()
-{
-int i;
-
-    for (i = 0; i < sysblk.maxcpu; i++)
-        if (IS_CPU_ONLINE(i)
-         && (sysblk.regs[i]->cpubit & sysblk.started_mask))
-            ARCH_DEP(purge_alb) (sysblk.regs[i]);
-
-} /* end function purge_alb_all */
-#endif /*defined(FEATURE_ACCESS_REGISTERS)*/
+#endif /* defined( FEATURE_ACCESS_REGISTERS ) */
 
 
 /*-------------------------------------------------------------------*/
@@ -568,10 +634,11 @@ int i;
 /* Input:                                                            */
 /*      arn     Access register number (0-15) to be used if the      */
 /*              address-space control (PSW bits 16-17) indicates     */
-/*              that ARMODE is the current translation mode.         */
+/*              that AR-mode is the current translation mode.        */
 /*              An access register number ORed with the special      */
-/*              value USE_ARMODE forces this routine to use ARMODE   */
-/*              regardless of the PSW address-space control setting. */
+/*              value USE_ARMODE forces this routine to use AR-mode  */
+/*              address translation regardless of the PSW address-   */
+/*              space control setting.                               */
 /*              Access register 0 is treated as if it contained 0    */
 /*              and its actual contents are not examined.            */
 /*              Alternatively the arn parameter may contain one      */
@@ -599,17 +666,16 @@ int i;
 /*      regs->dat.stid is set to TEA_ST_PRIMARY, TEA_ST_SECNDRY,     */
 /*      TEA_ST_HOME, or TEA_ST_ARMODE.                               */
 /*-------------------------------------------------------------------*/
-U16 ARCH_DEP(load_address_space_designator) (int arn,
-           REGS *regs, int acctype)
+U16 ARCH_DEP( load_address_space_designator )( int arn, REGS* regs, int acctype )
 {
-#if defined(FEATURE_ACCESS_REGISTERS)
+#if defined( FEATURE_ACCESS_REGISTERS )
 U32     alet;                           /* Access list entry token   */
 U32     asteo;                          /* Real address of ASTE      */
 U32     aste[16];                       /* ASN second table entry    */
 U16     eax;                            /* Authorization index       */
 #else
-    UNREFERENCED(acctype);
-#endif /*defined(FEATURE_ACCESS_REGISTERS)*/
+    UNREFERENCED( acctype );
+#endif
 
     switch(arn) {
 
@@ -619,11 +685,11 @@ U16     eax;                            /* Authorization index       */
         case 1:
             regs->dat.stid = TEA_ST_PRIMARY;
             break;
-    #if defined(FEATURE_LINKAGE_STACK)
+#if defined( FEATURE_LINKAGE_STACK )
         case 13:
             regs->dat.stid = TEA_ST_HOME;
             break;
-    #endif
+#endif
         default:
             regs->dat.stid = 0;
         } /* end switch(regs->AEA_AR(USE_INST_SPACE)) */
@@ -653,7 +719,7 @@ U16     eax;                            /* Authorization index       */
 
     default:
 
-    #if defined(FEATURE_ACCESS_REGISTERS)
+#if defined( FEATURE_ACCESS_REGISTERS )
         if (ACCESS_REGISTER_MODE(&regs->psw)
          || (SIE_ACTIVE(regs) && MULTIPLE_CONTROLLED_DATA_SPACE(GUESTREGS))
          || (arn >= USE_ARMODE)
@@ -710,22 +776,15 @@ U16     eax;                            /* Authorization index       */
                     regs->dat.asd = ASTE_AS_DESIGNATOR(aste);
                     regs->dat.stid = TEA_ST_ARMODE;
 
-#if defined( OPTION_GH275_PIC12_FIX )
-
-                    if (regs->dat.pvtaddr)
-
-#else // (original code)
-
                     if (regs->dat.protect & 2)
-#endif
                     {
-                #if defined(FEATURE_001_ZARCH_INSTALLED_FACILITY)
+#if defined( FEATURE_001_ZARCH_INSTALLED_FACILITY )
                        regs->dat.asd ^= ASCE_RESV;
                        regs->dat.asd |= ASCE_P;
-                #else
+#else
                        regs->dat.asd ^= STD_RESV;
                        regs->dat.asd |= STD_PRIVATE;
-                #endif
+#endif
                     }
 
                     /* Update ALB */
@@ -733,7 +792,6 @@ U16     eax;                            /* Authorization index       */
                     regs->AEA_AR(arn) = CR_ALB_OFFSET + arn;
                     regs->AEA_COMMON(CR_ALB_OFFSET + arn) = (regs->dat.asd & ASD_PRIVATE) == 0;
                     regs->aea_aleprot[arn] = regs->dat.protect & 2;
-
                 }
 
             } /* end switch(alet) */
@@ -741,25 +799,25 @@ U16     eax;                            /* Authorization index       */
             break;
 
         } /* end if(ACCESS_REGISTER_MODE) */
-    #endif /*defined(FEATURE_ACCESS_REGISTERS)*/
+#endif /* defined( FEATURE_ACCESS_REGISTERS ) */
 
-    #if defined(FEATURE_DUAL_ADDRESS_SPACE)
+#if defined( FEATURE_DUAL_ADDRESS_SPACE )
         if (SECONDARY_SPACE_MODE(&regs->psw))
         {
             regs->dat.stid = TEA_ST_SECNDRY;
             regs->dat.asd = regs->CR(7);
             break;
         }
-    #endif /* defined(FEATURE_DUAL_ADDRESS_SPACE) */
+#endif
 
-    #if defined(FEATURE_LINKAGE_STACK)
+#if defined( FEATURE_LINKAGE_STACK )
         if (HOME_SPACE_MODE(&regs->psw))
         {
             regs->dat.stid = TEA_ST_HOME;
             regs->dat.asd = regs->CR(13);
             break;
         }
-    #endif /* defined(FEATURE_LINKAGE_STACK) */
+#endif
 
         /* Primary space mode */
         regs->dat.stid = TEA_ST_PRIMARY;
@@ -774,9 +832,13 @@ U16     eax;                            /* Authorization index       */
 
 
 /*-------------------------------------------------------------------*/
+/*                        translate_addr                             */
+/*           PRIMARY DYNAMIC ADDRESS TRANSLATION LOGIC               */
+/*-------------------------------------------------------------------*/
 /* Translate a virtual address to a real address                     */
 /*                                                                   */
 /* Input:                                                            */
+/*                                                                   */
 /*      vaddr   virtual address to be translated                     */
 /*      arn     Access register number or special value (see         */
 /*              load_address_space_designator function for a         */
@@ -786,8 +848,10 @@ U16     eax;                            /* Authorization index       */
 /*              LRA, IVSK, TPROT, STACK, PTE, LPTEA                  */
 /*                                                                   */
 /* Output:                                                           */
+/*                                                                   */
 /*      The return value is set to facilitate the setting of the     */
 /*      condition code by the LRA instruction:                       */
+/*                                                                   */
 /*      0 = Translation successful; real address field contains      */
 /*          the real address corresponding to the virtual address    */
 /*          supplied by the caller; exception code set to zero.      */
@@ -809,8 +873,10 @@ U16     eax;                            /* Authorization index       */
 /*      5 = For ACCTYPE_EMC (Enhanced MC access only):               */
 /*          A translation specification exception occured            */
 /*                                                                   */
+/*                                                                   */
 /*      For ACCTYPE_LPTEA, the return value is set to facilitate     */
 /*      setting the condition code by the LPTEA instruction:         */
+/*                                                                   */
 /*      0 = Page table entry found, and page protection bit in the   */
 /*          segment table entry is zero; the real address field      */
 /*          contains the real address of the page table entry;       */
@@ -830,6 +896,7 @@ U16     eax;                            /* Authorization index       */
 /*          set; exception code is set to X'0028' through X'002D'.   */
 /*          ASCE-type error: real address is not set; exception      */
 /*          exception code is X'0038'.                               */
+/*                                                                   */
 /*                                                                   */
 /*      regs->dat.raddr is set to the real address if translation    */
 /*      was successful; otherwise it may contain the address of      */
@@ -851,19 +918,19 @@ U16     eax;                            /* Authorization index       */
 /*      protection (but not page protection) is in effect;           */
 /*      otherwise it is set to zero.                                 */
 /*                                                                   */
-/*      regs->dat.stid is set to one of the following                */
-/*      values TEA_ST_PRIMARY, TEA_ST_SECNDRY, TEA_ST_HOME, or       */
-/*      TEA_ST_ARMODE if the translation was successful.  This       */
-/*      indication is used to set bits 30-31 of the translation      */
-/*      exception address in the event of a protection exception     */
-/*      when the suppression on protection facility is used.         */
+/*      regs->dat.stid is set to one of the following values:        */
+/*      TEA_ST_PRIMARY, TEA_ST_SECNDRY, TEA_ST_HOME, TEA_ST_ARMODE   */
+/*      if the translation was successful.  This indication is used  */
+/*      to set bits 30-31 of the translation exception address in    */
+/*      the event of a protection exception when the suppression on  */
+/*      protection facility is used.                                 */
 /*                                                                   */
 /*      A program check may be generated for addressing and          */
 /*      translation specification exceptions, in which case the      */
 /*      function does not return.                                    */
+/*                                                                   */
 /*-------------------------------------------------------------------*/
-int ARCH_DEP(translate_addr) (VADR vaddr, int arn,
-                                            REGS *regs, int acctype)
+int ARCH_DEP( translate_addr )( VADR vaddr, int arn, REGS* regs, int acctype )
 {
 RADR    sto = 0;                        /* Segment table origin      */
 RADR    pto = 0;                        /* Page table origin         */
@@ -900,11 +967,11 @@ U32     ptl;                            /* Page table length         */
     {
         pte = regs->tlb.TLB_PTE(tlbix);
 
-        #ifdef FEATURE_SEGMENT_PROTECTION
+#if defined( FEATURE_SEGMENT_PROTECTION )
         /* Set the protection indicator if segment is protected */
         if (regs->tlb.protect[tlbix])
             regs->dat.protect = regs->tlb.protect[tlbix];
-        #endif /*FEATURE_SEGMENT_PROTECTION*/
+#endif
     }
     else
     {
@@ -982,11 +1049,11 @@ U32     ptl;                            /* Page table length         */
             (pte & PAGETAB_RSV_2K))
             goto tran_spec_excp;
 
-        #ifdef FEATURE_SEGMENT_PROTECTION
+#if defined( FEATURE_SEGMENT_PROTECTION )
         /* Set the protection indicator if segment is protected */
         if (ste & SEGTAB_370_PROT)
             regs->dat.protect |= 1;
-        #endif /*FEATURE_SEGMENT_PROTECTION*/
+#endif
 
         /* Place the translated address in the TLB */
         if (!(acctype & ACC_NOTLB))
@@ -999,7 +1066,7 @@ U32     ptl;                            /* Page table length         */
             regs->tlb.acc[tlbix]       = 0;
             regs->tlb.main[tlbix]      = NULL;
 
-        /* Set adjacent TLB entry if 4K page sizes */
+            /* Set adjacent TLB entry if 4K page sizes */
             if ((regs->CR(0) & CR0_PAGE_SIZE) == CR0_PAGE_SZ_4K)
             {
                 regs->tlb.TLB_ASD(tlbix^1)   = regs->tlb.TLB_ASD(tlbix);
@@ -1710,7 +1777,7 @@ reg_third_excp:
     regs->dat.xcode = PGM_REGION_THIRD_TRANSLATION_EXCEPTION;
     cc = 4;
     goto tran_excp_addr;
-#endif /*defined(FEATURE_001_ZARCH_INSTALLED_FACILITY)*/
+#endif /* defined( FEATURE_001_ZARCH_INSTALLED_FACILITY ) */
 
 tran_excp_addr:
     /* For LPTEA instruction, return xcode with cc = 3 */
@@ -1777,427 +1844,473 @@ tran_excp_addr:
 
 
 /*-------------------------------------------------------------------*/
-/* Purge the translation lookaside buffer                            */
+/*                      is_tlbe_match                                */
 /*-------------------------------------------------------------------*/
-void ARCH_DEP(purge_tlb) (REGS *regs)
+bool ARCH_DEP( is_tlbe_match )( REGS* regs, REGS* host_regs, U64 pfra, int i )
 {
-    INVALIDATE_AIA(regs);
-
-    if (((++regs->tlbID) & TLBID_BYTEMASK) == 0)
-    {
-        memset(&regs->tlb.vaddr, 0, TLBN * sizeof(DW) );
-        regs->tlbID = 1;
-    }
-
-#if defined(_FEATURE_SIE)
-    /* Also clear the guest registers in the SIE copy */
-    if(regs->host && GUESTREGS)
-    {
-        INVALIDATE_AIA(GUESTREGS);
-
-        if (((++GUESTREGS->tlbID) & TLBID_BYTEMASK) == 0)
-        {
-            memset(&GUESTREGS->tlb.vaddr, 0, TLBN * sizeof(DW));
-            GUESTREGS->tlbID = 1;
-        }
-    }
-#endif /*defined(_FEATURE_SIE)*/
-} /* end function purge_tlb */
-
-
-/*-------------------------------------------------------------------*/
-/* Purge the translation lookaside buffer for all CPUs               */
-/*-------------------------------------------------------------------*/
-void ARCH_DEP(purge_tlb_all) ()
-{
-int i;
-
-    for (i = 0; i < sysblk.maxcpu; i++)
-        if (IS_CPU_ONLINE(i)
-         && (sysblk.regs[i]->cpubit & sysblk.started_mask))
-            ARCH_DEP(purge_tlb) (sysblk.regs[i]);
-
-} /* end function purge_tlb_all */
-
-
-/*-------------------------------------------------------------------*/
-/* Purge translation lookaside buffer entries                        */
-/*-------------------------------------------------------------------*/
-void ARCH_DEP(purge_tlbe) (REGS *regs, RADR pfra)
-{
-int  i;
 RADR pte;
 RADR ptemask;
+bool match = false;
 
-#if !defined(FEATURE_S390_DAT) && !defined(FEATURE_001_ZARCH_INSTALLED_FACILITY)
+#if !defined( FEATURE_S390_DAT ) && !defined( FEATURE_001_ZARCH_INSTALLED_FACILITY )
     ptemask = ((regs->CR(0) & CR0_PAGE_SIZE) == CR0_PAGE_SZ_4K) ?
               PAGETAB_PFRA_4K : PAGETAB_PFRA_2K;
     pte = ((pfra & 0xFFFFFF) >> 8) & ptemask;
 #endif
-
-#if defined(FEATURE_S390_DAT)
+#if defined( FEATURE_S390_DAT )
     ptemask = PAGETAB_PFRA;
     pte = pfra & ptemask;
-#endif /* defined(FEATURE_S390_DAT) */
-
-#if defined(FEATURE_001_ZARCH_INSTALLED_FACILITY)
+#endif
+#if defined( FEATURE_001_ZARCH_INSTALLED_FACILITY )
     ptemask = (RADR)ZPGETAB_PFRA;
     pte = pfra & ptemask;
-#endif /* defined(FEATURE_001_ZARCH_INSTALLED_FACILITY) */
+#endif
 
-    INVALIDATE_AIA(regs);
+    if ((regs->tlb.TLB_PTE(i) & ptemask) == pte)
+        match = true;
+    else if (!host_regs)
+        match = false;
+    else switch (host_regs->arch_mode)
+    {
+    case ARCH_370_IDX: match = s370_is_tlbe_match( host_regs, NULL, pfra, i ); break;
+    case ARCH_390_IDX: match = s390_is_tlbe_match( host_regs, NULL, pfra, i ); break;
+    case ARCH_900_IDX: match = z900_is_tlbe_match( host_regs, NULL, pfra, i ); break;
+    default: CRASH();
+    }
 
-    for (i = 0; i < TLBN; i++)
-        if ((regs->tlb.TLB_PTE(i) & ptemask) == pte)
+    return match;
+}
+
+/*-------------------------------------------------------------------*/
+/*                      do_purge_tlbe                                */
+/*-------------------------------------------------------------------*/
+void ARCH_DEP( do_purge_tlbe )( REGS* regs, REGS* host_regs, U64 pfra )
+{
+int  i;
+
+    INVALIDATE_AIA( regs );
+
+    for (i=0; i < TLBN; i++)
+        if (ARCH_DEP( is_tlbe_match )( regs, host_regs, pfra, i ))
             regs->tlb.TLB_VADDR(i) &= TLBID_PAGEMASK;
+}
 
-#if defined(_FEATURE_SIE)
-    /* Also clear the guest registers in the SIE copy */
+/*-------------------------------------------------------------------*/
+/* Purge a specific translation lookaside buffer entry               */
+/*-------------------------------------------------------------------*/
+void ARCH_DEP( purge_tlbe )( REGS* regs, U64 pfra )
+{
+    /* Do it for the current architecture first */
+    ARCH_DEP( do_purge_tlbe )( regs, NULL, pfra );
+
+#if defined( _FEATURE_SIE )
+
+    /* Also clear the GUEST registers in the SIE copy */
     if (regs->host && GUESTREGS)
     {
-        INVALIDATE_AIA(GUESTREGS);
+        /*************************************************************/
+        /*                                                           */
+        /*                   PROGRAMMING NOTE                        */
+        /*                                                           */
+        /* The SIE guest's TLB PTE entries for DAT-OFF guests like   */
+        /* CMS do NOT actually contain the PTE, but rather contain   */
+        /* the host primary virtual address. Both are masked with    */
+        /* TBLID_PAGEMASK however. Therefore in order to properly    */
+        /* check if such a guest TLB PTE entry needs to be cleared,  */
+        /* one needs to also check the host's TLB PTE for a match    */
+        /* as well. In other words, instead of just doing:           */
+        /*                                                           */
+        /*    if ((GUESTREGS->tlb.TLB_PTE(i) & ptemask) == pte)      */
+        /*         GUESTREGS->tlb.TLB_VADDR(i) &= TLBID_PAGEMASK;    */
+        /*                                                           */
+        /* we need to essentially do the following instead:          */
+        /*                                                           */
+        /*    if ((GUESTREGS->tlb.TLB_PTE(i) & ptemask) == pte ||    */
+        /*         (HOSTREGS->tlb.TLB_PTE(i) & ptemask) == pte)      */
+        /*         GUESTREGS->tlb.TLB_VADDR(i) &= TLBID_PAGEMASK;    */
+        /*                                                           */
+        /*                         (Peter J. Jansen, 29-Jul-2016)    */
+        /*                                                           */
+        /* This is accomplished by also passing the host's registers */
+        /* to the "do_purge_tlbe" function so it can know to also    */
+        /* check the host's TLB PTE entry for a match as well.       */
+        /*                                                           */
+        /*                    "Fish" (David B. Trout), 07-Oct-2021   */
+        /*                                                           */
+        /*************************************************************/
 
-/**************************************************************************/
-/* The guest registers in the SIE copy TLB PTE entries for DAT-OFF guests */
-/* like CMS do NOT actually contain the PTE (but rather the host primary  */
-/* virtual address, both masked with TBLID_PAGEMASK).  In order to check  */
-/* if such guest TLB entry needs to be cleared, one needs to check the    */
-/* parallel host registers TLB PTE entry.  Hence that the if-test that    */
-/* follows needed to be expanded.  Originally it was just :               */
-/*                                                                        */
-/*          if ((GUESTREGS->tlb.TLB_PTE(i) & ptemask) == pte)       */
-/*                                                                        */
-/* and it is now expanded with the additional test as follows :           */
-/*                                                                        */
-/*                                        (Peter J. Jansen, 29-Jul-2016)  */
-/**************************************************************************/
-        for (i = 0; i < TLBN; i++)
-            if ((GUESTREGS->tlb.TLB_PTE(i) & ptemask) == pte ||
-                 (HOSTREGS->tlb.TLB_PTE(i) & ptemask) == pte)
-                GUESTREGS->tlb.TLB_VADDR(i) &= TLBID_PAGEMASK;
+        switch (GUESTREGS->arch_mode)
+        {
+        case ARCH_370_IDX: s370_do_purge_tlbe( GUESTREGS, regs, pfra ); break;
+        case ARCH_390_IDX: s390_do_purge_tlbe( GUESTREGS, regs, pfra ); break;
+        case ARCH_900_IDX: z900_do_purge_tlbe( GUESTREGS, regs, pfra ); break;
+        default: CRASH();
+        }
     }
-    else if (regs->guest)  /* For guests, clear any host entries */
+    else if (regs->guest)  /* For guests, also clear HOST entries */
     {
-        INVALIDATE_AIA(HOSTREGS);
-
-        for (i = 0; i < TLBN; i++)
-            if ((HOSTREGS->tlb.TLB_PTE(i) & ptemask) == pte)
-                HOSTREGS->tlb.TLB_VADDR(i) &= TLBID_PAGEMASK;
+        switch (HOSTREGS->arch_mode)
+        {
+        case ARCH_370_IDX: s370_do_purge_tlbe( HOSTREGS, NULL, pfra ); break;
+        case ARCH_390_IDX: s390_do_purge_tlbe( HOSTREGS, NULL, pfra ); break;
+        case ARCH_900_IDX: z900_do_purge_tlbe( HOSTREGS, NULL, pfra ); break;
+        default: CRASH();
+        }
     }
-#endif /*defined(_FEATURE_SIE)*/
+#endif /* defined( _FEATURE_SIE ) */
 
 } /* end function purge_tlbe */
 
 
 /*-------------------------------------------------------------------*/
-/* Purge translation lookaside buffer entries for all CPUs           */
+/*                 invalidate_tlb helper                             */
 /*-------------------------------------------------------------------*/
-void ARCH_DEP(purge_tlbe_all) (RADR pfra)
-{
-int i;
-
-    for (i = 0; i < sysblk.maxcpu; i++)
-        if (IS_CPU_ONLINE(i)
-         && (sysblk.regs[i]->cpubit & sysblk.started_mask))
-            ARCH_DEP(purge_tlbe) (sysblk.regs[i], pfra);
-
-} /* end function purge_tlbe_all */
-
-
-/*-------------------------------------------------------------------*/
-/* Invalidate all translation lookaside buffer entries               */
-/*-------------------------------------------------------------------*/
-void ARCH_DEP(invalidate_tlb) (REGS *regs, BYTE mask)
+void ARCH_DEP( do_invalidate_tlb )( REGS* regs, BYTE mask )
 {
 int  i;
 
-    INVALIDATE_AIA(regs);
+    INVALIDATE_AIA( regs );
     if (mask == 0)
-        memset(&regs->tlb.acc, 0, TLBN);
+        memset( &regs->tlb.acc, 0, TLBN );
     else
-        for (i = 0; i < TLBN; i++)
+        for (i=0; i < TLBN; i++)
             if ((regs->tlb.TLB_VADDR(i) & TLBID_BYTEMASK) == regs->tlbID)
                 regs->tlb.acc[i] &= mask;
+}
 
-#if defined(_FEATURE_SIE)
-    /* Also invalidate the guest registers in the SIE copy */
-    if(regs->host && GUESTREGS)
+/*-------------------------------------------------------------------*/
+/* Invalidate one or more translation lookaside buffer entries       */
+/*-------------------------------------------------------------------*/
+void ARCH_DEP( invalidate_tlb )( REGS* regs, BYTE mask )
+{
+    /* Do it for the current architecture first */
+    ARCH_DEP( do_invalidate_tlb )( regs, mask );
+    
+#if defined( _FEATURE_SIE )
+    /* Also invalidate the GUEST registers in the SIE copy */
+    if (regs->host && GUESTREGS)
     {
-        INVALIDATE_AIA(GUESTREGS);
-        if (mask == 0)
-            memset(&GUESTREGS->tlb.acc, 0, TLBN);
-        else
-            for (i = 0; i < TLBN; i++)
-                if ((GUESTREGS->tlb.TLB_VADDR(i) & TLBID_BYTEMASK) == GUESTREGS->tlbID)
-                    GUESTREGS->tlb.acc[i] &= mask;
+        switch (GUESTREGS->arch_mode)
+        {
+        case ARCH_370_IDX: s370_do_invalidate_tlb( GUESTREGS, mask ); break;
+        case ARCH_390_IDX: s390_do_invalidate_tlb( GUESTREGS, mask ); break;
+        case ARCH_900_IDX: z900_do_invalidate_tlb( GUESTREGS, mask ); break;
+        default: CRASH();
+        }
     }
-    else
-    /* Also invalidate the guest registers in the SIE copy */
-    if(regs->guest)
+    else if (regs->guest)  /* For guests, also clear HOST entries */
     {
-        INVALIDATE_AIA(HOSTREGS);
-        if (mask == 0)
-            memset(&HOSTREGS->tlb.acc, 0, TLBN);
-        else
-            for (i = 0; i < TLBN; i++)
-                if ((HOSTREGS->tlb.TLB_VADDR(i) & TLBID_BYTEMASK) == HOSTREGS->tlbID)
-                    HOSTREGS->tlb.acc[i] &= mask;
+        switch (HOSTREGS->arch_mode)
+        {
+        case ARCH_370_IDX: s370_do_invalidate_tlb( HOSTREGS, mask ); break;
+        case ARCH_390_IDX: s390_do_invalidate_tlb( HOSTREGS, mask ); break;
+        case ARCH_900_IDX: z900_do_invalidate_tlb( HOSTREGS, mask ); break;
+        default: CRASH();
+        }
     }
-
-#endif /*defined(_FEATURE_SIE)*/
+#endif /* defined( _FEATURE_SIE ) */
 } /* end function invalidate_tlb */
 
 
 /*-------------------------------------------------------------------*/
-/* Invalidate matching translation lookaside buffer entries          */
-/*                                                                   */
-/* Input:                                                            */
-/*      main    mainstore address to match on. This is mainstore     */
-/*              base plus absolute address (regs->mainstor+aaddr)    */
-/*                                                                   */
-/*    This function is called by the SSK(E) instructions to purge    */
-/*    TLB entries that match the mainstore address. The "main"       */
-/*    field in the TLB contains the mainstore address plus an        */
-/*    XOR hash with effective address (regs->mainstor+aaddr^addr).   */
-/*    Before the compare can happen, the effective address from      */
-/*    the tlb (TLB_VADDR) must be XORed with the "main" field from   */
-/*    the tlb (removing hash).  This is done using MAINADDR() macro. */
-/* NOTES:                                                            */
-/*   TLB_VADDR does not contain all the effective address bits and   */
-/*   must be created on-the-fly using the tlb index (i << shift).    */
-/*   TLB_VADDR also contains the tlbid, so the regs->tlbid is merged */
-/*   with the main input variable before the search is begun.        */
+/*                 invalidate_tlbe helper                            */
 /*-------------------------------------------------------------------*/
-void ARCH_DEP(invalidate_tlbe) (REGS *regs, BYTE *main)
+void ARCH_DEP( do_invalidate_tlbe )( REGS* regs, BYTE* main )
 {
     int     i;                          /* index into TLB            */
     int     shift;                      /* Number of bits to shift   */
-    BYTE    *mainwid;                   /* mainstore with tlbid      */
+    BYTE*   mainwid;                    /* mainstore with tlbid      */
 
-    if (main == NULL)
+    if (!main)
     {
-        ARCH_DEP(invalidate_tlb)(regs, 0);
+        ARCH_DEP( invalidate_tlb )( regs, 0 );
         return;
     }
 
     mainwid = main + regs->tlbID;
 
-    INVALIDATE_AIA_MAIN(regs, main);
-    shift = regs->arch_mode == ARCH_370_IDX ? 11 : 12;
-    for (i = 0; i < TLBN; i++)
-        if (MAINADDR(regs->tlb.main[i],
-                     (regs->tlb.TLB_VADDR(i) | (i << shift)))
-                     == mainwid)
+    INVALIDATE_AIA_MAIN( regs, main );
+
+    shift = (regs->arch_mode == ARCH_370_IDX) ? 11 : 12;
+
+    for (i=0; i < TLBN; i++)
+    {
+        if (MAINADDR( regs->tlb.main[i], (regs->tlb.TLB_VADDR(i) | (i << shift)) ) == mainwid)
         {
             regs->tlb.acc[i] = 0;
-#if !defined(FEATURE_S390_DAT) && !defined(FEATURE_001_ZARCH_INSTALLED_FACILITY)
+
+            // 370?
+#if !defined( FEATURE_S390_DAT ) && !defined( FEATURE_001_ZARCH_INSTALLED_FACILITY )
+
             if ((regs->CR(0) & CR0_PAGE_SIZE) == CR0_PAGE_SZ_4K)
                 regs->tlb.acc[i^1] = 0;
 #endif
         }
+    }
+}
 
-#if defined(_FEATURE_SIE)
-    /* Also clear the guest registers in the SIE copy */
+/*-------------------------------------------------------------------*/
+/* Invalidate matching translation lookaside buffer entries          */
+/*                                                                   */
+/* Input:                                                            */
+/*                                                                   */
+/*      main    mainstor address to match on. This is mainstor       */
+/*              base plus absolute address (regs->mainstor+aaddr)    */
+/*                                                                   */
+/*    This function is called by the SSK(E) instructions to purge    */
+/*    TLB entries that match the mainstor address. The "main"        */
+/*    field in the TLB contains the mainstor address plus an         */
+/*    XOR hash with effective address (regs->mainstor+aaddr^addr).   */
+/*    Before the compare can happen, the effective address from      */
+/*    the tlb (TLB_VADDR) must be XORed with the "main" field from   */
+/*    the tlb (removing hash).  This is done using MAINADDR() macro. */
+/*                                                                   */
+/* NOTES:                                                            */
+/*                                                                   */
+/*   TLB_VADDR does not contain all the effective address bits and   */
+/*   must be created on-the-fly using the tlb index (i << shift).    */
+/*   TLB_VADDR also contains the tlbid, so the regs->tlbid is merged */
+/*   with the main input variable before the search is begun.        */
+/*                                                                   */
+/*-------------------------------------------------------------------*/
+void ARCH_DEP( invalidate_tlbe )( REGS* regs, BYTE* main )
+{
+    /* Do it for the current architecture first */
+    ARCH_DEP( do_invalidate_tlbe )( regs, main );
+
+#if defined( _FEATURE_SIE )
+    /* Also clear the GUEST registers in the SIE copy */
     if (regs->host && GUESTREGS)
     {
-        INVALIDATE_AIA_MAIN(GUESTREGS, main);
-        shift = GUESTREGS->arch_mode == ARCH_370_IDX ? 11 : 12;
-        for (i = 0; i < TLBN; i++)
-            if (MAINADDR(GUESTREGS->tlb.main[i],
-                         (GUESTREGS->tlb.TLB_VADDR(i) | (i << shift)))
-                         == mainwid)
-            {
-                GUESTREGS->tlb.acc[i] = 0;
-#if !defined(FEATURE_S390_DAT) && !defined(FEATURE_001_ZARCH_INSTALLED_FACILITY)
-                if ((GUESTREGS->CR(0) & CR0_PAGE_SIZE) == CR0_PAGE_SZ_4K)
-                    GUESTREGS->tlb.acc[i^1] = 0;
-#endif
-            }
+        switch (GUESTREGS->arch_mode)
+        {
+        case ARCH_370_IDX: s370_do_invalidate_tlbe( GUESTREGS, main ); break;
+        case ARCH_390_IDX: s390_do_invalidate_tlbe( GUESTREGS, main ); break;
+        case ARCH_900_IDX: z900_do_invalidate_tlbe( GUESTREGS, main ); break;
+        default: CRASH();
+        }
     }
-
-    /* Also clear the host registers in the SIE copy */
-    if (regs->guest)
+    else if (regs->guest)  /* For guests, also clear HOST entries */
     {
-        INVALIDATE_AIA_MAIN(HOSTREGS, main);
-        shift = HOSTREGS->arch_mode == ARCH_370_IDX ? 11 : 12;
-        for (i = 0; i < TLBN; i++)
-            if (MAINADDR(HOSTREGS->tlb.main[i],
-                         (HOSTREGS->tlb.TLB_VADDR(i) | (i << shift)))
-                         == mainwid)
-            {
-                HOSTREGS->tlb.acc[i] = 0;
-#if !defined(FEATURE_S390_DAT) && !defined(FEATURE_001_ZARCH_INSTALLED_FACILITY)
-                if ((HOSTREGS->CR(0) & CR0_PAGE_SIZE) == CR0_PAGE_SZ_4K)
-                    HOSTREGS->tlb.acc[i^1] = 0;
-#endif
-            }
+        switch (HOSTREGS->arch_mode)
+        {
+        case ARCH_370_IDX: s370_do_invalidate_tlbe( HOSTREGS, main ); break;
+        case ARCH_390_IDX: s390_do_invalidate_tlbe( HOSTREGS, main ); break;
+        case ARCH_900_IDX: z900_do_invalidate_tlbe( HOSTREGS, main ); break;
+        default: CRASH();
+        }
     }
-
-#endif /*defined(_FEATURE_SIE)*/
+#endif /* defined( _FEATURE_SIE ) */
 
 } /* end function invalidate_tlbe */
 
 
 /*-------------------------------------------------------------------*/
-/* Invalidate page table entry                                       */
+/*                Invalidate Page Table Entry                        */
+/*-------------------------------------------------------------------*/
 /*                                                                   */
-/* Input:                                                            */
-/*      ibyte   0x21=IPTE instruction, 0x59=IESBE instruction        */
-/*      r1      First operand register number                        */
-/*      r2      Second operand register number                       */
+/*  This function is called by the IPTE and IESBE instructions. It   */
+/*  either sets the PAGETAB_INVALID bit (for IPTE instruction) or    */
+/*  resets the PAGETAB_ESVALID bit (for IESBE instruction) for the   */
+/*  Page Table Entry addressed by the passed Page Table Origin value */
+/*  plus the Virtual Address's page index value, and clears the TLB  */
+/*  of all entries with a Page Frame Real Address matching the one   */
+/*  from the invalidated Page Table Entry.                           */
+/*                                                                   */
+/*  Input:                                                           */
+/*                                                                   */
+/*      ibyte   0x21 = IPTE instruction, 0x59 = IESBE instruction    */
+/*      pto     Real address of Page Table Origin identifying the    */
+/*              Page Table containing the Entry to be invalidated    */
+/*      vaddr   Virtual Address of page within specified Page Table  */
+/*              whose entry is to be invalidated                     */
 /*      regs    CPU register context                                 */
+/*      local   true = clear only local TLB entry, else all CPUs     */
 /*                                                                   */
-/*      This function is called by the IPTE and IESBE instructions.  */
-/*      It sets the PAGETAB_INVALID bit (for IPTE) or resets the     */
-/*      PAGETAB_ESVALID bit (for IESBE) in the page table entry      */
-/*      addressed by the page table origin in the R1 register and    */
-/*      the page index in the R2 register.  It clears the TLB of     */
-/*      all entries whose PFRA matches the page table entry.         */
+/*                     *** IMPORTANT! ***                            */
 /*                                                                   */
-/* invalidate_pte should be called with the intlock held and         */
-/* SYNCHRONIZE_CPUS issued while intlock is held.                    */
+/*           This function expects INTLOCK to be held                */
+/*         and SYNCHRONIZE_CPUS to be called beforehand!             */
 /*                                                                   */
 /*-------------------------------------------------------------------*/
-void ARCH_DEP(invalidate_pte) (BYTE ibyte, RADR op1,
-                                                    U32 op2, REGS *regs)
+void ARCH_DEP( invalidate_pte )( BYTE ibyte, RADR pto, VADR vaddr, REGS* regs, bool local )
 {
-RADR    raddr;                          /* Addr of page table entry  */
-RADR    pte;
-RADR    pfra;
+RADR    raddr;                          /* Addr of Page Table Entry  */
+RADR    pte;                            /* Page Table Entry itself   */
+RADR    pfra;                           /* Page Frame Real Address   */
 
-    UNREFERENCED_370(ibyte);
+    UNREFERENCED_370( ibyte );
 
-#if !defined(FEATURE_S390_DAT) && !defined(FEATURE_001_ZARCH_INSTALLED_FACILITY)
+#if !defined( FEATURE_S390_DAT ) && !defined( FEATURE_001_ZARCH_INSTALLED_FACILITY )
     {
+        // SYSTEM/370...
+
         /* Program check if translation format is invalid */
-        if ((((regs->CR(0) & CR0_PAGE_SIZE) != CR0_PAGE_SZ_2K) &&
-           ((regs->CR(0) & CR0_PAGE_SIZE) != CR0_PAGE_SZ_4K)) ||
-           (((regs->CR(0) & CR0_SEG_SIZE) != CR0_SEG_SZ_64K) &&
-           ((regs->CR(0) & CR0_SEG_SIZE) != CR0_SEG_SZ_1M)))
-            regs->program_interrupt (regs,
-                              PGM_TRANSLATION_SPECIFICATION_EXCEPTION);
+        if (0
+            || (((regs->CR(0) & CR0_PAGE_SIZE) != CR0_PAGE_SZ_2K) && ((regs->CR(0) & CR0_PAGE_SIZE) != CR0_PAGE_SZ_4K))
+            || (((regs->CR(0) & CR0_SEG_SIZE)  != CR0_SEG_SZ_64K) && ((regs->CR(0) & CR0_SEG_SIZE)  != CR0_SEG_SZ_1M))
+        )
+            regs->program_interrupt( regs, PGM_TRANSLATION_SPECIFICATION_EXCEPTION );
 
-        /* Combine the page table origin in the R1 register with
-           the page index in the R2 register, ignoring carry, to
-           form the 31-bit real address of the page table entry */
-        raddr = (op1 & SEGTAB_370_PTO)
-                    + (((regs->CR(0) & CR0_SEG_SIZE) == CR0_SEG_SZ_1M) ?
-                      (((regs->CR(0) & CR0_PAGE_SIZE) == CR0_PAGE_SZ_4K) ?
-                      ((op2 & 0x000FF000) >> 11) :
-                      ((op2 & 0x000FF800) >> 10)) :
-                      (((regs->CR(0) & CR0_PAGE_SIZE) == CR0_PAGE_SZ_4K) ?
-                      ((op2 & 0x0000F000) >> 11) :
-                      ((op2 & 0x0000F800) >> 10)));
-        raddr &= 0x00FFFFFF;
+        /* Add the vaddr's page table entry index to the Page Table
+           Origin, ignoring any carry, to form the 24-bit real address
+           of the Page Table Entry to be invalidated, taking into account
+           that each Page Table Entry is 2 bytes wide (shift 1 less bit)
+        */
+        raddr = (pto & SEGTAB_370_PTO) +
+        (
+            ((regs->CR(0)  & CR0_SEG_SIZE)  == CR0_SEG_SZ_1M)
+            ?
+            (((regs->CR(0) & CR0_PAGE_SIZE) == CR0_PAGE_SZ_4K) ?
+            ((vaddr & 0x000FF000) >> (SHIFT_4K-1)) : ((vaddr & 0x000FF800) >> (SHIFT_2K-1)))
+            :
+            (((regs->CR(0) & CR0_PAGE_SIZE) == CR0_PAGE_SZ_4K) ?
+            ((vaddr & 0x0000F000) >> (SHIFT_4K-1)) : ((vaddr & 0x0000F800) >> (SHIFT_2K-1)))
+        );
+        raddr &= MAXADDRESS;
 
-        /* Fetch the page table entry from real storage, subject
-           to normal storage protection mechanisms */
-        pte = ARCH_DEP(vfetch2) ( raddr, USE_REAL_ADDR, regs );
+        /* Fetch the Page Table Entry from real storage,
+           subject to normal storage protection mechanisms
+        */
+        pte = ARCH_DEP( vfetch2 )( raddr, USE_REAL_ADDR, regs );
 
-        /* Set the page invalid bit in the page table entry,
-           again subject to storage protection mechansims */
-// /*debug*/ LOGMSG("dat.c: IPTE issued for entry %4.4X at %8.8X...\n"
-//                  "       page table %8.8X, page index %8.8X, cr0 %8.8X\n",
-//                  pte, raddr, regs->GR_L(r1), regs->GR_L(r2), regs->CR(0));
-        if ((regs->CR(0) & CR0_PAGE_SIZE) == CR0_PAGE_SZ_2K)
-            pte |= PAGETAB_INV_2K;
-        else
-            pte |= PAGETAB_INV_4K;
-        ARCH_DEP(vstore2) ( pte, raddr, USE_REAL_ADDR, regs );
-        pfra = ((regs->CR(0) & CR0_PAGE_SIZE) == CR0_PAGE_SZ_4K) ?
-#if defined(FEATURE_S370E_EXTENDED_ADDRESSING)
+#if 0 // debug 370 IPTE
+        LOGMSG
+        (
+            "dat.c: IPTE issued for entry %4.4X at %8.8X...\n"
+            "       pto %8.8X, vaddr %8.8X, cr0 %8.8X\n"
+
+            , pte, raddr
+            , pto, vaddr, regs->CR(0)
+        );
+#endif
+
+        /* Set the invalid bit in the Page Table Entry just fetched */
+        pte |= ((regs->CR(0) & CR0_PAGE_SIZE) == CR0_PAGE_SZ_2K)
+               ? PAGETAB_INV_2K : PAGETAB_INV_4K;
+
+        /* Store the now invalidated Page Table Entry back into
+           real storage where we originally got it from, subject
+           to the same storage protection mechanisms
+        */
+        ARCH_DEP( vstore2 )( pte, raddr, USE_REAL_ADDR, regs );
+
+        /* Extract the Page Frame Address from the Page Table Entry */
+        pfra = ((regs->CR(0) & CR0_PAGE_SIZE) == CR0_PAGE_SZ_4K)
+            ?
+#if defined( FEATURE_S370E_EXTENDED_ADDRESSING )
             (((U32)pte & PAGETAB_EA_4K) << 23) |
 #endif
-            (((U32)pte & PAGETAB_PFRA_4K) << 8) :
+            (((U32)pte & PAGETAB_PFRA_4K) << 8)
+            :
             (((U32)pte & PAGETAB_PFRA_2K) << 8);
     }
-#elif defined(FEATURE_S390_DAT)
+#elif defined( FEATURE_S390_DAT )
     {
+        // SYSTEM/390...
+
         /* Program check if translation format is invalid */
         if ((regs->CR(0) & CR0_TRAN_FMT) != CR0_TRAN_ESA390)
-            regs->program_interrupt (regs,
-                              PGM_TRANSLATION_SPECIFICATION_EXCEPTION);
+            regs->program_interrupt( regs, PGM_TRANSLATION_SPECIFICATION_EXCEPTION );
 
-        /* Combine the page table origin in the R1 register with
-           the page index in the R2 register, ignoring carry, to
-           form the 31-bit real address of the page table entry */
-        raddr = (op1 & SEGTAB_PTO)
-                    + ((op2 & 0x000FF000) >> 10);
-        raddr &= 0x7FFFFFFF;
+        /* Add the vaddr's page table entry index to the Page Table
+           Origin, ignoring any carry, to form the 31-bit real address
+           of the Page Table Entry to be invalidated, taking into account
+           that each Page Table Entry is 4 bytes wide (shift 2 fewer bits)
+        */
+        raddr = (pto & SEGTAB_PTO) + ((vaddr & 0x000FF000) >> (PAGEFRAME_PAGESHIFT-2));
+        raddr &= MAXADDRESS;
 
-        /* Fetch the page table entry from real storage, subject
-           to normal storage protection mechanisms */
-        pte = ARCH_DEP(vfetch4) ( raddr, USE_REAL_ADDR, regs );
+        /* Fetch the Page Table Entry from real storage,
+           subject to normal storage protection mechanisms */
+        pte = ARCH_DEP( vfetch4 )( raddr, USE_REAL_ADDR, regs );
 
-        /* Set the page invalid bit in the page table entry,
-           again subject to storage protection mechansims */
-#if defined(FEATURE_MOVE_PAGE_FACILITY_2) && defined(FEATURE_EXPANDED_STORAGE)
-        if(ibyte == 0x59)
+        /* Set the invalid bit in the Page Table Entry just fetched */
+#if defined( FEATURE_MOVE_PAGE_FACILITY_2 ) && defined( FEATURE_EXPANDED_STORAGE )
+        if (ibyte == 0x59) // (IESBE instruction?)
             pte &= ~PAGETAB_ESVALID;
         else
-#endif /*defined(FEATURE_MOVE_PAGE_FACILITY_2)*/
-            pte |= PAGETAB_INVALID;
-        ARCH_DEP(vstore4) ( pte, raddr, USE_REAL_ADDR, regs );
+#endif
+            pte |= PAGETAB_INVALID; // (no, IPTE instruction)
+
+        /* Store the now invalidated Page Table Entry back into
+           real storage where we originally got it from, subject
+           to the same storage protection mechanisms
+        */
+        ARCH_DEP( vstore4 )( pte, raddr, USE_REAL_ADDR, regs );
+
+        /* Extract the Page Frame Address from the Page Table Entry */
         pfra = pte & PAGETAB_PFRA;
     }
-#else /*defined(FEATURE_001_ZARCH_INSTALLED_FACILITY)*/
+#else /* defined( FEATURE_001_ZARCH_INSTALLED_FACILITY ) */
     {
-        /* Combine the page table origin in the R1 register with
-           the page index in the R2 register, ignoring carry, to
-           form the 64-bit real address of the page table entry */
-        raddr = (op1 & ZSEGTAB_PTO)
-                    + ((op2 & 0x000FF000) >> 9);
+        // ESAME = z/Architecture...
 
-#if defined(MODEL_DEPENDENT)
-        raddr = APPLY_PREFIXING (raddr, regs->PX);
-#endif /*defined(MODEL_DEPENDENT)*/
+        /* Add the vaddr's page table entry index to the Page Table
+           Origin, ignoring any carry, to form the 64-bit real address
+           of the Page Table Entry to be invalidated, taking into account
+           that each Page Table Entry is 8 bytes wide (shift 3 fewer bits)
+        */
+        raddr = (pto & ZSEGTAB_PTO) + ((vaddr & 0x000FF000) >> (PAGEFRAME_PAGESHIFT-3));
+        raddr &= MAXADDRESS;
 
-        /* Fetch the page table entry from real storage, subject
-           to normal storage protection mechanisms */
-        pte = ARCH_DEP(vfetch8) ( raddr, USE_REAL_ADDR, regs );
+        /* Fetch the Page Table Entry from real storage,
+           subject to normal storage protection mechanisms
+        */
+        pte = ARCH_DEP( vfetch8 )( raddr, USE_REAL_ADDR, regs );
 
-        /* Set the page invalid bit in the page table entry,
-           again subject to storage protection mechansims */
-#if defined(FEATURE_MOVE_PAGE_FACILITY_2) && defined(FEATURE_EXPANDED_STORAGE)
-        if(ibyte == 0x59)
+        /* Set the invalid bit in the Page Table Entry just fetched */
+#if defined( FEATURE_MOVE_PAGE_FACILITY_2 ) && defined( FEATURE_EXPANDED_STORAGE )
+        if (ibyte == 0x59) // (IESBE instruction?)
             pte &= ~ZPGETAB_ESVALID;
         else
-#endif /*defined(FEATURE_MOVE_PAGE_FACILITY_2)*/
-            pte |= ZPGETAB_I;
-        ARCH_DEP(vstore8) ( pte, raddr, USE_REAL_ADDR, regs );
+#endif
+            pte |= ZPGETAB_I; // (no, IPTE instruction)
+
+        /* Store the now invalidated Page Table Entry back into
+           real storage where we originally got it from, subject
+           to the same storage protection mechanisms
+        */
+        ARCH_DEP( vstore8 )( pte, raddr, USE_REAL_ADDR, regs );
+
+        /* Extract the Page Frame Address from the Page Table Entry */
         pfra = pte & ZPGETAB_PFRA;
     }
-#endif /*defined(FEATURE_001_ZARCH_INSTALLED_FACILITY)*/
+#endif /* defined( FEATURE_001_ZARCH_INSTALLED_FACILITY ) */
 
-    /* Invalidate TLB entries */
-    ARCH_DEP(purge_tlbe_all) (pfra);
+    /* Invalidate all TLB entries for this Page Frame Real Address */
+    ARCH_DEP( purge_tlbe_all )( regs, pfra, local ? regs->cpuad : 0xFFFF );
 
 } /* end function invalidate_pte */
 
 
-#if defined(FEATURE_PER2)
+#if defined( FEATURE_PER2 )
 /*-------------------------------------------------------------------*/
-/* Check for a storage alteration PER2 event                         */
-/* Returns 1 if true, 0 if false                                     */
+/* Check for a storage alteration PER2 event. Returns true or false. */
 /*-------------------------------------------------------------------*/
-static inline int ARCH_DEP(check_sa_per2) (int arn, int acctype, REGS *regs)
+static inline int ARCH_DEP( check_sa_per2 )( int arn, int acctype, REGS* regs )
 {
-    UNREFERENCED(acctype);
-    if((regs->dat.asd & SAEVENT_BIT) || !(regs->CR(9) & CR9_SAC))
+    UNREFERENCED( acctype );
+
+    if (0
+        || (regs->dat.asd & SAEVENT_BIT)
+        || !(regs->CR(9) & CR9_SAC)
+    )
     {
         regs->peraid = arn > 0 ? arn : 0;
         regs->perc |= regs->dat.stid;
-        return 1;
+        return true;
     }
-    return 0;
-} /* end function check_sa_per2 */
-#endif /*defined(FEATURE_PER2)*/
+    return false;
+}
+#endif /* defined( FEATURE_PER2 ) */
 
 
 /*-------------------------------------------------------------------*/
 /* Convert logical address to absolute address and check protection  */
 /*                                                                   */
 /* Input:                                                            */
+/*                                                                   */
 /*      addr    Logical address to be translated                     */
 /*      arn     Access register number (or USE_REAL_ADDR,            */
 /*                      USE_PRIMARY_SPACE, USE_SECONDARY_SPACE)      */
@@ -2205,7 +2318,9 @@ static inline int ARCH_DEP(check_sa_per2) (int arn, int acctype, REGS *regs)
 /*      acctype Type of access requested: READ, WRITE, or instfetch  */
 /*      akey    Bits 0-3=access key, 4-7=zeroes                      */
 /*      len     Length of data access for PER SA purpose             */
+/*                                                                   */
 /* Returns:                                                          */
+/*                                                                   */
 /*      Absolute storage address.                                    */
 /*                                                                   */
 /*      If the PSW indicates DAT-off, or if the access register      */
@@ -2223,10 +2338,12 @@ static inline int ARCH_DEP(check_sa_per2) (int arn, int acctype, REGS *regs)
 /*      If the logical address causes an addressing, protection,     */
 /*      or translation exception then a program check is generated   */
 /*      and the function does not return.                            */
+/*                                                                   */
 /*-------------------------------------------------------------------*/
-_LOGICAL_C_STATIC BYTE *ARCH_DEP(logical_to_main_l) (VADR addr, int arn,
-                                    REGS *regs, int acctype, BYTE akey,
-                                    size_t len)
+DLL_EXPORT
+BYTE *ARCH_DEP( logical_to_main_l )( VADR addr, int arn,
+                                     REGS *regs, int acctype,
+                                     BYTE akey, size_t len )
 {
 RADR    aaddr;                          /* Absolute address          */
 RADR    apfra;                          /* Abs page frame address    */
@@ -2234,7 +2351,7 @@ int     ix = TLBIX(addr);               /* TLB index                 */
 
     /* Convert logical address to real address */
     if ( (REAL_MODE(&regs->psw) || arn == USE_REAL_ADDR)
-#if defined( FEATURE_INTERPRETIVE_EXECUTION )
+#if defined( FEATURE_SIE )
       /* Under SIE guest real is always host primary, regardless
          of the DAT mode */
       && !(regs->sie_active
@@ -2245,7 +2362,7 @@ int     ix = TLBIX(addr);               /* TLB index                 */
 //                               || SIE_STATE_BIT_ON(GUESTREGS, MX, XC) )
 #endif /* defined( _FEATURE_MULTIPLE_CONTROLLED_DATA_SPACE ) */
           )
-#endif /* defined( FEATURE_INTERPRETIVE_EXECUTION ) */
+#endif /* defined( FEATURE_SIE ) */
        )
     {
         regs->dat.pvtaddr = regs->dat.protect = 0;
@@ -2281,7 +2398,6 @@ int     ix = TLBIX(addr);               /* TLB index                 */
     if(SIE_MODE(regs)) HOSTREGS->dat.protect = 0;
     if(SIE_MODE(regs)  && !regs->sie_pref)
     {
-
         if (SIE_TRANSLATE_ADDR (regs->sie_mso + regs->dat.aaddr,
                     (arn > 0 && MULTIPLE_CONTROLLED_DATA_SPACE(regs)) ? arn : USE_PRIMARY_SPACE,
                     HOSTREGS, ACCTYPE_SIE))
@@ -2308,26 +2424,13 @@ int     ix = TLBIX(addr);               /* TLB index                 */
             regs->aea_aleprot[arn] = HOSTREGS->dat.protect & 2;
         }
 
-        /* Convert host real address to host absolute address */
-        /* ISW 20181005 */
-        /* Use the Prefixing logic of the SIE host (not the guest) */
-        switch(HOSTREGS->arch_mode)
-        {
-            case ARCH_390_IDX:
-                HOSTREGS->dat.aaddr = aaddr =
-                        s390_apply_prefixing( HOSTREGS->dat.raddr, HOSTREGS->PX );
-                apfra = s390_apply_prefixing( HOSTREGS->dat.rpfra, HOSTREGS->PX );
-                break;
-            case ARCH_900_IDX:
-                HOSTREGS->dat.aaddr = aaddr =
-                        z900_apply_prefixing( HOSTREGS->dat.raddr, HOSTREGS->PX );
-                apfra = z900_apply_prefixing( HOSTREGS->dat.rpfra, HOSTREGS->PX );
-                break;
-            /* No S/370 or any other SIE host exist */
-            default:
-            case ARCH_370_IDX:
-                CRASH();
-        }
+        /* Convert host real address to host absolute address.
+           Use the Prefixing logic of the SIE host, not the guest!
+                                               -- ISW 20181005
+        */
+        HOSTREGS->dat.aaddr =
+        aaddr = apply_host_prefixing( HOSTREGS, HOSTREGS->dat.raddr );
+        apfra = apply_host_prefixing( HOSTREGS, HOSTREGS->dat.rpfra );
 
         if (HOSTREGS->dat.aaddr > HOSTREGS->mainlim)
             goto vabs_addr_excp;
@@ -2342,8 +2445,8 @@ int     ix = TLBIX(addr);               /* TLB index                 */
     }
 #endif /* defined( _FEATURE_SIE ) */
 
-    /* Check protection and set reference and change bits */
-    regs->dat.storkey = &(STORAGE_KEY(aaddr, regs));
+    /* Save ptr to storage key for this translated logical address */
+    regs->dat.storkey = ARCH_DEP( get_ptr_to_storekey )( aaddr );
 
 #if defined( _FEATURE_SIE )
     /* Do not apply host key access when SIE fetches/stores data */
@@ -2351,6 +2454,7 @@ int     ix = TLBIX(addr);               /* TLB index                 */
         return regs->mainstor + aaddr;
 #endif
 
+    /* Check protection and set reference and change bits */
     if (likely(acctype & ACC_READ))
     {
         /* Program check if fetch protected location */
@@ -2361,16 +2465,16 @@ int     ix = TLBIX(addr);               /* TLB index                 */
         }
 
         /* Set the reference bit in the storage key */
-        *regs->dat.storkey |= STORKEY_REF;
+        ARCH_DEP( or_storage_key_by_ptr )( regs->dat.storkey, STORKEY_REF );
 
         /* Update accelerated lookup TLB fields */
         regs->tlb.storkey[ix]    = regs->dat.storkey;
-        regs->tlb.skey[ix]       = *regs->dat.storkey & STORKEY_KEY;
+        regs->tlb.skey[ix]       = ARCH_DEP( get_storekey_by_ptr )( regs->dat.storkey ) & STORKEY_KEY;
         regs->tlb.acc[ix]        = ACC_READ;
         regs->tlb.main[ix]       = NEW_MAINADDR (regs, addr, apfra);
 
     }
-    else /* if(acctype & (ACC_WRITE|ACC_CHECK)) */
+    else /* if(acctype & (ACC_WRITE|ACC_CHECK|ACCTYPE_HW)) */
     {
         /* Program check if store protected location */
         if (unlikely(ARCH_DEP(is_store_protected) (addr, *regs->dat.storkey, akey, regs)))
@@ -2383,13 +2487,13 @@ int     ix = TLBIX(addr);               /* TLB index                 */
 
         /* Set the reference and change bits in the storage key */
         if (acctype & ACC_WRITE)
-            *regs->dat.storkey |= (STORKEY_REF | STORKEY_CHANGE);
+            ARCH_DEP( or_storage_key_by_ptr )( regs->dat.storkey, (STORKEY_REF | STORKEY_CHANGE) );
 
         /* Update accelerated lookup TLB fields */
         regs->tlb.storkey[ix] = regs->dat.storkey;
-        regs->tlb.skey[ix]    = *regs->dat.storkey & STORKEY_KEY;
+        regs->tlb.skey[ix]    = ARCH_DEP( get_storekey_by_ptr )( regs->dat.storkey ) & STORKEY_KEY;
         regs->tlb.acc[ix]     = (addr >= PSA_SIZE || regs->dat.pvtaddr)
-                              ? (ACC_READ|ACC_CHECK|acctype)
+                              ? (ACC_READ | ACC_CHECK | acctype)
                               :  ACC_READ;
         regs->tlb.main[ix]    = NEW_MAINADDR (regs, addr, apfra);
 
@@ -2415,9 +2519,11 @@ int     ix = TLBIX(addr);               /* TLB index                 */
     return regs->mainstor + aaddr;
 
 vabs_addr_excp:
+
     regs->program_interrupt (regs, PGM_ADDRESSING_EXCEPTION);
 
 vabs_prot_excp:
+
 #if defined( FEATURE_SUPPRESSION_ON_PROTECTION )
     regs->TEA = addr & STORAGE_KEY_PAGEMASK;
     if (regs->dat.protect && (acctype & (ACC_WRITE|ACC_CHECK)) )
@@ -2433,30 +2539,34 @@ vabs_prot_excp:
 #endif /* defined( FEATURE_SUPPRESSION_ON_PROTECTION ) */
 
 #if defined( _FEATURE_PROTECTION_INTERCEPTION_CONTROL )
-    if(SIE_MODE(regs) && HOSTREGS->dat.protect)
+    if (SIE_MODE( regs ) && HOSTREGS->dat.protect)
     {
 #if defined( FEATURE_SUPPRESSION_ON_PROTECTION )
-        HOSTREGS->TEA = regs->TEA;
+
+        switch (HOSTREGS->arch_mode)
+        {
+        case ARCH_370_IDX: HOSTREGS->TEA_370 = regs->TEA; break;
+        case ARCH_390_IDX: HOSTREGS->TEA_390 = regs->TEA; break;
+        case ARCH_900_IDX: HOSTREGS->TEA_900 = regs->TEA; break;
+        default: CRASH();
+        }
+
         HOSTREGS->excarid = regs->excarid;
-#endif
-        (HOSTREGS->program_interrupt) (HOSTREGS, PGM_PROTECTION_EXCEPTION);
+
+#endif /* defined( FEATURE_SUPPRESSION_ON_PROTECTION ) */
+
+        HOSTREGS->program_interrupt( HOSTREGS, PGM_PROTECTION_EXCEPTION );
     }
     else
 #endif /* defined( _FEATURE_PROTECTION_INTERCEPTION_CONTROL ) */
         regs->program_interrupt (regs, PGM_PROTECTION_EXCEPTION);
 
 vabs_prog_check:
+
     regs->program_interrupt (regs, regs->dat.xcode);
 
     return NULL; /* prevent warning from compiler */
 } /* end function ARCH_DEP(logical_to_main_l) */
-
-/* Original logical_to_main() for compatiblity purpose */
-_LOGICAL_C_STATIC BYTE *ARCH_DEP(logical_to_main) (VADR addr, int arn,
-                                    REGS *regs, int acctype, BYTE akey)
-{
-    return ARCH_DEP(logical_to_main_l)(addr,arn,regs,acctype,akey,1);
-}
 
 /*-------------------------------------------------------------------*/
 /*          (delineates ARCH_DEP from non-arch_dep)                  */
@@ -2486,6 +2596,17 @@ _LOGICAL_C_STATIC BYTE *ARCH_DEP(logical_to_main) (VADR addr, int arn,
 /*  given feature was defined for *ANY* of the build architectures.  */
 /*-------------------------------------------------------------------*/
 
-// (we have no non-ARCH_DEP code to place here -- yet!)
+RADR apply_host_prefixing( REGS* regs, RADR raddr )
+{
+    RADR aaddr = 0;
+    switch (HOSTREGS->arch_mode)
+    {
+    case ARCH_370_IDX: aaddr = APPLY_370_PREFIXING( raddr, HOSTREGS->PX_370 ); break;
+    case ARCH_390_IDX: aaddr = APPLY_390_PREFIXING( raddr, HOSTREGS->PX_390 ); break;
+    case ARCH_900_IDX: aaddr = APPLY_900_PREFIXING( raddr, HOSTREGS->PX_900 ); break;
+    default: CRASH();
+    }
+    return aaddr;
+}
 
-#endif /* !defined( _GEN_ARCH )*/
+#endif /* !defined( _GEN_ARCH ) */

@@ -26,7 +26,6 @@
 
 #include "hercules.h"
 #include "opcode.h"
-#include "inline.h"
 
 DISABLE_GCC_UNUSED_SET_WARNING;
 
@@ -266,7 +265,7 @@ U64     d;
             regs->GR_L(r1) += 8;
 #if 0
             /* This is where the instruction may be interrupted */
-            UPD_PSW_IA(regs, PSW_IA(regs, -4));
+            SET_PSW_IA_AND_MAYBE_IP(regs, PSW_IA_FROM_IP(regs, -4));
             return;
 #endif
         }
@@ -338,7 +337,7 @@ U64     d;
             regs->GR_L(r1) += 8;
 #if 0
             /* This is where the instruction may be interrupted */
-            UPD_PSW_IA(regs, PSW_IA(regs, -4));
+            SET_PSW_IA_AND_MAYBE_IP(regs, PSW_IA_FROM_IP(regs, -4));
             return;
 #endif
         }
@@ -411,7 +410,7 @@ U64     d;
             regs->GR_L(r1) += 8;
 #if 0
             /* This is where the instruction may be interrupted */
-            UPD_PSW_IA(regs, PSW_IA(regs, -4));
+            SET_PSW_IA_AND_MAYBE_IP(regs, PSW_IA_FROM_IP(regs, -4));
             return;
 #endif
         }

@@ -1,4 +1,5 @@
 /* SIE.C        (C) Copyright Jan Jaeger, 1999-2012                  */
+/*              (C) and others 2013-2021                             */
 /*              Interpretive Execution                               */
 /*                                                                   */
 /*   Released under "The Q Public License Version 1"                 */
@@ -21,17 +22,23 @@
 #include "hercules.h"
 #include "opcode.h"
 #include "inline.h"
+#include "sie.h"
 
 DISABLE_GCC_UNUSED_SET_WARNING;
-
-/*-------------------------------------------------------------------*/
-/*   ARCH_DEP section: compiled multiple times, once for each arch.  */
-/*-------------------------------------------------------------------*/
 
 #if defined( _FEATURE_SIE )
 
 #if !defined( COMPILE_THIS_ONLY_ONCE )
 #define       COMPILE_THIS_ONLY_ONCE
+
+/*-------------------------------------------------------------------*/
+/*  non-ARCH_DEP section: due to above COMPILE_THIS_ONLY_ONCE guard, */
+/*  the below header section is compiled only ONCE, *before*         */
+/*  the very first architecture is ever built.                       */
+/*-------------------------------------------------------------------*/
+/*  The ARCH_DEP section (compiled multiple times, once for each     */
+/*  architecture) follows AFTER the COMPILE_THIS_ONLY_ONCE section.  */
+/*-------------------------------------------------------------------*/
 
 #if defined( SIE_DEBUG )
 static const char* sie_icode_2str( int icode );
@@ -246,8 +253,24 @@ void* sie_perfmon_disp()
 #endif /* !defined( COMPILE_THIS_ONLY_ONCE ) */
 
 /*-------------------------------------------------------------------*/
-/*                     SIE helper macros                             */
+/*   ARCH_DEP section: compiled multiple times, once for each arch.  */
 /*-------------------------------------------------------------------*/
+
+//-------------------------------------------------------------------
+//                      ARCH_DEP() code
+//-------------------------------------------------------------------
+// ARCH_DEP (build-architecture / FEATURE-dependent) functions here.
+// All BUILD architecture dependent (ARCH_DEP) function are compiled
+// multiple times (once for each defined build architecture) and each
+// time they are compiled with a different set of FEATURE_XXX defines
+// appropriate for that architecture. Use #ifdef FEATURE_XXX guards
+// to check whether the current BUILD architecture has that given
+// feature #defined for it or not. WARNING: Do NOT use _FEATURE_XXX.
+// The underscore feature #defines mean something else entirely. Only
+// test for FEATURE_XXX. (WITHOUT the underscore)
+//-------------------------------------------------------------------
+
+// (some needed  helper macros...)
 
 #undef SIE_I_WAIT
 #if defined(_FEATURE_WAITSTATE_ASSIST)
@@ -277,7 +300,7 @@ void* sie_perfmon_disp()
 #endif /* defined( _FEATURE_SIE ) */
 
 
-#if defined( FEATURE_INTERPRETIVE_EXECUTION )
+#if defined( FEATURE_SIE )
 /*-------------------------------------------------------------------*/
 /* B214 SIE   - Start Interpretive Execution                     [S] */
 /*-------------------------------------------------------------------*/
@@ -288,21 +311,41 @@ RADR    effective_addr2;                /* address of state desc.    */
 int     n;                              /* Loop counter              */
 U16     lhcpu;                          /* Last Host CPU address     */
 U64     sie_state;                      /* Last SIE state            */
-#if defined( OPTION_FIX_SIE_ICODE_BUG )
 int lpsw_xcode;                         /* xcode from load_psw       */
 volatile int icode = 0;                 /* interrupt code            */
                                         /* (why is this volatile?!)  */
-#else
-volatile int icode;                     /* Interception code         */
-#endif
 bool    same_cpu, same_state;           /* boolean helper flags      */
 U64     dreg;
 
+#if defined( FEATURE_VIRTUAL_ARCHITECTURE_LEVEL )
+U32     fld;                            /* Facility List Designator  */
+#if !defined( OPTION_SIE2BK_FLD_COPY)
+int     i;                              /* (work)                    */
+#endif
+#endif
+
+    //-----------------------------------------------------------
+    //             IMPORTANT SIE PROGRAMMING NOTE!
+    //-----------------------------------------------------------
+    // NOTE: Our execution architectural mode is that of the SIE
+    // HOST and our 'regs' variable is pointing the the HOST's
+    // registers. Since the GUEST could be running in a completely
+    // different architecture from the HOST, if you need to call
+    // a ARCH_DEP function for the GUEST (passing it GUESTREGS),
+    // you must TAKE SPECIAL CARE to ensure the correct version
+    // of that function is called! You cannot simply call the
+    // "ARCH_DEP" version of that function as they are for the
+    // architectue of the HOST, not the GUEST! (i.e. you cannot
+    // call a "z900_xxx" function expecting it to work correctly
+    // if the GUEST is supposed to call "s390_xxx" functions!)
+    //-----------------------------------------------------------
+
     S( inst, regs, b2, effective_addr2 );
 
-    SIE_INTERCEPT( regs );
-
+    TRAN_INSTR_CHECK( regs );
     PRIV_CHECK( regs );
+
+    SIE_INTERCEPT( regs );
 
     PTT_SIE( "SIE", regs->GR(14), regs->GR(15), effective_addr2);
 
@@ -318,11 +361,15 @@ U64     dreg;
 
 #if defined( FEATURE_001_ZARCH_INSTALLED_FACILITY )
 
-        || (effective_addr2 & 0xFFFFFFFFFFFFF000ULL) == 0
-        || (effective_addr2 & 0xFFFFFFFFFFFFF000ULL) == regs->PX
+        || (effective_addr2 & PREFIXING_900_MASK) == 0
+        || (effective_addr2 & PREFIXING_900_MASK) == regs->PX_900
+
+#elif defined( FEATURE_S390_DAT )
+        || (effective_addr2 & PREFIXING_390_MASK) == 0
+        || (effective_addr2 & PREFIXING_390_MASK) == regs->PX_390
 #else
-        || (effective_addr2 & 0x7FFFF000) == 0
-        || (effective_addr2 & 0x7FFFF000) == regs->PX
+        || (effective_addr2 & PREFIXING_370_MASK) == 0
+        || (effective_addr2 & PREFIXING_370_MASK) == regs->PX_370
 #endif
     )
         ARCH_DEP( program_interrupt )( regs, PGM_SPECIFICATION_EXCEPTION );
@@ -371,17 +418,13 @@ U64     dreg;
     /* Direct pointer to state descriptor block */
     GUESTREGS->siebk = (void*)(regs->mainstor + effective_addr2);
 
-    /* Load the guest's PSW */
+    /* Set the guest's execution arch_mode and load its PSW */
 #if defined( FEATURE_001_ZARCH_INSTALLED_FACILITY )
     if (STATEBK->mx & SIE_MX_ESAME)
     {
         GUESTREGS->arch_mode = ARCH_900_IDX;
         GUESTREGS->program_interrupt = &z900_program_interrupt;
-#if defined( OPTION_FIX_SIE_ICODE_BUG )
         lpsw_xcode = z900_load_psw( GUESTREGS, STATEBK->psw );
-#else
-        icode = z900_load_psw( GUESTREGS, STATEBK->psw );
-#endif
     }
 #else /* !defined( FEATURE_001_ZARCH_INSTALLED_FACILITY ) */
     if (STATEBK->m & SIE_M_370)
@@ -389,15 +432,10 @@ U64     dreg;
 #if defined(_370)
         GUESTREGS->arch_mode = ARCH_370_IDX;
         GUESTREGS->program_interrupt = &s370_program_interrupt;
-#if defined( OPTION_FIX_SIE_ICODE_BUG )
         lpsw_xcode = s370_load_psw(GUESTREGS, STATEBK->psw);
 #else
-        icode = s370_load_psw(GUESTREGS, STATEBK->psw);
-#endif
-#else
         /* Validity intercept when 370 mode not installed */
-        SIE_SET_VI(SIE_VI_WHO_CPU, SIE_VI_WHEN_SIENT,
-          SIE_VI_WHY_370NI, GUESTREGS);
+        SIE_SET_VI(SIE_VI_WHO_CPU, SIE_VI_WHEN_SIENT, SIE_VI_WHY_370NI, GUESTREGS);
         STATEBK->c = SIE_C_VALIDITY;
         return;
 #endif
@@ -410,11 +448,7 @@ U64     dreg;
     {
         GUESTREGS->arch_mode = ARCH_390_IDX;
         GUESTREGS->program_interrupt = &s390_program_interrupt;
-#if defined( OPTION_FIX_SIE_ICODE_BUG )
         lpsw_xcode = s390_load_psw(GUESTREGS, STATEBK->psw);
-#else
-        icode = s390_load_psw(GUESTREGS, STATEBK->psw);
-#endif
     }
 #if !defined( FEATURE_001_ZARCH_INSTALLED_FACILITY )
     else
@@ -429,14 +463,9 @@ U64     dreg;
     /* Prefered guest indication */
     GUESTREGS->sie_pref = (STATEBK->m & SIE_M_VR) ? 1 : 0;
 
-    /* Load prefix from state descriptor */
-    FETCH_FW( GUESTREGS->PX, STATEBK->prefix );
-    GUESTREGS->PX &=
-#if !defined( FEATURE_001_ZARCH_INSTALLED_FACILITY )
-                     PX_MASK;
-#else
-                     (GUESTREGS->arch_mode == ARCH_900_IDX) ? PX_MASK : 0x7FFFF000;
-#endif
+    /* Load prefix from state descriptor... (Using 'PX_L' is okay
+       since prefix is always a FWORD regardless of architecture) */
+    FETCH_FW( GUESTREGS->PX_L, STATEBK->prefix );
 
 #if defined( FEATURE_REGION_RELOCATE )
 
@@ -480,7 +509,7 @@ U64     dreg;
         GUESTREGS->sie_mso   =  0;
         GUESTREGS->mainstor  =  &sysblk.mainstor[mso];
         GUESTREGS->mainlim   =  msl - mso;
-        GUESTREGS->storkeys  =  &STORAGE_KEY( mso, &sysblk );
+        GUESTREGS->storkeys  =  ARCH_DEP( get_ptr_to_storekey )( mso );
         GUESTREGS->sie_xso   =  eso;
         GUESTREGS->sie_xsl   =  esl;
         GUESTREGS->sie_xso  *=  (XSTORE_INCREMENT_SIZE >> XSTORE_PAGESHIFT);
@@ -506,7 +535,7 @@ U64     dreg;
         FETCH_DW( GUESTREGS->sie_mso, STATEBK->mso );
         GUESTREGS->sie_mso &= SIE2_MS_MASK;
 
-        /* Load main storage extend */
+        /* Load main storage extent */
         FETCH_DW( GUESTREGS->mainlim, STATEBK->mse );
         GUESTREGS->mainlim |= ~SIE2_MS_MASK;
 
@@ -526,7 +555,7 @@ U64     dreg;
         FETCH_HW( GUESTREGS->sie_mso, STATEBK->mso );
         GUESTREGS->sie_mso <<= 16;
 
-        /* Load main storage extend */
+        /* Load main storage extent */
         FETCH_HW( GUESTREGS->mainlim, STATEBK->mse );
         GUESTREGS->mainlim = ((GUESTREGS->mainlim + 1) << 16) - 1;
 
@@ -555,11 +584,12 @@ U64     dreg;
 
     /* System Control Area Origin */
     FETCH_FW( GUESTREGS->sie_scao, STATEBK->scao );
+    GUESTREGS->sie_scao &= SIEISCAM;
 
 #if defined( FEATURE_001_ZARCH_INSTALLED_FACILITY )
     {
-        U32 sie_scaoh;
         /* For ESAME insert the high word of the address */
+        U32 sie_scaoh;
         FETCH_FW( sie_scaoh, STATEBK->scaoh );
         GUESTREGS->sie_scao |= (RADR)sie_scaoh << 32;
     }
@@ -592,55 +622,72 @@ U64     dreg;
         }
     }
 
+    GUESTREGS->sie_fld = false;  // (default until we learn otherwise)
+
 #if defined( FEATURE_VIRTUAL_ARCHITECTURE_LEVEL )
 
     /* Set Virtual Architecture Level (Facility List) */
+    /* SIE guest facilities by default start out same as host's */
+    memcpy( GUESTREGS->facility_list, HOSTREGS->facility_list, STFL_HERC_BY_SIZE );
+
+    /* Fetch address of optional SIE guest facility list designator */
+    FETCH_FW( fld, STATEBK->fld );
+
+    if (0
+        || (U64)fld > regs->mainlim /* (beyond end of main storage?)  */
+        || (fld & ~0x7ffffff8)      /* (above 2GB or not DW aligned?) */
+    )
     {
-        U32  fld;       /* SIE Facility List Designator */
-
-        /* SIE guest facilities by default start out same as host's */
-        memcpy( GUESTREGS->facility_list, regs->facility_list, STFL_HERC_BY_SIZE );
-
-        /* Fetch address of optional SIE guest facility list mask */
-        FETCH_FW( fld, STATEBK->fld );
-
-        if (0
-            || (U64)fld > regs->mainlim /* (beyond end of main storage?)  */
-            || (fld & ~0x7ffffff8)      /* (above 2GB or not DW aligned?) */
-        )
-        {
-            /* ZZ: FIXME
-            SIE_SET_VI( SIE_VI_WHO_CPU, SIE_VI_WHEN_SIENT, SIE_VI_WHY_??ADR, GUESTREGS );
-            */
-            STATEBK->c = SIE_C_VALIDITY;
-            return;
-        }
-
-        /* If a facility list mask was provided then use it to
-           clear SIE guest facility bits which shouldn't be on */
-        if (fld)
-        {
-            int    i;
-            BYTE   facilities_mask[ STFL_HERC_BY_SIZE ];
-
-            /* Copy mask bits to work area */
-            memcpy( facilities_mask, &regs->mainstor[ fld ], STFL_HERC_BY_SIZE );
-
-            /* Prevent certain facility bits from being masked */
-#if defined( FEATURE_001_ZARCH_INSTALLED_FACILITY )
-            BIT_ARRAY_SET( facilities_mask, STFL_001_ZARCH_INSTALLED );
-#endif
-            /* Mask SIE guest facility bits as requested */
-            for (i=0; i < (int) STFL_IBM_BY_SIZE; i++)
-               GUESTREGS->facility_list[i] &= facilities_mask[i];
-        }
+        /* ZZ: FIXME
+        SIE_SET_VI( SIE_VI_WHO_CPU, SIE_VI_WHEN_SIENT, SIE_VI_WHY_??ADR, GUESTREGS );
+        */
+        STATEBK->c = SIE_C_VALIDITY;
+        return;
     }
+
+    if (fld)
+    {
+        GUESTREGS->sie_fld = true;
+
+#if defined( OPTION_SIE2BK_FLD_COPY)
+
+        /* If a facility list designator was provided
+           then it defines the SIE guest facility bits.
+        */
+        memcpy( GUESTREGS->facility_list, &regs->mainstor[ fld ], STFL_HERC_BY_SIZE );
+
+#else /* !defined( OPTION_SIE2BK_FLD_COPY) */
+
+        /* If a facility list designator was provided
+           then it's used as a mask to clear the SIE
+           guest facility bits which shouldn't be on.
+        */
+        for (i=0; i < (int) STFL_IBM_BY_SIZE; i++)
+            GUESTREGS->facility_list[i] &= regs->mainstor[ fld + i ];
+
+#endif /* defined( OPTION_SIE2BK_FLD_COPY) */
+    }
+
+    /* Prevent certain facility bits from being masked */
+    BIT_ARRAY_SET( GUESTREGS->facility_list, STFL_001_ZARCH_INSTALLED );
+
+    if (ARCH_900_IDX == GUESTREGS->arch_mode)
+        BIT_ARRAY_SET( GUESTREGS->facility_list, STFL_002_ZARCH_ACTIVE );
+    else
+        BIT_ARRAY_CLR( GUESTREGS->facility_list, STFL_002_ZARCH_ACTIVE );
+
 #endif /* defined( FEATURE_VIRTUAL_ARCHITECTURE_LEVEL ) */
+
+   /* Reference and Change Preservation (RCP) Origin if high-order
+      0x80 bit is off. Otherwise (high-order 0x80 bit is on, which
+      it usually is for VM/ESA and z/VM), then the field ACTUALLY
+      contains various Execution Control flags such as Storage Key
+      Assist (SKA), etc.
+   */
+    FETCH_FW( GUESTREGS->sie_rcpo, STATEBK->rcpo );
 
 #if !defined( FEATURE_001_ZARCH_INSTALLED_FACILITY )
 
-    /* Reference and Change Preservation Origin */
-    FETCH_FW( GUESTREGS->sie_rcpo, STATEBK->rcpo );
     if (!GUESTREGS->sie_rcpo && !GUESTREGS->sie_pref)
     {
         SIE_SET_VI( SIE_VI_WHO_CPU, SIE_VI_WHEN_SIENT, SIE_VI_WHY_RCZER, GUESTREGS );
@@ -655,11 +702,11 @@ U64     dreg;
 
     /* Load the TOD clock offset for this guest */
     FETCH_DW( GUESTREGS->sie_epoch, STATEBK->epoch );
-    GUESTREGS->tod_epoch = regs->tod_epoch + tod2etod( GUESTREGS->sie_epoch );
+    GUESTREGS->tod_epoch = regs->tod_epoch + TOD_high64_to_ETOD_high56( GUESTREGS->sie_epoch );
 
     /* Load the clock comparator */
     FETCH_DW( GUESTREGS->clkc, STATEBK->clockcomp );
-    GUESTREGS->clkc = tod2etod( GUESTREGS->clkc );  /* Internal Hercules format */
+    GUESTREGS->clkc = TOD_high64_to_ETOD_high56( GUESTREGS->clkc );  /* Internal Hercules format */
 
     /* Load TOD Programmable Field */
     FETCH_HW( GUESTREGS->todpr, STATEBK->todpf );
@@ -691,47 +738,57 @@ U64     dreg;
     SIE_STATE( GUESTREGS ) = effective_addr2;
     STORE_HW( STATEBK->lhcpu, regs->cpuad );
 
+    /*----------------------------------------*/
+    /* Maybe purge the guest's TLB/ALB or not */
+    /*----------------------------------------*/
 #if !defined( OPTION_SIE_PURGE_DAT_ALWAYS )
     /*
-     * If this is not the same last host cpu that dispatched this state
-     * descriptor then clear the guest TLB entries.
+     *   If this is not the same last host cpu that dispatched
+     *   this state descriptor then clear the guest TLB entries.
      */
     if (!same_cpu || !same_state)
     {
         SIE_PERFMON( SIE_PERF_ENTER_F );
 
         /* Purge guest TLB entries */
-        ARCH_DEP( purge_tlb )( GUESTREGS );
-        ARCH_DEP( purge_alb )( GUESTREGS );
+
+        switch (GUESTREGS->arch_mode)
+        {
+        case ARCH_370_IDX: s370_purge_tlb( GUESTREGS );                              break;
+        case ARCH_390_IDX: s390_purge_tlb( GUESTREGS ); s390_purge_alb( GUESTREGS ); break;
+        case ARCH_900_IDX: z900_purge_tlb( GUESTREGS ); z900_purge_alb( GUESTREGS ); break;
+        default: CRASH();
+        }
     }
-
 #else // defined( OPTION_SIE_PURGE_DAT_ALWAYS )
-
-    /* Always purge guest TLB entries */
-    ARCH_DEP( purge_tlb )( GUESTREGS );
-    ARCH_DEP( purge_alb )( GUESTREGS );
-#endif
+    /*
+     *   ALWAYS purge guest TLB entries (Ivan 2016-07-30)
+     */
+    switch (GUESTREGS->arch_mode)
+    {
+    case ARCH_370_IDX: s370_purge_tlb( GUESTREGS );                              break;
+    case ARCH_390_IDX: s390_purge_tlb( GUESTREGS ); s390_purge_alb( GUESTREGS ); break;
+    case ARCH_900_IDX: z900_purge_tlb( GUESTREGS ); z900_purge_alb( GUESTREGS ); break;
+    default: CRASH();
+    }
+#endif // defined( OPTION_SIE_PURGE_DAT_ALWAYS )
 
     /* Initialize interrupt mask and state */
-    SET_IC_MASK( GUESTREGS );
+    ARCH_DEP( set_guest_ic_mask )( GUESTREGS );
     SET_IC_INITIAL_STATE( GUESTREGS );
     SET_IC_PER( GUESTREGS );
 
     /* Initialize accelerated address lookup values */
-    SET_AEA_MODE( GUESTREGS );
-    SET_AEA_COMMON( GUESTREGS );
-    INVALIDATE_AIA( GUESTREGS );
+    ARCH_DEP( set_guest_aea_mode   )( GUESTREGS );
+    ARCH_DEP( set_guest_aea_common )( GUESTREGS );
+    ARCH_DEP( invalidate_guest_aia )( GUESTREGS );
 
-    GUESTREGS->tracing = regs->tracing;
+    GUESTREGS->breakortrace = regs->breakortrace;
 
     /* Must do setjmp(progjmp) here since the 'translate_addr' further
        below may result in longjmp(progjmp) for addressing exceptions.
     */
-#if defined( OPTION_FIX_SIE_ICODE_BUG )
     if (!(icode = setjmp( GUESTREGS->progjmp )))
-#else
-    if (!setjmp( GUESTREGS->progjmp ))
-#endif
     {
         /*
          * Set sie_active to 1. This means other threads
@@ -756,6 +813,9 @@ U64     dreg;
             /* NOTE: longjmp(progjmp) for addressing exception is possible
                here. Thus the need for doing setjmp(progjmp) further above.
             */
+            /* Translate where this SIE guest's absolute storage begins
+               (which is a host virtual address) to a host real address.
+            */
             if (ARCH_DEP( translate_addr )( GUESTREGS->sie_mso + GUESTREGS->PX,
                                             USE_PRIMARY_SPACE, regs, ACCTYPE_SIE ))
             {
@@ -772,7 +832,7 @@ U64     dreg;
             }
 
             /* Convert host real address to host absolute address */
-            GUESTREGS->sie_px = APPLY_PREFIXING( regs->dat.raddr, regs->PX );
+            GUESTREGS->sie_px = apply_host_prefixing( regs, regs->dat.raddr );
 
             if (regs->dat.protect || GUESTREGS->sie_px > regs->mainlim)
             {
@@ -846,19 +906,12 @@ U64     dreg;
         RELEASE_INTLOCK( regs );
 
         /* Early exceptions associated with the guest load_psw() */
-#if defined( OPTION_FIX_SIE_ICODE_BUG )
         if (lpsw_xcode)
         {
             PTT_SIE( "*SIE > pgmint", lpsw_xcode, 0, 0 );
             GUESTREGS->program_interrupt( GUESTREGS, lpsw_xcode );
         }
-#else
-        if (icode)
-        {
-            PTT_SIE( "*SIE > pgmint", icode, 0, 0 );
-            GUESTREGS->program_interrupt( GUESTREGS, icode );
-        }
-#endif
+
         /* Run SIE in guest's architecture mode */
         PTT_SIE( "SIE > run_sie", GUESTREGS->arch_mode, 0, 0 );
         icode = run_sie[ GUESTREGS->arch_mode ]( regs );
@@ -880,7 +933,7 @@ U64     dreg;
     longjmp( regs->progjmp, SIE_NO_INTERCEPT );
 
 } /* end of start_interpretive_execution instruction */
-#endif /* defined( FEATURE_INTERPRETIVE_EXECUTION ) */
+#endif /* defined( FEATURE_SIE ) */
 
 
 #if defined( _FEATURE_SIE )
@@ -895,6 +948,52 @@ static int ARCH_DEP( run_sie )( REGS* regs )
     int    icode;   /* SIE longjmp intercept code */
     int    i;
     const INSTR_FUNC*  current_opcode_table;
+
+    //---------------------------------------------------------
+    //              CRITICAL SIE PROGRAMMING NOTE!
+    //---------------------------------------------------------
+    //
+    //  Our 'regs' variable always points the HOST's regs (i.e.
+    //  regs == HOSTREGS && regs->host is always true), even though
+    //  we are actually RUNNING (executing) in GUEST architecture
+    //  mode!!
+    //
+    //  That is to say, if the host is, for example, z900 (z/VM)
+    //  but the guest it wants to execute is a 390 guest, the above
+    //  "start_interpretive_execution" instruction function calls
+    //  the "s390_run_sie" function (because it wants to execute
+    //  the guest in 390 mode), but it passed its own HOST regs to
+    //  this function!
+    //
+    //  So even though our function's build architecture is 390
+    //  (i.e. even though our function's build architecture is that
+    //  of the GUEST's), our 'regs' pointer is nevertheless still
+    //  pointing to the z/VM HOST's registers!! GUESTREGS must be
+    //  used to access the GUEST's register context!!
+    //
+    //  What this means is that SPECIAL CARE must be taken when
+    //  invoking macros or calling functions on behalf of the HOST
+    //  (i.e. when using 'regs' or HOSTREGS instead of GUESTREGS)
+    //  since many of our macros and functions are architecture
+    //  dependent, relying on the regs they were called with to
+    //  always match that of the current build architecture, which,
+    //  as explained, is NOT necessarily always true in our case!!
+    //
+    //---------------------------------------------------------
+
+    //-----------------------------------------------------------
+    //               IMPORTANT SIE PROGRAMMING NOTE!
+    //-----------------------------------------------------------
+    // NOTE: Our execution architectural mode is that of the SIE
+    // GUEST, not the HOST! If you need to call a function on
+    // behalf of the HOST (passing it 'regs'), you must be careful
+    // to ensure the correct version of that function is called!
+    // You cannot simply call the "ARCH_DEP" version of a function
+    // as they are for the architectue of the GUEST, not the HOST!
+    // (e.g. you cannot call a "s390_xxxx" function expecting it
+    // to work correctly if the HOST function that SHOULD have been
+    // called should have been "z900_xxxx"!) YOU HAVE BEEN WARNED!
+    //-----------------------------------------------------------
 
     PTT_SIE( "run_sie h,g,a", regs->host, regs->guest, regs->sie_active );
 
@@ -920,6 +1019,9 @@ static int ARCH_DEP( run_sie )( REGS* regs )
 
         PTT_SIE( "run_sie setjmp", 0, 0, 0 );
 
+        /* Establish longjmp destination for program check or
+           RETURN_INTCHECK, or SIE_INTERCEPT, or longjmp, etc.
+        */
         if (!(icode = setjmp( GUESTREGS->progjmp )))
         {
             PTT_SIE( "run_sie run...", 0, 0, 0 );
@@ -930,10 +1032,22 @@ static int ARCH_DEP( run_sie )( REGS* regs )
                 /* Set `execflag' to 0 in case EXecuted instruction did progjmp */
                 GUESTREGS->execflag = 0;
 
-                if (0
-                    || SIE_I_STOP ( GUESTREGS )
-                    || SIE_I_EXT  ( GUESTREGS )
-                    || SIE_I_IO   ( GUESTREGS )
+                /* Exit from SIE mode when either asked or
+                   if External or I/O Interrupt is pending
+                */
+                if (1
+#if defined( FEATURE_073_TRANSACT_EXEC_FACILITY )
+                    /* Don't interrupt active transaction */
+                    && (0
+                        || GUESTREGS->txf_tnd == 0
+                        || GUESTREGS->txf_PPA < PPA_MUCH_HELP_THRESHOLD
+                       )
+#endif
+                    && (0
+                        || SIE_I_STOP ( GUESTREGS )
+                        || SIE_I_EXT  ( GUESTREGS )
+                        || SIE_I_IO   ( GUESTREGS )
+                       )
                 )
                     break;
 
@@ -951,13 +1065,26 @@ static int ARCH_DEP( run_sie )( REGS* regs )
                     /* Set psw.IA and invalidate the aia */
                     INVALIDATE_AIA( GUESTREGS );
 
-                    if (OPEN_IC_EXTPENDING( GUESTREGS ))
+                    /* Process External Interrupt if one is pending */
+                    if (1
+                        && OPEN_IC_EXTPENDING( GUESTREGS )
+#if defined( FEATURE_073_TRANSACT_EXEC_FACILITY )
+                        /* Don't interrupt active transaction */
+                        && (0
+                            || GUESTREGS->txf_tnd == 0
+                            || GUESTREGS->txf_PPA < PPA_MUCH_HELP_THRESHOLD
+                           )
+#endif
+                    )
                         ARCH_DEP( perform_external_interrupt )( GUESTREGS );
 
+                    /* Process I/O Interrupt if either I/O or SIGA Assist is enabled
+                       and an I/O Interrupt is pending.
+                    */
                     if (1
                         && (0
                             || (STATEBK->ec[0] & SIE_EC0_IOA)
-                            || (STATEBK->ec[3] & SIE_EC3_SIGAA)
+                            || (STATEBK->ec[3] & SIE_EC3_SIGA)
                            )
                         && OPEN_IC_IOPENDING( GUESTREGS )
                     )
@@ -1017,7 +1144,7 @@ static int ARCH_DEP( run_sie )( REGS* regs )
                                 timed_wait_condition( &regs->intcond, &sysblk.intlock, &waittime );
 
                                 while (sysblk.syncing)
-                                     wait_condition( &sysblk.sync_bc_cond, &sysblk.intlock );
+                                     wait_condition( &sysblk.sync_done_cond, &sysblk.intlock );
                             }
                             sysblk.intowner       =   regs->cpuad;
                             sysblk.waiting_mask  &=  ~regs->cpubit;
@@ -1038,6 +1165,8 @@ static int ARCH_DEP( run_sie )( REGS* regs )
                 /* Break out of loop if SIE guest is waiting */
                 if (SIE_I_WAIT( GUESTREGS ))
                     break;
+
+sie_fetch_instruction:
 
                 ip = INSTRUCTION_FETCH( GUESTREGS, 0 );
                 current_opcode_table = GUESTREGS->ARCH_DEP( runtime_opcode_xxxx );
@@ -1080,10 +1209,10 @@ static int ARCH_DEP( run_sie )( REGS* regs )
 
                 SIE_PERFMON( SIE_PERF_EXEC );
 
+                PROCESS_TRACE( GUESTREGS, ip, sie_fetch_instruction );
                 EXECUTE_INSTRUCTION( current_opcode_table, ip, GUESTREGS );
-                GUESTREGS->instcount++;
+                regs->instcount++;
                 UPDATE_SYSBLK_INSTCOUNT( 1 );
-
                 SIE_PERFMON( SIE_PERF_EXEC_U );
 
                 for (i=0; i < MAX_CPU_LOOPS/2; i++)
@@ -1091,8 +1220,8 @@ static int ARCH_DEP( run_sie )( REGS* regs )
                     UNROLLED_EXECUTE( current_opcode_table, GUESTREGS );
                     UNROLLED_EXECUTE( current_opcode_table, GUESTREGS );
                 }
-                GUESTREGS->instcount +=  1 + (i * 2);
-                UPDATE_SYSBLK_INSTCOUNT( 1 + (i * 2) );
+                regs->instcount +=  (i * 2);
+                UPDATE_SYSBLK_INSTCOUNT( (i * 2) );
 
                 /* Perform automatic instruction tracing if it's enabled */
                 do_automatic_tracing();
@@ -1107,10 +1236,10 @@ txf_facility_loop:
                 if (GUESTREGS->txf_tnd)
                     goto txf_slower_loop;
 
+                PROCESS_TRACE( GUESTREGS, ip, sie_fetch_instruction );
                 EXECUTE_INSTRUCTION( current_opcode_table, ip, GUESTREGS );
-                GUESTREGS->instcount++;
+                regs->instcount++;
                 UPDATE_SYSBLK_INSTCOUNT( 1 );
-
                 SIE_PERFMON( SIE_PERF_EXEC_U );
 
                 for (i=0; i < MAX_CPU_LOOPS/2; i++)
@@ -1125,8 +1254,8 @@ txf_facility_loop:
 
                     UNROLLED_EXECUTE( current_opcode_table, GUESTREGS );
                 }
-                GUESTREGS->instcount +=  1 + (i * 2);
-                UPDATE_SYSBLK_INSTCOUNT( 1 + (i * 2) );
+                regs->instcount +=  (i * 2);
+                UPDATE_SYSBLK_INSTCOUNT( (i * 2) );
 
                 /* Perform automatic instruction tracing if it's enabled */
                 do_automatic_tracing();
@@ -1134,10 +1263,10 @@ txf_facility_loop:
 
 txf_slower_loop:
 
+                PROCESS_TRACE( GUESTREGS, ip, sie_fetch_instruction );
                 TXF_EXECUTE_INSTRUCTION( current_opcode_table, ip, GUESTREGS );
-                GUESTREGS->instcount++;
+                regs->instcount++;
                 UPDATE_SYSBLK_INSTCOUNT( 1 );
-
                 SIE_PERFMON( SIE_PERF_EXEC_U );
 
                 for (i=0; i < MAX_CPU_LOOPS/2; i++)
@@ -1152,8 +1281,8 @@ txf_slower_loop:
 
                     TXF_UNROLLED_EXECUTE( current_opcode_table, GUESTREGS );
                 }
-                GUESTREGS->instcount +=  1 + (i * 2);
-                UPDATE_SYSBLK_INSTCOUNT( 1 + (i * 2) );
+                regs->instcount +=  (i * 2);
+                UPDATE_SYSBLK_INSTCOUNT( (i * 2) );
 
                 /* Perform automatic instruction tracing if it's enabled */
                 do_automatic_tracing();
@@ -1164,38 +1293,75 @@ txf_slower_loop:
 endloop:        ; // (nop to make compiler happy)
             }
             /******************************************/
-            /* Remain in SIE (above loop) until ...   */
-            /*  - A Host Interrupt is made pending    */
-            /*  - A Sie defined irpt becomes enabled  */
-            /*  - A guest interrupt is made pending   */
+            /* Remain in SIE (above loop) as long as: */
+            /*  - No Host Interrupt is pending        */
+            /*  - No SIE defined Interrupt is pending */
+            /*    (Wait, External or I/O)             */
+            /*  - No guest interrupt is pending       */
             /******************************************/
-            while (unlikely
-            (1
-                && !SIE_I_HOST            (    regs   )
-                && !SIE_I_WAIT            ( GUESTREGS )
-                && !SIE_I_EXT             ( GUESTREGS )
-                && !SIE_I_IO              ( GUESTREGS )
-                && !SIE_INTERRUPT_PENDING ( GUESTREGS )
-            ));
+            while
+            (0
+#if defined( FEATURE_073_TRANSACT_EXEC_FACILITY )
+             /* Don't interrupt active transaction */
+             || (1
+                 && GUESTREGS->txf_tnd > 0
+                 && GUESTREGS->txf_PPA >= PPA_MUCH_HELP_THRESHOLD
+                )
+#endif
+             || (1
+                 && !SIE_I_HOST            (    regs   )
+                 && !SIE_I_WAIT            ( GUESTREGS )
+                 && !SIE_I_EXT             ( GUESTREGS )
+                 && !SIE_I_IO              ( GUESTREGS )
+                 && !SIE_INTERRUPT_PENDING ( GUESTREGS )
+                )
+            );
+
+            /* Otherwise break out of the above loop
+               and check if we should exit from SIE
+               (check is done slightly further below)
+            */
+        }
+        else
+        {
+            /* Our above instruction execution loop didn't finish due
+               to a longjmp(progjmp) having been done, bringing us to
+               here, thereby causing the instruction counter to not be
+               properly updated. Thus, we must update it here instead.
+           */
+            if (sysblk.ipled)
+            {
+                regs->instcount += MAX_CPU_LOOPS/2;
+                UPDATE_SYSBLK_INSTCOUNT( MAX_CPU_LOOPS/2 );
+
+                /* Perform automatic instruction tracing if it's enabled */
+                do_automatic_tracing();
+            }
         }
 
         PTT_SIE( "run_sie !run", icode, 0, 0 );
 
+        /* Check if we should remain in, or exit from, SIE mode */
         if (!icode || SIE_NO_INTERCEPT == icode)
         {
             /* Check PER first, higher priority */
             if (OPEN_IC_PER( GUESTREGS ))
                 ARCH_DEP( program_interrupt )( GUESTREGS, PGM_PER_EVENT );
 
+            /* Check for SIE exit conditions... */
+
                  if (SIE_I_EXT  ( GUESTREGS )) icode = SIE_INTERCEPT_EXTREQ;
             else if (SIE_I_IO   ( GUESTREGS )) icode = SIE_INTERCEPT_IOREQ;
             else if (SIE_I_STOP ( GUESTREGS )) icode = SIE_INTERCEPT_STOPREQ;
             else if (SIE_I_WAIT ( GUESTREGS )) icode = SIE_INTERCEPT_WAIT;
             else if (SIE_I_HOST (   regs    )) icode = SIE_HOST_INT_PEND;
+
+            /* Otherwise we should remain in SIE mode */
         }
 
         PTT_SIE( "run_sie !run", icode, 0, 0 );
     }
+    /* Try to remain in SIE mode if possible */
     while (!icode || icode == SIE_NO_INTERCEPT);
 
     PTT_SIE( "run_sie ret", icode, 0, 0 );
@@ -1205,7 +1371,7 @@ endloop:        ; // (nop to make compiler happy)
 #endif /* defined( _FEATURE_SIE ) */
 
 
-#if defined( FEATURE_INTERPRETIVE_EXECUTION )
+#if defined( FEATURE_SIE )
 /*-------------------------------------------------------------------*/
 /*                         sie_exit                                  */
 /*-------------------------------------------------------------------*/
@@ -1221,13 +1387,26 @@ void ARCH_DEP( sie_exit )( REGS* regs, int icode )
     BYTE txf_tnd = 0;
 #endif
 
+    //-----------------------------------------------------------
+    //              IMPORTANT SIE PROGRAMMING NOTE!
+    //-----------------------------------------------------------
+    // NOTE: Our execution architectural mode is that of the SIE
+    // HOST, not the GUEST! If you need to call a function on
+    // behalf of the GUEST (passing it 'GUESTREGS'), you must be
+    // careful to ensure the correct version of that function is
+    // called! You cannot simply call the "ARCH_DEP" version of
+    // a function as they are for the architectue of the HOST,
+    // not the GUEST! (e.g. you can't call a "z900_xxx" function
+    // and expect it to work correctly if the GUEST is actually
+    // supposed to be run in s390 mode!) YOU HAVE BEEN WARNED!
+    //-----------------------------------------------------------
+
     PTT_SIE( "sie_xit i,h,g", icode, regs->host, regs->guest );
 
+    /* PTT trace the SIE Exit... */
     if (pttclass & PTT_CL_SIE)
     {
-        // PTT trace SIE Exit...
-
-        // Include in the trace entry some instruction information...
+        // (include some instruction information in the trace entry)
 
         U32    nt1  = 0;        // First 2 or 4 bytes of instruction.
                                 // If ilc > 4 then last 2 bytes are
@@ -1276,23 +1455,28 @@ void ARCH_DEP( sie_exit )( REGS* regs, int icode )
         }
 
         PTT_SIE( "sie_xit inst", icode, nt1, nt2  );
-    }
+
+    } // end PTT trace of SIE exit
 
 #if defined( SIE_DEBUG )
     LOGMSG( "SIE: interception code %d = %s\n", icode, sie_icode_2str( icode ));
-    ARCH_DEP( display_inst )( GUESTREGS, GUESTREGS->instinvalid ? NULL : GUESTREGS->ip );
+    ARCH_DEP( display_guest_inst )( GUESTREGS, GUESTREGS->instinvalid ? NULL : GUESTREGS->ip );
 #endif
 
     SIE_PERFMON( SIE_PERF_EXIT   );
     SIE_PERFMON( SIE_PERF_PGMINT );
 
-    /* Indicate we have left SIE mode */
-    PTT_SIE( "sie_xit a=0", 0, 0, 0  );
-    OBTAIN_INTLOCK( regs );
     {
+        /* Obtain INTLOCK (unless we already own it) */
+        REGS* realregs = GUEST( sysblk.regs[ regs->cpuad ]);
+        if (!IS_INTLOCK_HELD( realregs ))
+            OBTAIN_INTLOCK( regs );
+
+        /* Indicate we have left SIE mode */
+        PTT_SIE( "sie_xit a=0", 0, 0, 0  );
         regs->sie_active = 0;
+        RELEASE_INTLOCK( regs );
     }
-    RELEASE_INTLOCK( regs );
 
     /* Zeroize interception status */
     STATEBK->f = 0;
@@ -1306,15 +1490,15 @@ void ARCH_DEP( sie_exit )( REGS* regs, int icode )
         */
         case SIE_HOST_INT_PEND:
 
-            SET_PSW_IA( regs );
-            UPD_PSW_IA( regs, regs->psw.IA -REAL_ILC( regs ));
+            MAYBE_SET_PSW_IA_FROM_IP( regs );
+            SET_PSW_IA_AND_MAYBE_IP( regs, regs->psw.IA - REAL_ILC( regs ));
             break;
 
         case SIE_HOST_PGM_INT:         /* do nothing */             break;
         case SIE_INTERCEPT_INST:       STATEBK->c = SIE_C_INST;     break;
         case SIE_INTERCEPT_PER:        STATEBK->f |= SIE_F_IF;
                                        /* fall through */
-        case SIE_INTERCEPT_INSTCOMP:   STATEBK->c = SIE_C_PGMINST;  break;
+        case SIE_INTERCEPT_INSTCOMP:   STATEBK->c = SIE_C_BOTH;     break;
         case SIE_INTERCEPT_WAIT:       STATEBK->c = SIE_C_WAIT;     break;
         case SIE_INTERCEPT_STOPREQ:    STATEBK->c = SIE_C_STOPREQ;  break;
         case SIE_INTERCEPT_IOREQ:      STATEBK->c = SIE_C_IOREQ;    break;
@@ -1333,8 +1517,8 @@ void ARCH_DEP( sie_exit )( REGS* regs, int icode )
 #if defined( FEATURE_073_TRANSACT_EXEC_FACILITY )
 
     /* US 8,880,959 B2, Greiner et al, 17.20:
-    
-       "Interception TDB: The 256-byte host real location 
+
+       "Interception TDB: The 256-byte host real location
         specified by locations 488-495 (x'1E8') of the state
         description."
     */
@@ -1369,7 +1553,7 @@ void ARCH_DEP( sie_exit )( REGS* regs, int icode )
     }
     else if (GUESTREGS->txf_UPGM_abort)
     {
-        PTT_TXF( "TXF upgm", GUESTREGS->txf_UPGM_abort, GUESTREGS->txf_caborts, 0 );
+        PTT_TXF( "TXF upgm", GUESTREGS->txf_UPGM_abort, GUESTREGS->txf_aborts, 0 );
         itdb = &GUESTREGS->txf_tdb;
     }
 
@@ -1420,10 +1604,10 @@ void ARCH_DEP( sie_exit )( REGS* regs, int icode )
 #endif /* defined( FEATURE_073_TRANSACT_EXEC_FACILITY ) */
 
     /* Save CPU timer  */
-    STORE_DW( STATEBK->cputimer, cpu_timer( GUESTREGS ));
+    STORE_DW( STATEBK->cputimer, get_cpu_timer( GUESTREGS ));
 
     /* Save clock comparator */
-    STORE_DW( STATEBK->clockcomp, etod2tod( GUESTREGS->clkc ));
+    STORE_DW( STATEBK->clockcomp, ETOD_high64_to_TOD_high56( GUESTREGS->clkc ));
 
 #if defined( _FEATURE_INTERVAL_TIMER ) && !defined( FEATURE_001_ZARCH_INSTALLED_FACILITY )
     /* If this is a S/370 guest, and the interval timer is enabled
@@ -1484,7 +1668,7 @@ void ARCH_DEP( sie_exit )( REGS* regs, int icode )
     /* If format-2 interception, we have more work to do */
     if (0
         || STATEBK->c == SIE_C_INST
-        || STATEBK->c == SIE_C_PGMINST
+        || STATEBK->c == SIE_C_BOTH
         || STATEBK->c == SIE_C_OPEREXC
         || STATEBK->c == SIE_C_IOINST
     )
@@ -1570,11 +1754,11 @@ void ARCH_DEP( sie_exit )( REGS* regs, int icode )
     PTT_SIE( "sie_xit ret", 0, 0, 0  );
 
 } /* end function sie_exit */
-#endif /* defined( FEATURE_INTERPRETIVE_EXECUTION ) */
+#endif /* defined( FEATURE_SIE ) */
 
 
 #if defined( _FEATURE_SIE )
-#if defined( FEATURE_INTERPRETIVE_EXECUTION )
+#if defined( FEATURE_SIE )
 #if defined( FEATURE_REGION_RELOCATE )
 /*-------------------------------------------------------------------*/
 /* B23D STZP  - Store Zone Parameter                             [S] */
@@ -1588,6 +1772,7 @@ int     zone;                           /* Zone number               */
 
     S(inst, regs, b2, effective_addr2);
 
+    TRAN_INSTR_CHECK( regs );
     PRIV_CHECK(regs);
 
     SIE_INTERCEPT(regs);
@@ -1632,6 +1817,7 @@ RADR    mso,                            /* Main Storage Origin       */
 
     S(inst, regs, b2, effective_addr2);
 
+    TRAN_INSTR_CHECK( regs );
     PRIV_CHECK(regs);
 
     SIE_INTERCEPT(regs);
@@ -1690,6 +1876,7 @@ int     zone;                           /* Zone number               */
 
     S(inst, regs, b2, effective_addr2);
 
+    TRAN_INSTR_CHECK( regs );
     PRIV_CHECK(regs);
 
     SIE_INTERCEPT(regs);
@@ -1801,7 +1988,71 @@ U32    newgr1;
     release_lock (&dev->lock);
 }
 #endif /* defined( FEATURE_IO_ASSIST ) */
-#endif /* defined( FEATURE_INTERPRETIVE_EXECUTION ) */
+
+
+#if defined( FEATURE_074_STORE_HYPER_INFO_FACILITY )
+/*-------------------------------------------------------------------*/
+/* B256 STHYI - CP Store Hypervisor Information                [RRE] */
+/*-------------------------------------------------------------------*/
+/* This instruction is part of z/VM's "CMMA" (Collaborative Memory   */
+/* Management) facility/feature. It is NOT a valid z/Architecture    */
+/* instruction and will always cause a program check when attempted  */
+/* to be executed natively. It is a z/VM-ONLY instruction that can   */
+/* only be used (executed) by guests running under z/VM via z/VM     */
+/* instruction interception and simulation. An operation execption   */
+/* program interrupt will always occur if this instruction is not    */
+/* intercepted by z/VM.                                              */ 
+/* Ref: page 895 of SC24-6272-03 "zVM 7.1 CP Programming Services"   */
+/*-------------------------------------------------------------------*/
+DEF_INST( store_hypervisor_information )
+{
+    int r1, r2;
+    RRE( inst, regs, r1, r2 );
+    SIE_INTERCEPT( regs );
+    ARCH_DEP( program_interrupt )( regs, PGM_OPERATION_EXCEPTION );
+}
+#endif
+
+
+#if defined( FEATURE_ZVM_ESSA )
+/*-------------------------------------------------------------------*/
+/* B9AB ESSA  - CP Extract and Set Storage Attributes        [RRF-c] */
+/*-------------------------------------------------------------------*/
+/* This instruction is part of z/VM's "CMMA" (Collaborative Memory   */
+/* Management) facility/feature. It is NOT a valid z/Architecture    */
+/* instruction and will always cause a program check when attempted  */
+/* to be executed natively. It is a z/VM-ONLY instruction that can   */
+/* only be used (executed) by guests running under z/VM via z/VM     */
+/* instruction interception and simulation. An operation execption   */
+/* program interrupt will always occur if this instruction is not    */
+/* intercepted by z/VM.                                              */ 
+/* Ref: page 870 of SC24-6272-03 "zVM 7.1 CP Programming Services"   */
+/*-------------------------------------------------------------------*/
+DEF_INST( extract_and_set_storage_attributes )
+{
+    int r1, r2, m3;
+    RRF_M( inst, regs, r1, r2, m3 );
+    SIE_INTERCEPT( regs );
+    ARCH_DEP( program_interrupt )( regs, PGM_OPERATION_EXCEPTION );
+}
+#endif
+#endif /* defined( FEATURE_SIE ) */
+
+
+extern inline bool ARCH_DEP( LockUnlockSCALock )( REGS* regs, bool lock, bool trylock );
+#if defined( OPTION_USE_SKAIP_AS_LOCK )
+extern inline void ARCH_DEP( LockUnlockSKALock )( REGS* regs, bool lock );
+#endif
+extern inline void ARCH_DEP( LockUnlockRCPLock )( REGS* regs, RCPTE* rcpte, bool lock );
+extern inline void ARCH_DEP( LockUnlockKeyLock )( REGS* regs, PGSTE* pgste, RCPTE* rcpte, bool lock );
+
+
+extern inline PGSTE* ARCH_DEP( GetPGSTE           )( REGS* regs, U64 gabspage );
+extern inline PGSTE* ARCH_DEP( GetPGSTEFromPTE    )( REGS* regs, U64 pte );
+extern inline RCPTE* ARCH_DEP( GetOldRCP          )( REGS* regs, U64 gabspage );
+extern inline void   ARCH_DEP( GetPGSTE_and_RCPTE )( REGS* regs, U64 gabspage, PGSTE** ppPGSTE, RCPTE** ppRCPTE );
+
+
 #endif /* defined( _FEATURE_SIE ) */
 
 /*-------------------------------------------------------------------*/
@@ -1825,7 +2076,12 @@ U32    newgr1;
 /*          (delineates ARCH_DEP from non-arch_dep)                  */
 /*-------------------------------------------------------------------*/
 
+#if defined( _FEATURE_SIE )
+
 #if defined( SIE_DEBUG )
+/*-------------------------------------------------------------------*/
+/*     Return a text string describing an SIE intercept code         */
+/*-------------------------------------------------------------------*/
 static const char* sie_icode_2str( int icode )
 {
     static const char* icode_names[] =
@@ -1865,17 +2121,13 @@ static const char* sie_icode_2str( int icode )
     };
 #endif
 
-    const char* name;
+    const char* name;       // (string pointer to be returned)
 
-    if (icode < 0)
+    if (icode < 0)          // Intercept code?
     {
-        // Intercept code
-
         if (icode >= SIE_MAX_NEG)
-        {
             name = icode_names[ -icode - 1 ];
-        }
-        else // icode < SIE_MAX_NEG
+        else
         {
 #if defined( SIE_DEBUG_PERFMON )
             if (1
@@ -1888,20 +2140,20 @@ static const char* sie_icode_2str( int icode )
                 name = "???";
         }
     }
-    else // icode >= 0
+    else // (icode >= 0)    // Program interrupt code
     {
-        // Program interrupt code
-
 #if defined( SIE_DEBUG_PERFMON )
         if (icode == 0)
             name = "SIE performance monitor";
         else
 #endif
-        name = PIC2Name( icode );
+            name = PIC2Name( icode );
     }
 
     return name;
 }
 #endif /* defined( SIE_DEBUG ) */
+
+#endif /* defined( _FEATURE_SIE ) */
 
 #endif /*!defined(_GEN_ARCH)*/

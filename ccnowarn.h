@@ -65,22 +65,22 @@
   /*                       GCC or CLANG                              */
   /*-----------------------------------------------------------------*/
 
-  #if defined(HAVE_GCC_DIAG_PRAGMA)
+  #if defined( HAVE_GCC_DIAG_PRAGMA )
 
     #define DISABLE_GCC_WARNING( _str )   QPRAGMA( GCC diagnostic ignored _str )
     #define ENABLE_GCC_WARNING(  _str )   QPRAGMA( GCC diagnostic warning _str )
 
-    #if defined(HAVE_GCC_SET_UNUSED_WARNING)
+    #if defined( HAVE_GCC_SET_UNUSED_WARNING )
       #define DISABLE_GCC_UNUSED_SET_WARNING            \
               DISABLE_GCC_WARNING("-Wunused-but-set-variable")
     #endif
 
-    #if defined(HAVE_GCC_UNUSED_FUNC_WARNING)
+    #if defined( HAVE_GCC_UNUSED_FUNC_WARNING )
       #define DISABLE_GCC_UNUSED_FUNCTION_WARNING       \
               DISABLE_GCC_WARNING("-Wunused-function")
     #endif
 
-    #if defined(HAVE_GCC_DIAG_PUSHPOP)
+    #if defined( HAVE_GCC_DIAG_PUSHPOP )
       #define PUSH_GCC_WARNINGS()         QPRAGMA( GCC diagnostic push )
       #define POP_GCC_WARNINGS()          QPRAGMA( GCC diagnostic pop  )
     #endif
@@ -92,11 +92,11 @@
     #define ENABLE_GCC_WARNING(  _str )              /* (do nothing) */
   #endif
 
-  #if !defined(DISABLE_GCC_UNUSED_SET_WARNING)
+  #ifndef   DISABLE_GCC_UNUSED_SET_WARNING
     #define DISABLE_GCC_UNUSED_SET_WARNING           /* (do nothing) */
   #endif
 
-  #if !defined(DISABLE_GCC_UNUSED_FUNCTION_WARNING)
+  #ifndef   DISABLE_GCC_UNUSED_FUNCTION_WARNING
     #define DISABLE_GCC_UNUSED_FUNCTION_WARNING      /* (do nothing) */
   #endif
 
@@ -114,8 +114,22 @@
   DISABLE_GCC_WARNING( "-Wunused-local-typedefs" )
   #endif
 
+  #if defined( __clang__ ) && __clang_major__ >= 5 /* clang >= 5.0.0 */
+  DISABLE_GCC_WARNING( "-Wunused-local-typedef" )
+  #endif
+
   // "converts between pointers to integer types with different sign"
   DISABLE_GCC_WARNING( "-Wpointer-sign" )
+
+  #if defined( GCC_VERSION ) && GCC_VERSION >= 70100 /* gcc >= 7.1.0 */
+  // "output may be truncated writing up to x bytes into a region of size y"
+  // (this warning is usually issued for most all uses of our MSGBUF macro)
+  DISABLE_GCC_WARNING( "-Wformat-truncation" )
+  #endif
+  #if defined( GCC_VERSION ) && GCC_VERSION >= 80000 /* gcc >= 8.0.0 */
+  /* Too many false positives on this one */
+  DISABLE_GCC_WARNING( "-Wstringop-truncation" )
+  #endif
 
   /*-----------------------------------------------------------------*/
   /*            define support for other compilers here              */

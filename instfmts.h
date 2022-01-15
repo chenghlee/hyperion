@@ -176,13 +176,13 @@
     offset = 2LL * (S32) ri2;                                       \
                                                                     \
     (_addr2) = likely( !(_regs)->execflag )                         \
-        ? PSW_IA( (_regs), offset )                                 \
+        ? PSW_IA_FROM_IP( (_regs), offset )                         \
         : ((_regs)->ET + offset) & ADDRESS_MAXWRAP( (_regs) );      \
                                                                     \
     offset = 2LL * (S32) ri3;                                       \
                                                                     \
     (_addr3) = likely( !(_regs)->execflag )                         \
-        ? PSW_IA((_regs), offset)                                   \
+        ? PSW_IA_FROM_IP((_regs), offset)                           \
         : ((_regs)->ET + offset) & ADDRESS_MAXWRAP( (_regs) );      \
                                                                     \
     INST_UPDATE_PSW( (_regs), (_len), (_ilc) );                     \
@@ -1266,7 +1266,7 @@
 /*-------------------------------------------------------------------*/
 /*  RIL - register and longer immediate with extended 4 bit op code  */
 /*-------------------------------------------------------------------*/
-// This is z/Arch RIL-a format.
+// This is z/Arch RIL-a format or RIL-b/c format for branches.
 
 #define RIL(   _inst, _regs, _r1, _op, _i2 )  RIL_DECODER( _inst, _regs, _r1, _op, _i2, 6, 6 )
 #define RIL_B( _inst, _regs, _r1, _op, _i2 )  RIL_DECODER( _inst, _regs, _r1, _op, _i2, 0, 6 )
@@ -1306,7 +1306,7 @@
     S64 offset = 2LL * (S32) (fetch_fw( &(_inst)[2] ));             \
                                                                     \
     (_ri2) = likely( !(_regs)->execflag )                           \
-        ? PSW_IA( (_regs), offset )                                 \
+        ? PSW_IA_FROM_IP( (_regs), offset )                         \
         : ((_regs)->ET + offset) & ADDRESS_MAXWRAP(( _regs ));      \
                                                                     \
     (_r1) = ((_inst)[1] >> 4) & 0xf;                                \
@@ -1546,7 +1546,7 @@
     offset = 2LL * (S32) ri2;                                       \
                                                                     \
     (_addr2) = likely( !(_regs)->execflag )                         \
-            ? PSW_IA( (_regs), offset )                             \
+            ? PSW_IA_FROM_IP( (_regs), offset )                     \
             : ((_regs)->ET + offset) & ADDRESS_MAXWRAP(( _regs ));  \
                                                                     \
     INST_UPDATE_PSW( (_regs), (_len), (_ilc) );                     \

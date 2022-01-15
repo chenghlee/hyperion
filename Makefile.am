@@ -14,10 +14,12 @@ lns            = @LN_S@
 ldadd          = @LIBS@
 
 #------------------------------------------------------------------------------
+# Note! Backslash line continuation is disallowed by newer versions of aclocal
+#------------------------------------------------------------------------------
 
-ACLOCAL_AMFLAGS =   \
-  -I autoconf       \
-  -I m4
+ACLOCAL_AMFLAGS = -I autoconf -I m4
+
+#------------------------------------------------------------------------------
 
 AM_CPPFLAGS =       \
   -I $(top_srcdir)  \
@@ -26,7 +28,7 @@ AM_CPPFLAGS =       \
 AM_CPPFLAGS += $(extpkg_incdirs)
 
 #------------------------------------------------------------------------------
-# NOte! Due to inter-module dependencies the sequence
+# Note! Due to inter-module dependencies the sequence
 #       (ordering) of the SUBDIRS list is important!
 #------------------------------------------------------------------------------
 
@@ -144,7 +146,6 @@ dyndev_SRC =  \
 
 XSTATIC =
 DYNSRC  =
-LTDL    =  ltdl.c
 
 DYNMOD_LD_FLAGS =   \
   -module           \
@@ -397,12 +398,13 @@ libhercu_la_SOURCES = \
   hthreads.c          \
   logger.c            \
   logmsg.c            \
+  machdep.c           \
   memrchr.c           \
   parser.c            \
   pttrace.c           \
   version.c           \
-  $(FTHREADS)         \
-  $(LTDL)
+  $(FTHREADS)
+
 libhercu_la_LDFLAGS = $(LIB_LD_FLAGS)
 libhercu_la_LIBADD =  \
   $(extpkg_ldadd)     \
@@ -467,6 +469,7 @@ libherc_la_SOURCES = \
   general2.c         \
   general3.c         \
   hao.c              \
+  hbyteswp.c         \
   hconsole.c         \
   hdiagf18.c         \
   history.c          \
@@ -481,12 +484,14 @@ libherc_la_SOURCES = \
   httpserv.c         \
   ieee.c             \
   impl.c             \
+  inline.c           \
   io.c               \
   ipl.c              \
   loadmem.c          \
   loadparm.c         \
   losc.c             \
   machchk.c          \
+  machdep.c          \
   opcode.c           \
   panel.c            \
   pfpo.c             \
@@ -497,6 +502,7 @@ libherc_la_SOURCES = \
   script.c           \
   service.c          \
   sie.c              \
+  skey.c             \
   sr.c               \
   stack.c            \
   strsignal.c        \
@@ -507,12 +513,12 @@ libherc_la_SOURCES = \
   vector.c           \
   vm.c               \
   vmd250.c           \
+  vstore.c           \
   x75.c              \
   xstore.c           \
   $(DYNSRC)
 
 EXTRA_libherc_la_SOURCES = \
-  ltdl.c             \
   memrchr.c          \
   $(dynamic_SRC)     \
   $(dyndev_SRC)      \
@@ -775,6 +781,9 @@ EXTRA_DIST =                  \
   Hercules_VS2019.sln              \
   Hercules_VS2019.vcxproj          \
   Hercules_VS2019.vcxproj.filters  \
+  Hercules_VS2022.sln              \
+  Hercules_VS2022.vcxproj          \
+  Hercules_VS2022.vcxproj.filters  \
   hercver.rc2                 \
   INSTALL                     \
   license_dyn76.txt           \
@@ -842,6 +851,7 @@ EXTRA_DIST =                  \
   readme/README.RXVT4APL.md       \
   readme/README.S37X.md           \
   readme/README.SETUID.md         \
+  readme/README.SNA.md            \
   readme/README.SUN.md            \
   readme/README.TAPE.md           \
   readme/README.TCPIP.md          \
@@ -877,7 +887,6 @@ noinst_HEADERS =          \
   cckddasd.h              \
   ccnowarn.h              \
   ccwarn.h                \
-  chain.h                 \
   chsc.h                  \
   clock.h                 \
   cmdtab.h                \
@@ -956,7 +965,6 @@ noinst_HEADERS =          \
   instfmts.h              \
   linklist.h              \
   logger.h                \
-  ltdl.h                  \
   machdep.h               \
   memrchr.h               \
   mpc.h                   \
@@ -973,6 +981,8 @@ noinst_HEADERS =          \
   scsiutil.h              \
   service.h               \
   shared.h                \
+  sie.h                   \
+  skey.h                  \
   sllib.h                 \
   sockdev.h               \
   sr.h                    \
@@ -1105,3 +1115,106 @@ uninstall-hook:
 
 check:
 	$(top_srcdir)/tests/runtest  $(top_srcdir)/tests
+
+.PHONY: diagnostic diagnostic-sysinfo diagnostic-tools diagnostic-dirs diagnostic-vars
+
+diagnostic: diagnostic-sysinfo diagnostic-tools diagnostic-dirs diagnostic-vars
+
+diagnostic-sysinfo:
+	@echo 'System information'
+	@echo '  /etc/os-release     ' `cat /etc/os-release 2>&1`
+	@echo '  uname -a            ' `uname -a`
+	@echo '  uname -m            ' `uname -m`
+	@echo '  uname -p            ' `uname -p`
+	@echo '  uname -s            ' `uname -s`
+	@echo ' '
+
+diagnostic-tools:
+	@echo 'Build tools versions'
+	@echo '  autoconf            ' `autoconf --version 2>&1 | head -n 1`
+	@echo '  automake            ' `automake --version 2>&1 | head -n 1`
+	@echo '  m4                  ' `m4 --version 2>&1 | head -n 1 | sed "s/.*illegal option.*/BSD version of m4"/`
+	@echo '  make                ' `make --version 2>&1 | head -n 1 | sed "s/^usage: make.*/BSD version of make/"`
+	@echo '  compiler            ' `$(CC) --version 2>&1 | head -n 1`
+	@echo '  linker              ' `$(LD) --version 2>&1 | head -n 1`
+	@echo ' '
+
+diagnostic-dirs:
+	@echo 'Build directories'
+	@echo '  source             ' `(cd $(top_srcdir) && pwd || echo $(top_srcdir))`
+	@echo '  build              ' `pwd`
+	@echo 'Install directories'
+	@echo '  prefix              $(prefix)'
+	@echo '    exec_prefix       $(exec_prefix)'
+	@echo '      bindir          $(bindir)'
+	@echo '      libdir          $(libdir)'
+	@echo '    includedir        $(includedir)'
+	@echo '    datarootdir       $(datarootdir)'
+	@echo '      datadir         $(datadir)'
+	@echo '      mandir          $(mandir)'
+	@echo '      infodir         $(infodir)'
+	@echo '      docdir          $(docdir)'
+	@echo ' '
+
+diagnostic-vars:
+	@echo 'Values from automake'
+if BUILD_HERCIFC
+	@echo '  BUILD_HERCIFC        Defined'
+else
+	@echo '  BUILD_HERCIFC        Undefined'
+endif
+if BUILD_FTHREADS
+	@echo '  BUILD_FTHREADS       Defined'
+else
+	@echo '  BUILD_FTHREADS       Undefined'
+endif
+# if BUILD_SHARED
+# 	@echo '  BUILD_SHARED         Defined'
+# else
+# 	@echo '  BUILD_SHARED         Undefined'
+# endif
+# if OPTION_DYNAMIC_LOAD
+# 	@echo '  OPTION_DYNAMIC_LOAD  Defined'
+# else
+# 	@echo '  OPTION_DYNAMIC_LOAD  Undefined'
+# endif
+	@echo ' '
+	@echo 'Values from make'
+	@echo '  $$CC                 $(CC)'
+	@echo '  $$CFLAGS             $(CFLAGS)'
+	@echo '  $$CXX                $(CXX)'
+	@echo '  $$CXXFLAG            $(CXXFLAGS)'
+	@echo '  $$LDFLAGS            $(LDFLAGS)'
+	@echo '  $$CPPFLAGS           $(CPPFLAGS)'
+	@echo ' '
+	@echo 'Values from configure'
+	@echo '  $$LIBS               @LIBS@'
+	@echo '  $$S3FH_INC           @S3FH_INC@'
+	@echo '  $$S3FH_LIB           @S3FH_LIB@     (future use)'
+	@echo '  $$HQA_INC            @HQA_INC@'
+	@echo ' '
+	@echo 'Values generated by Makefile.am'
+	@echo '  $$AM_CPPFLAGS         $(AM_CPPFLAGS)'
+	@echo '  $$DYNAMIC_VERISON     $(DYNAMIC_VERSION)'
+	@echo '  $$DYNMOD_LD_ADD       $(DYNMOD_LD_ADD)'
+	@echo '  $$DYNMOD_LD_FLAGS     $(DYNMOD_LD_FLAGS)'
+	@echo '  $$FTHREADS            $(FTHREADS)'
+	@echo '  $$HDEPS               $(HDEPS)'
+	@echo '  $$HDLFLAGS            $(HDLFLAGS)'
+	@echo '  $$HERCIFC             $(HERCIFC)'
+	@echo '  $$HERCLIBS            $(HERCLIBS)'
+	@echo '  $$HERCLIBS2           $(HERCLIBS2)'
+	@echo '  $$HERCLIN             $(HERCLIN)'
+	@echo '  $$LDADD               $(LDADD)'
+	@echo '  $$LIB_LD_FLAGS        $(LIB_LD_FLAGS)'
+	@echo '  $$LTDL                $(LTDL)'
+	@echo '  $$tools_ADDLIBS       $(tools_ADDLIBS)'
+	@echo '  $$disktools_ADDLIBS   $(disktools_ADDLIBS)'
+	@echo '  $$tapetools_ADDLIBS   $(tapetools_ADDLIBS)'
+	@echo '  $$tools_LD_FLAGS      $(tools_LD_FLAGS)'
+	@echo '  $$XSTATIC             $(XSTATIC)'
+
+
+
+
+

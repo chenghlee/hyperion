@@ -1,4 +1,5 @@
 /* HEXTERNS.H   (C) Copyright Roger Bowler, 1999-2012                */
+/*              (C) and others 2013-2021                             */
 /*                    Hercules function prototypes...                */
 /*                                                                   */
 /*   Released under "The Q Public License Version 1"                 */
@@ -130,12 +131,10 @@ HCEM_DLL_IMPORT int aia_cmd       ( int argc, char* argv[], char* cmdline );
 
 /* CPU ID related functions in module hscemode.c */
 extern U64  createCpuId      ( const U64 model, const U64 version, const U64 serial, const U64 MCEL );
-extern BYTE setAllCpuIds     ( const S32 model, const S16 version, const S32 serial, const S32 MCEL );
-extern BYTE setAllCpuIds_lock( const S32 model, const S16 version, const S32 serial, const S32 MCEL );
-extern void setCpuIdregs     ( REGS* regs,
-                               S32 arg_model, S16 arg_version, S32 arg_serial, S32 arg_MCEL );
-extern void setCpuId         ( const unsigned int cpu,
-                               S32 arg_model, S16 arg_version, S32 arg_serial, S32 arg_MCEL );
+extern BYTE setAllCpuIds     ( const S32 model, const S16 version, const S32 serial, const S32 MCEL, bool force );
+extern BYTE setAllCpuIds_lock( const S32 model, const S16 version, const S32 serial, const S32 MCEL, bool force );
+extern void setCpuIdregs     ( REGS* regs, S32 arg_model, S16 arg_version, S32 arg_serial, S32 arg_MCEL, bool force );
+extern void setCpuId         ( const unsigned int cpu, S32 arg_model, S16 arg_version, S32 arg_serial, S32 arg_MCEL, bool force );
 extern BYTE resetAllCpuIds();
 extern void setOperationMode();
 extern void enable_lparmode( const bool enable );
@@ -215,7 +214,6 @@ LOADPARM_DLL_IMPORT char *str_manufacturer();
 int set_plant(char *name);
 LOADPARM_DLL_IMPORT char *str_plant();
 int set_model(char *m1, char* m2, char* m3, char* m4);
-LOADPARM_DLL_IMPORT char **str_model();
 char *str_modelhard();
 char *str_modelcapa();
 char *str_modelperm();
@@ -255,6 +253,9 @@ IMPL_DLL_IMPORT COMMANDHANDLER getCommandHandler(void);
 
 /* Functions in module timer.c */
 void* timer_thread( void* argp );
+#if defined( _FEATURE_073_TRANSACT_EXEC_FACILITY )
+void* rubato_thread( void* argp );
+#endif
 
 /* Functions in module clock.c */
 void update_TOD_clock (void);
@@ -372,6 +373,7 @@ const char* FormatORB( ORB* orb, char* buf, size_t bufsz );
 const char* FormatSCL( ESW* esw, char* buf, size_t bufsz );
 const char* FormatERW( ESW* esw, char* buf, size_t bufsz );
 const char* FormatESW( ESW* esw, char* buf, size_t bufsz );
+HMISC_DLL_IMPORT int parse_range (char *operand, U64 maxadr, U64 *sadrp, U64 *eadrp, BYTE *newval);
 HMISC_DLL_IMPORT REGS* copy_regs( REGS* regs );
 HMISC_DLL_IMPORT const char* FormatSID( BYTE* iobuf, int num, char* buf, size_t bufsz );
 HMISC_DLL_IMPORT const char* FormatRCD( BYTE* iobuf, int num, char* buf, size_t bufsz );
@@ -396,9 +398,9 @@ int exec_cmd( int argc, char* argv[], char* cmdline );
 int suspend_cmd(int argc, char *argv[],char *cmdline);
 int resume_cmd(int argc, char *argv[],char *cmdline);
 
-/* Functions in ecpsvm.c that are not *direct* instructions */
-/* but support functions either used by other instruction   */
-/* functions or from somewhere else                         */
+/* Functions in module ecpsvm.c that are not *direct* instructions   */
+/* but rather are instead support functions used by either other     */
+/* instruction functions or elsewhere.                               */
 #if defined( _FEATURE_ECPSVM )
 int  ecpsvm_dosvc(REGS *regs, int svccode);
 int  ecpsvm_dossm(REGS *regs,int b,VADR ea);
@@ -420,12 +422,12 @@ HSYS_DLL_IMPORT int  (*debug_tt32_stats)   (int);
 HSYS_DLL_IMPORT bool (*debug_tt32_tracing) (int);
 #endif // defined(OPTION_W32_CTCI)
 
-/* Function in crypto.c */
+/* Functions in module crypto.c */
 #if defined( _FEATURE_076_MSA_EXTENSION_FACILITY_3 )
 void renew_wrapping_keys(void);
 #endif
 
-/* Function in getopt.c */
+/* Functions in module getopt.c */
 GOP_DLL_IMPORT int   opterr;    /* if error message should be printed */
 GOP_DLL_IMPORT int   optind;    /* index into parent argv vector */
 GOP_DLL_IMPORT int   optopt;    /* character checked for validity */
@@ -434,7 +436,7 @@ GOP_DLL_IMPORT char* optarg;    /* argument associated with option */
 GOP_DLL_IMPORT int   getopt      ( int nargc, char * const *nargv, const char *options );
 GOP_DLL_IMPORT int   getopt_long ( int nargc, char * const *nargv, const char *options, const struct option *long_options, int *idx );
 
-/* Function in channel.c */
+/* Functions in module channel.c */
                 void shared_iowait (DEVBLK *dev);
 CHAN_DLL_IMPORT int  device_attention (DEVBLK *dev, BYTE unitstat);
 CHAN_DLL_IMPORT int  ARCH_DEP(device_attention) (DEVBLK *dev, BYTE unitstat);
@@ -452,5 +454,99 @@ CHAN_DLL_IMPORT void Update_IC_IOPENDING_QLocked  ();
 #define DEQUEUE_IO_INTERRUPT_QLOCKED( io )        (int)Dequeue_IO_Interrupt_QLocked( (IOINT*)(io), PTT_LOC )
 #define UPDATE_IC_IOPENDING()                     (void)Update_IC_IOPENDING()
 #define UPDATE_IC_IOPENDING_QLOCKED()             (void)Update_IC_IOPENDING_QLocked()
+
+/* Functions in module dat.c */
+
+void s370_invalidate_aia( REGS* regs );
+void s390_invalidate_aia( REGS* regs );
+void z900_invalidate_aia( REGS* regs );
+
+void s370_set_ic_mask( REGS* regs );
+void s390_set_ic_mask( REGS* regs );
+void z900_set_ic_mask( REGS* regs );
+
+void s370_set_aea_mode( REGS* regs );
+void s390_set_aea_mode( REGS* regs );
+void z900_set_aea_mode( REGS* regs );
+
+void s370_invalidate_guest_aia( REGS* regs );
+void s390_invalidate_guest_aia( REGS* regs );
+void z900_invalidate_guest_aia( REGS* regs );
+
+void s370_set_guest_ic_mask( REGS* regs );
+void s390_set_guest_ic_mask( REGS* regs );
+void z900_set_guest_ic_mask( REGS* regs );
+
+void s370_set_guest_aea_mode( REGS* regs );
+void s390_set_guest_aea_mode( REGS* regs );
+void z900_set_guest_aea_mode( REGS* regs );
+
+void s370_set_aea_common( REGS* regs );
+void s390_set_aea_common( REGS* regs );
+void z900_set_aea_common( REGS* regs );
+
+void s370_set_guest_aea_common( REGS* regs );
+void s390_set_guest_aea_common( REGS* regs );
+void z900_set_guest_aea_common( REGS* regs );
+
+void s370_do_purge_tlb( REGS* regs );
+void s390_do_purge_tlb( REGS* regs );
+void z900_do_purge_tlb( REGS* regs );
+
+void s370_purge_tlb( REGS* regs );
+void s390_purge_tlb( REGS* regs );
+void z900_purge_tlb( REGS* regs );
+
+void s390_do_purge_alb( REGS* regs );
+void z900_do_purge_alb( REGS* regs );
+
+void s390_purge_alb( REGS* regs );
+void z900_purge_alb( REGS* regs );
+
+void s370_do_invalidate_tlb( REGS* regs, BYTE mask );
+void s390_do_invalidate_tlb( REGS* regs, BYTE mask );
+void z900_do_invalidate_tlb( REGS* regs, BYTE mask );
+
+bool s370_is_tlbe_match( REGS* regs, REGS* host_regs, U64 pfra, int i );
+bool s390_is_tlbe_match( REGS* regs, REGS* host_regs, U64 pfra, int i );
+bool z900_is_tlbe_match( REGS* regs, REGS* host_regs, U64 pfra, int i );
+
+void s370_do_purge_tlbe( REGS* regs, REGS* host_regs, U64 pfra );
+void s390_do_purge_tlbe( REGS* regs, REGS* host_regs, U64 pfra );
+void z900_do_purge_tlbe( REGS* regs, REGS* host_regs, U64 pfra );
+
+void s370_purge_tlbe( REGS* regs, U64 pfra );
+void s390_purge_tlbe( REGS* regs, U64 pfra );
+void z900_purge_tlbe( REGS* regs, U64 pfra );
+
+void s370_do_invalidate_tlbe( REGS* regs, BYTE* main );
+void s390_do_invalidate_tlbe( REGS* regs, BYTE* main );
+void z900_do_invalidate_tlbe( REGS* regs, BYTE* main );
+
+void s370_invalidate_tlbe( REGS* regs, BYTE* main );
+void s390_invalidate_tlbe( REGS* regs, BYTE* main );
+void z900_invalidate_tlbe( REGS* regs, BYTE* main );
+
+RADR apply_host_prefixing( REGS* regs, RADR raddr );
+
+CPU_DLL_IMPORT void (ATTR_REGPARM(2) s370_program_interrupt)( REGS* regs, int code );
+CPU_DLL_IMPORT void (ATTR_REGPARM(2) s390_program_interrupt)( REGS* regs, int code );
+CPU_DLL_IMPORT void (ATTR_REGPARM(2) z900_program_interrupt)( REGS* regs, int code );
+
+void s370_display_inst( REGS* iregs, BYTE* inst );
+void s390_display_inst( REGS* iregs, BYTE* inst );
+void z900_display_inst( REGS* iregs, BYTE* inst );
+
+void s370_display_guest_inst( REGS* iregs, BYTE* inst );
+void s390_display_guest_inst( REGS* iregs, BYTE* inst );
+void z900_display_guest_inst( REGS* iregs, BYTE* inst );
+
+void s370_update_psw_ia( REGS* regs, int n );
+void s390_update_psw_ia( REGS* regs, int n );
+void z900_update_psw_ia( REGS* regs, int n );
+
+void s370_update_guest_psw_ia( REGS* regs, int n );
+void s390_update_guest_psw_ia( REGS* regs, int n );
+void z900_update_guest_psw_ia( REGS* regs, int n );
 
 #endif // _HEXTERNS_H

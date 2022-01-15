@@ -698,7 +698,11 @@ static int     tcpnje_initiate_userdial(struct TCPNJE *tn)
 /*-------------------------------------------------------------------*/
 static void tcpnje_wakeup(struct TCPNJE *tn, BYTE code)
 {
-    write_pipe(tn->pipe[1], &code, 1);
+    if (write_pipe( tn->pipe[1], &code, 1 ) < 0)
+    {
+        // "Error in function %s: %s"
+        WRMSG( HHC04000, "W", "write_pipe", strerror( errno ));
+    }
 }
 /*-------------------------------------------------------------------*/
 /* TCPNJE close connection to remote link partner                    */
@@ -1420,7 +1424,7 @@ static void *tcpnje_thread(void *vtn)
     int maxfd;                  /* highest FD for select             */
     int tn_shutdown;            /* Thread shutdown internal flag     */
     int init_signaled;          /* Thread initialisation signaled    */
-    int TTBlength;              /* Length of TTB in host byte order  */
+    int TTBlength = 0;          /* Length of TTB in host byte order  */
     int eintrcount = 0;         /* Number of times EINTR occured     */
     int errorcount067 = 0;      /* Number of times HHCTN067E issued  */
     int errorcount100 = 0;      /* Number of times HHCTN100E issued  */
@@ -2814,7 +2818,11 @@ static int tcpnje_init_handler(DEVBLK *dev, int argc, char *argv[])
         initialize_condition(&tn->ipc_halt);
 
         /* Allocate I/O -> Thread signaling pipe */
-        create_pipe(tn->pipe);
+        if (create_pipe( tn->pipe ) < 0)
+        {
+            // "Error in function %s: %s"
+            WRMSG( HHC04000, "W", "create_pipe", strerror( errno ));
+        }
 
 #if !defined(HYPERION_DEVHND_FORMAT)
         /* Point to the halt routine for HDV/HIO/HSCH handling */
@@ -2838,7 +2846,7 @@ static int tcpnje_init_handler(DEVBLK *dev, int argc, char *argv[])
         /* Start the async worker thread */
 
         /* Set thread-name for debugging purposes */
-        snprintf(thread_name, sizeof(thread_name),
+        MSGBUF(thread_name,
                  "tcpnje %4.4X thread", dev->devnum);
         thread_name[sizeof(thread_name) - 1] = 0;
 
@@ -4236,6 +4244,7 @@ BYTE    signoff[] =    {0x10, 0x02, 0x90, 0x8f, 0xcf,
                 /* I don't understand at all and can't test.             */
                 DBGMSG(1, "HHCTN098E %4.4X:TCPNJE - POLL operation is not supported by TCPNJE\n",
                         dev->devnum);
+                /* FALLTHRU */
 
         default:
         /*---------------------------------------------------------------*/

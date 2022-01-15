@@ -2,6 +2,7 @@
 /*              (C) Copyright Jan Jaeger, 1999-2012                  */
 /*              (C) Copyright "Fish" (David B. Trout), 2002-2009     */
 /*              (C) Copyright TurboHercules SAS, 2011                */
+/*              (C) and others 2013-2021                             */
 /*              Execute Hercules System Commands                     */
 /*                                                                   */
 /*   Released under "The Q Public License Version 1"                 */
@@ -65,6 +66,146 @@ DISABLE_GCC_UNUSED_FUNCTION_WARNING;
 #include "ctc_ptp.h"
 #include "qeth.h"
 #include "cckddasd.h"
+#include "inline.h"
+
+//-------------------------------------------------------------------
+//                      ARCH_DEP() code
+//-------------------------------------------------------------------
+// ARCH_DEP (build-architecture / FEATURE-dependent) functions here.
+// All BUILD architecture dependent (ARCH_DEP) function are compiled
+// multiple times (once for each defined build architecture) and each
+// time they are compiled with a different set of FEATURE_XXX defines
+// appropriate for that architecture. Use #ifdef FEATURE_XXX guards
+// to check whether the current BUILD architecture has that given
+// feature #defined for it or not. WARNING: Do NOT use _FEATURE_XXX.
+// The underscore feature #defines mean something else entirely. Only
+// test for FEATURE_XXX. (WITHOUT the underscore)
+//-------------------------------------------------------------------
+
+/*-------------------------------------------------------------------*/
+/* f? command - display currently defined unusable storage range(s)  */
+/*-------------------------------------------------------------------*/
+int ARCH_DEP( fquest_cmd )()
+{
+    U64   aaddr, begbad = 0;
+    bool  looking4bad = true, bad, foundbad = false;
+
+    /* Scan all of defined storage to locate all bad frames */
+    OBTAIN_INTLOCK( NULL );
+    {
+        for (aaddr=0; aaddr < sysblk.mainsize; aaddr += STORAGE_KEY_PAGESIZE)
+        {
+            /* NOTE: we use the internal "_get_storage_key" function
+               here so we're returned the internal STORKEY_BADFRM bit.
+            */
+            bad = ARCH_DEP( _get_storage_key )( aaddr, SKEY_K ) & STORKEY_BADFRM;
+
+            if (looking4bad && bad)
+            {
+                foundbad = true;
+                begbad = aaddr;         /* Beginning of bad range */
+                looking4bad = false;
+            }
+            else if (!looking4bad && !bad)
+            {
+                // "Storage "F_RADR"-"F_RADR" set to unusable"
+                WRMSG( HHC02390, "I", begbad, aaddr - 1);
+                looking4bad = true;
+            }
+        }
+    }
+    RELEASE_INTLOCK( NULL );
+
+    if (!looking4bad)
+        // "Storage "F_RADR"-"F_RADR" set to unusable"
+        WRMSG( HHC02390, "I", begbad, aaddr - 1);
+    else if (!foundbad)
+        // "No unusable storage found"
+        WRMSG( HHC02391, "I" );
+
+    return 0;
+}
+
+/*-------------------------------------------------------------------*/
+/* f- and f+ commands - mark page frame as -unusable or +usable      */
+/*-------------------------------------------------------------------*/
+int ARCH_DEP( fonoff_cmd )( REGS* regs, char* cmdline )
+{
+    char*   cmd = cmdline;              /* Copy of panel command     */
+    U64     aaddr;                      /* Absolute storage address  */
+    U64     saddr, eaddr;               /* Range start/end addresses */
+    int     len;                        /* Number of bytes to alter  */
+    bool    plus_enable_on;             /* true == x+, false == x-   */
+    char    buf[64];                    /* Message buffer            */
+
+    plus_enable_on = (cmd[1] == '+');
+
+    /* Parse the range operand(s) */
+    if ((len = parse_range( cmd+2, sysblk.mainsize-1, &saddr, &eaddr, NULL )) < 0)
+        return 0; /* (error message already issued) */
+
+    /* Round start/end address to page boundary */
+    saddr &= STORAGE_KEY_PAGEMASK;
+    eaddr &= STORAGE_KEY_PAGEMASK;
+
+    /* Mark all frames in range as usable or unusable */
+    for (aaddr = saddr; aaddr <= eaddr; aaddr += STORAGE_KEY_PAGESIZE)
+    {
+        if (aaddr > regs->mainlim)
+        {
+            MSGBUF( buf, F_RADR, aaddr);
+            // "Invalid argument %s%s"
+            WRMSG( HHC02205, "E", buf, "" );
+            return -1;
+        }
+
+        /* Note: we must use the internal "_xxx_storage_key"
+           functions to be able to directly set/clear the
+           internal STORKEY_BADFRM bit.
+        */
+        if (plus_enable_on)
+            ARCH_DEP( _and_storage_key )( aaddr, STORKEY_BADFRM, SKEY_K );
+        else
+            ARCH_DEP( _or_storage_key )(  aaddr, STORKEY_BADFRM, SKEY_K );
+    }
+
+    MSGBUF( buf, "Storage "F_RADR"-"F_RADR, saddr, aaddr - 1 );
+    // "%-14s set to %s"
+    WRMSG( HHC02204, "I", buf, plus_enable_on ? "usable" : "unusable" );
+    return 0;
+}
+
+/*-------------------------------------------------------------------*/
+/*          (delineates ARCH_DEP from non-arch_dep)                  */
+/*-------------------------------------------------------------------*/
+
+#if !defined( _GEN_ARCH )
+
+  #if defined(              _ARCH_NUM_1 )
+    #define   _GEN_ARCH     _ARCH_NUM_1
+    #include "hsccmd.c"
+  #endif
+
+  #if defined(              _ARCH_NUM_2 )
+    #undef    _GEN_ARCH
+    #define   _GEN_ARCH     _ARCH_NUM_2
+    #include "hsccmd.c"
+  #endif
+
+/*-------------------------------------------------------------------*/
+/*          (delineates ARCH_DEP from non-arch_dep)                  */
+/*-------------------------------------------------------------------*/
+
+/*-------------------------------------------------------------------*/
+/*  non-ARCH_DEP section: compiled only ONCE after last arch built   */
+/*-------------------------------------------------------------------*/
+/*  Note: the last architecture has been built so the normal non-    */
+/*  underscore FEATURE values are now #defined according to the      */
+/*  LAST built architecture just built (usually zarch = 900). This   */
+/*  means from this point onward (to the end of file) you should     */
+/*  ONLY be testing the underscore _FEATURE values to see if the     */
+/*  given feature was defined for *ANY* of the build architectures.  */
+/*-------------------------------------------------------------------*/
 
 // (forward references, etc)
 
@@ -127,8 +268,6 @@ static void* deadlocks_1( void* parg)
     UNREFERENCED( parg );
 
     // 1 acq a, then b
-    // 2 acq b, then c
-    // 3 acq c, then a
 
     obtain_lock( &deadlocks_a );
     {
@@ -148,9 +287,7 @@ static void* deadlocks_2( void* parg)
 {
     UNREFERENCED( parg );
 
-    // 1 acq a, then b
     // 2 acq b, then c
-    // 3 acq c, then a
 
     obtain_lock( &deadlocks_b );
     {
@@ -170,8 +307,6 @@ static void* deadlocks_3( void* parg)
 {
     UNREFERENCED( parg );
 
-    // 1 acq a, then b
-    // 2 acq b, then c
     // 3 acq c, then a
 
     obtain_lock( &deadlocks_c );
@@ -224,9 +359,9 @@ int $test_cmd(int argc, char *argv[],char *cmdline)
             set_lock_name( &deadlocks_b, "b" );
             set_lock_name( &deadlocks_c, "c" );
 
-            VERIFY( create_thread( &tid, DETACHED, deadlocks_1, 0, "#1"  ) == 0);
+            VERIFY( create_thread( &tid, DETACHED, deadlocks_1, 0, "#1" ) == 0);
             VERIFY( create_thread( &tid, DETACHED, deadlocks_2, 0, "#2" ) == 0);
-            VERIFY( create_thread( &tid, DETACHED, deadlocks_3, 0, "#3"  ) == 0);
+            VERIFY( create_thread( &tid, DETACHED, deadlocks_3, 0, "#3" ) == 0);
         }
         else if (CMD( argv[1], LOCKS, 5 ))
         {
@@ -308,41 +443,11 @@ int $test_cmd(int argc, char *argv[],char *cmdline)
         else if (CMD( argv[1], SIGUSR1, 7 )) raise( SIGUSR1 );
         else if (CMD( argv[1], SIGUSR2, 7 )) raise( SIGUSR2 );
 #endif
-#if defined( FISHTEST_TXF_STATS )
-        else if (CMD( argv[1], TXF, 3 ))
-        {
-            LOGMSG("+++ acc_read  =%12"PRIu64"\n", sysblk.acc_read   );
-            LOGMSG("+++ acc_write =%12"PRIu64"\n", sysblk.acc_write  );
-            LOGMSG("+++ acc_check =%12"PRIu64"\n", sysblk.acc_check  );
-            LOGMSG("+++ acc_notrw =%12"PRIu64"\n", sysblk.acc_notrw  );
-            LOGMSG("+++ acc_none  =%12"PRIu64"\n", sysblk.acc_none   );
-            LOGMSG("+++ ctrans    =%12"PRIu64"\n", sysblk.txf_ctrans );
-
-            if (sysblk.txf_ctrans)
-            {
-                double count, total = sysblk.txf_ctrans;
-
-#define         TXF_BUCKET(n) \
-                count = sysblk.txf_caborts[n]; \
-                LOGMSG("+++ " #n " retries =%12"PRIu64"  (%4.1f%%)\n", sysblk.txf_caborts[n], (count/total) * 100.0 )
-
-                TXF_BUCKET(0);
-                TXF_BUCKET(1);
-                TXF_BUCKET(2);
-                TXF_BUCKET(3);
-                TXF_BUCKET(4);
-                TXF_BUCKET(5);
-                TXF_BUCKET(6);
-                TXF_BUCKET(7);
-//              TXF_BUCKET(8);
-                count = sysblk.txf_caborts[8];
-                LOGMSG("+++ 8+retries =%12"PRIu64"  (%4.1f%%)\n", sysblk.txf_caborts[8], (count/total) * 100.0 );
-            }
-        }
-#endif /* defined( FISHTEST_TXF_STATS ) */
         else
+        {
             // "%s%s"
             WRMSG( HHC00001, "E", argv[1], ": unknown test");
+        }
         return 0;
     }
 
@@ -401,6 +506,13 @@ int maxrates_cmd(int argc, char *argv[],char *cmdline)
 
             maxrates_rpt_intvl = 1440;
             WRMSG( HHC02204, "I", argv[0], "midnight" );
+        }
+        else if (CMD( argv[1], RESET, 5 ))
+        {
+            curr_high_mips_rate = 0;
+            curr_high_sios_rate = 0;
+            WRMSG( HHC02272, "I", "Done!" );
+            return 0;
         }
         else
         {
@@ -1111,7 +1223,7 @@ int g_cmd(int argc, char *argv[], char *cmdline)
     if ( argc == 1 )
     {
         OBTAIN_INTLOCK(NULL);
-        sysblk.inststep = 0;
+        sysblk.instbreak = 0;
         SET_IC_TRACE;
         for (i = 0; i < sysblk.hicpu; i++)
         {
@@ -2023,9 +2135,14 @@ int ctc_cmd( int argc, char *argv[], char *cmdline )
     LCSBLK*  pLCSBLK;
     U16      lcss;
     U16      devnum;
-    BYTE     onoff;
-    BYTE     startup;
-    u_int    mask;
+    u_int    mask = 0;
+    BYTE     onoff = FALSE;
+    BYTE     startup = FALSE;
+    BYTE     all = FALSE;
+    BYTE     invalid = FALSE;
+    int      iTraceLen = LCS_TRACE_LEN_DEFAULT;
+    int      iDiscTrace = LCS_DISC_TRACE_ZERO;
+    int      i;
 
     UNREFERENCED( cmdline );
 
@@ -2033,34 +2150,125 @@ int ctc_cmd( int argc, char *argv[], char *cmdline )
 
     // Format:  "ctc  debug  { on | off }  [ <devnum> | ALL ]"
 
-    if (0
-        || argc < 3
-        || !CMD(argv[1],debug,5)
-        || (1
-            && !CMD(argv[2],on,2)
-            && !CMD(argv[2],off,3)
-            && !CMD(argv[2],startup,7)
-           )
-        || argc > 4
-        || (1
-            && argc == 4
-            && !CMD(argv[3],ALL,3)
-            && parse_single_devnum( argv[3], &lcss, &devnum) < 0
-           )
-    )
+    /* Check that there are at least two tokens */
+    if (argc < 2)
     {
+        invalid = TRUE;
+    }
+
+    /* Check the second token is debug. */
+    if (argc >= 2)
+    {
+        if (!CMD(argv[1],debug,5))
+        {
+            invalid = TRUE;
+        }
+    }
+
+    /* Check the third token is startup, on or off. */
+    if (argc >= 3)
+    {
+        if (CMD(argv[2],startup,7))
+        {
+            startup = TRUE;
+        }
+        else if (CMD(argv[2],on,2))
+        {
+            onoff = TRUE;
+        }
+        else if (!CMD(argv[2],off,3))
+        {
+            invalid = TRUE;
+        }
+    }
+
+    /* Check whether there is a fourth token. If there isn't, assume the fourth token is all.  */
+    if (argc < 4)
+    {
+        all = TRUE;
+    }
+
+    /* Check the fourth token is all or a device address. */
+    if (argc >= 4)
+    {
+        if (CMD(argv[3],ALL,3))
+        {
+            all = TRUE;
+        }
+        else if (parse_single_devnum( argv[3], &lcss, &devnum) != 0)
+        {
+            invalid = TRUE;
+        }
+    }
+
+    /* Check the fifth and later keyword and value tokens that are optional with on. */
+    if (argc >= 5)
+    {
+        if( onoff )
+        {
+            for ( i = 4; i < argc; i++ )
+            {
+                if (CMD(argv[i],trace,2))
+                {
+                    if ( (i + 1) < argc )
+                    {
+                        i++;
+                        iTraceLen = atoi( argv[i] );
+                        if ((iTraceLen < LCS_TRACE_LEN_MINIMUM || iTraceLen > LCS_TRACE_LEN_MAXIMUM) && iTraceLen != LCS_TRACE_LEN_ZERO)
+                        {
+                            invalid = TRUE;
+                        }
+                    }
+                    else
+                    {
+                        invalid = TRUE;
+                    }
+                }
+                else if (CMD(argv[i],discard,3))
+                {
+                    if ( (i + 1) < argc )
+                    {
+                        i++;
+                        iDiscTrace = atoi( argv[i] );
+                        if ((iDiscTrace < LCS_DISC_TRACE_MINIMUM || iDiscTrace > LCS_DISC_TRACE_MAXIMUM) && iDiscTrace != LCS_DISC_TRACE_ZERO)
+                        {
+                            invalid = TRUE;
+                        }
+                    }
+                    else
+                    {
+                        invalid = TRUE;
+                    }
+                }
+                else
+                {
+                    invalid = TRUE;
+                    break;
+                }
+            }
+        }
+        else
+        {
+            invalid = TRUE;
+        }
+    }
+
+    /* Check whether the entered command is invalid. */
+    if (invalid)
+    {
+        /* HHC02299 "Invalid command usage. Type 'help %s' for assistance." */
         WRMSG( HHC02299, "E", argv[0] );
         return -1;
     }
 
-    onoff = ( CMD(argv[2],on,2) );
-    startup = ( CMD(argv[2],startup,7) );
+    /* Prepare the default debug mask for CTC_PTP devices with on. */
     if( onoff )
+    {
         mask = DBGPTPPACKET;
-    else
-        mask = 0;
+    }
 
-    if (argc < 4 || CMD(argv[3],ALL,3) )
+    /* */
+    if (all)
     {
         for ( dev = sysblk.firstdev; dev; dev = dev->nextdev )
         {
@@ -2081,6 +2289,8 @@ int ctc_cmd( int argc, char *argv[], char *cmdline )
                 pLCSDEV = dev->dev_data;
                 pLCSBLK = pLCSDEV->pLCSBLK;
                 pLCSBLK->fDebug = onoff;
+                pLCSBLK->iTraceLen = iTraceLen;
+                pLCSBLK->iDiscTrace = iDiscTrace;
             }
             else // (CTC_PTP == dev->ctctype)
             {
@@ -2090,11 +2300,12 @@ int ctc_cmd( int argc, char *argv[], char *cmdline )
             }
         }
 
+        /* HHC02204 "%-14s set to %s" */
         WRMSG(HHC02204, "I", "CTC DEBUG", startup ? "startup ALL" : onoff ? "on ALL" : "off ALL");
     }
     else
     {
-        int i;
+        int acount;
         DEVGRP* pDEVGRP;
         DEVBLK* pDEVBLK;
 
@@ -2106,37 +2317,43 @@ int ctc_cmd( int argc, char *argv[], char *cmdline )
         }
 
         pDEVGRP = dev->group;
+        acount = 0;
 
         if (CTC_CTCI == dev->ctctype)
         {
-            for (i=0; i < pDEVGRP->acount; i++)
+            if (pDEVGRP && pDEVGRP->acount)  /* CTCI should be a group of two devices. */
             {
-                pDEVBLK = pDEVGRP->memdev[i];
+                pDEVBLK = pDEVGRP->memdev[0];
                 pCTCBLK = pDEVBLK->dev_data;
                 pCTCBLK->fDebug = onoff;
+                acount = pDEVGRP->acount;
             }
         }
-        else if (CTC_LCS == dev->ctctype)
+        else if (CTC_LCS == dev->ctctype)  /* LCS should be a group of one or more devices. */
         {
-            for (i=0; i < pDEVGRP->acount; i++)
+            if (pDEVGRP && pDEVGRP->acount)
             {
-                pDEVBLK = pDEVGRP->memdev[i];
+                pDEVBLK = pDEVGRP->memdev[0];
                 pLCSDEV = pDEVBLK->dev_data;
                 pLCSBLK = pLCSDEV->pLCSBLK;
                 pLCSBLK->fDebug = onoff;
+                pLCSBLK->iTraceLen = iTraceLen;
+                pLCSBLK->iDiscTrace = iDiscTrace;
+                acount = pDEVGRP->acount;
             }
         }
-        else if (CTC_PTP == dev->ctctype)
+        else if (CTC_PTP == dev->ctctype)  /* PTP should be a group of two devices. */
         {
-            for (i=0; i < pDEVGRP->acount; i++)
+            if (pDEVGRP && pDEVGRP->acount)
             {
-                pDEVBLK = pDEVGRP->memdev[i];
+                pDEVBLK = pDEVGRP->memdev[0];
                 pPTPATH = pDEVBLK->dev_data;
                 pPTPBLK = pPTPATH->pPTPBLK;
                 pPTPBLK->uDebugMask = mask;
+                acount = pDEVGRP->acount;
             }
         }
-        else if (CTC_CTCE == dev->ctctype)
+        else if (CTC_CTCE == dev->ctctype)  /* CTCE is not grouped. */
         {
             if (onoff)
             {
@@ -2153,17 +2370,24 @@ int ctc_cmd( int argc, char *argv[], char *cmdline )
         }
         else
         {
+            /* HHC02209 "%1d:%04X device is not a %s" */
             WRMSG(HHC02209, "E", lcss, devnum, "supported CTCI, LSC, PTP or CTCE" );
             return -1;
         }
 
         {
-          char buf[128];
-          MSGBUF( buf, "%s for %s device %1d:%04X%s",
+          char buf1[32] = {0};
+          char buf2[128];
+          if (acount) {
+            MSGBUF( buf1, " group (%d devices)", acount);
+          }
+          MSGBUF( buf2, "%s for %s device %1d:%04X%s",
                   startup ? "STARTUP" : onoff ? "ON" : "OFF",
                   CTC_CTCE == dev->ctctype ? "CTCE" : CTC_LCS == dev->ctctype ? "LCS" : CTC_PTP == dev->ctctype ? "PTP" : "CTCI",
-                  lcss, devnum, CTC_CTCE != dev->ctctype ? "pair" : "" );
-          WRMSG(HHC02204, "I", "CTC DEBUG", buf);
+                  lcss, devnum,
+                  buf1 );
+          /* HHC02204 "%-14s set to %s" */
+          WRMSG(HHC02204, "I", "CTC DEBUG", buf2);
         }
     }
 
@@ -2658,7 +2882,7 @@ int qeth_cmd( int argc, char *argv[], char *cmdline )
                   {
                     if (grp->mac[i].type)
                     {
-                      snprintf( charaddr, sizeof(charaddr),
+                      MSGBUF( charaddr,
                                 "%2.2X:%2.2X:%2.2X:%2.2X:%2.2X:%2.2X",
                                 grp->mac[i].addr[0],
                                 grp->mac[i].addr[1],
@@ -3983,60 +4207,138 @@ int toddrag_cmd(int argc, char *argv[], char *cmdline)
 /*-------------------------------------------------------------------*/
 int panopt_cmd( int argc, char* argv[], char* cmdline)
 {
-    char buf[64];
+    char*  pantitle     = NULL;
+    int    panrate      = sysblk.panrate;
+    int    pan_colors   = sysblk.pan_colors;
+    bool   devnameonly  = sysblk.devnameonly ? true : false;
+    char   buf[256];
+    int    i;
 
     UNREFERENCED( cmdline );
     UPPER_ARGV_0(  argv   );
 
-    // panopt [MSGCOLOR=NO|YES] [FULLPATH|NAMEONLY]
+    // panopt [FULLPATH|NAMEONLY] [RATE=nnn] [MSGCOLOR=NO|DARK|LIGHT] [TITLE=xxx]
 
     if (argc <= 1)
     {
-        MSGBUF( buf, "MSGCOLOR=%s %s",
-            sysblk.pan_colors  ? "YES"      : "NO",
-            sysblk.devnameonly ? "NAMEONLY" : "FULLPATH"
+        /* Display current settings */
+
+        char* quote = sysblk.pantitle ?
+            strpbrk( sysblk.pantitle, WHITESPACE ) ? "\"" : "" : "";
+
+        MSGBUF( buf, "%s RATE=%d MSGCOLOR=%s %sTITLE=%s%s"
+            , sysblk.devnameonly ? "NAMEONLY" : "FULLPATH"
+            , sysblk.panrate
+            , sysblk.pan_colors == PANC_NONE  ? "NO"    :
+              sysblk.pan_colors == PANC_DARK  ? "DARK"  :
+              sysblk.pan_colors == PANC_LIGHT ? "LIGHT" : "(err!)"
+            , quote , sysblk.pantitle ? sysblk.pantitle : "(default)" , quote
         );
 
         // "%-14s: %s"
         WRMSG( HHC02203, "I", argv[0], buf );
         return 0;
     }
-    else if (argc <= 3)
+
+    /* Too many arguments? */
+    if (argc > 5)
     {
-        int  i;
-        for (i=1; i < argc; i++)
+        // "Invalid command usage. Type 'help %s' for assistance."
+        WRMSG( HHC02299, "E", argv[0] );
+        return -1;
+    }
+
+    /* Examine each argument in turn */
+    for (i=1; i < argc; i++)
+    {
+        if      (CMD( argv[i], NAMEONLY,        4 )) devnameonly = true;
+        else if (CMD( argv[i], FULLPATH,        4 )) devnameonly = false;
+        else if (CMD( argv[i], MSGCOLOR=NO,    11 )) pan_colors  = PANC_NONE;
+        else if (CMD( argv[i], MSGCOLOR=DARK,  13 )) pan_colors  = PANC_DARK;
+        else if (CMD( argv[i], MSGCOLOR=LIGHT, 14 )) pan_colors  = PANC_LIGHT;
+        else if (CMD( argv[i], RATE=FAST,       9 )) panrate = PANEL_REFRESH_RATE_FAST;
+        else if (CMD( argv[i], RATE=SLOW,       9 )) panrate = PANEL_REFRESH_RATE_SLOW;
+        else if (strncasecmp( argv[i], "RATE=", 5 ) == 0)
         {
-            if      (CMD( argv[i], NAMEONLY,      4 )) sysblk.devnameonly = 1;
-            else if (CMD( argv[i], FULLPATH,      4 )) sysblk.devnameonly = 0;
-            else if (CMD( argv[i], MSGCOLOR=NO,  11 )) sysblk.pan_colors = false;
-            else if (CMD( argv[i], MSGCOLOR=YES, 12 )) sysblk.pan_colors = true;
-            else // error
+            int rate = 0;
+            int rc = sscanf( argv[i]+5, "%d", &rate );
+
+            if (1
+                && rc > 0
+                && rate >= PANEL_REFRESH_RATE_MIN
+                && rate <= PANEL_REFRESH_RATE_MAX
+            )
             {
+                panrate = rate;
+            }
+            else
+            {
+                char buf[20];
+                char buf2[64];
+
+                if (rc == 0)
+                {
+                    MSGBUF( buf, "%s", argv[i]+5 );
+                    MSGBUF( buf2, "; not numeric value" );
+                }
+                else
+                {
+                    MSGBUF( buf, "%d", rate );
+                    MSGBUF( buf2, "; not within range %d to %d inclusive",
+                        (int)PANEL_REFRESH_RATE_MIN,
+                        PANEL_REFRESH_RATE_MAX );
+                }
+
                 // "Invalid argument %s%s"
-                WRMSG( HHC02205, "E", argv[i], "" );
+                WRMSG( HHC02205, "E", buf, buf2 );
                 return -1;
             }
         }
-
-        set_panel_colors();
-
-        if (MLVL( VERBOSE ))
+        else if (strncasecmp( argv[i], "TITLE=", 6 ) == 0)
         {
-            MSGBUF( buf, "MSGCOLOR=%s %s",
-                sysblk.pan_colors  ? "YES"      : "NO",
-                sysblk.devnameonly ? "NAMEONLY" : "FULLPATH"
-            );
-
-            // "%-14s set to %s"
-            WRMSG( HHC02204, "I", argv[0], buf );
+            pantitle = argv[i]+6;
         }
-
-        return 0;
+        else
+        {
+            // "Invalid argument %s%s"
+            WRMSG( HHC02205, "E", argv[i], "" );
+            return -1;
+        }
     }
 
-    // "Invalid command usage. Type 'help %s' for assistance."
-    WRMSG( HHC02299, "E", argv[0] );
-    return -1;
+    /* Update setting(s) */
+
+    sysblk.panrate     = panrate;
+    sysblk.pan_colors  = pan_colors;
+    sysblk.devnameonly = devnameonly;
+
+    if (pantitle)
+    {
+        free( sysblk.pantitle );
+        sysblk.pantitle = (strlen( pantitle ) > 0) ? strdup( pantitle ) : NULL;
+        set_console_title( NULL );
+    }
+    set_panel_colors();
+
+    if (MLVL( VERBOSE ))
+    {
+        char* quote = sysblk.pantitle ?
+            strpbrk( sysblk.pantitle, WHITESPACE ) ? "\"" : "" : "";
+
+        MSGBUF( buf, "%s RATE=%d MSGCOLOR=%s %sTITLE=%s%s"
+            , sysblk.devnameonly ? "NAMEONLY" : "FULLPATH"
+            , sysblk.panrate
+            , sysblk.pan_colors == PANC_NONE  ? "NO"    :
+              sysblk.pan_colors == PANC_DARK  ? "DARK"  :
+              sysblk.pan_colors == PANC_LIGHT ? "LIGHT" : "(err!)"
+            , quote , sysblk.pantitle ? sysblk.pantitle : "(default)" , quote
+        );
+
+        // "%-14s set to %s"
+        WRMSG( HHC02204, "I", argv[0], buf );
+    }
+
+    return 0;
 }
 
 /*-------------------------------------------------------------------*/
@@ -4048,6 +4350,9 @@ int panrate_cmd( int argc, char* argv[], char* cmdline )
 
     UNREFERENCED( cmdline );
     UPPER_ARGV_0(  argv   );
+
+    // "Command '%s' is deprecated%s"
+    WRMSG( HHC02256, "W", argv[0], "; use PANOPT RATE=xxx instead" );
 
     if (argc > 2)
     {
@@ -4067,7 +4372,7 @@ int panrate_cmd( int argc, char* argv[], char* cmdline )
 
             rc = sscanf( argv[1], "%d", &trate );
 
-            if (rc > 0 && trate >= (1000 / CLK_TCK) && trate < 5001)
+            if (rc > 0 && trate >= (1000 / CLK_TCK) && trate <= 5000)
                 sysblk.panrate = trate;
             else // error
             {
@@ -4113,6 +4418,9 @@ int pantitle_cmd( int argc, char* argv[], char* cmdline )
 {
     UNREFERENCED( cmdline );
     UPPER_ARGV_0(  argv   );
+
+    // "Command '%s' is deprecated%s"
+    WRMSG( HHC02256, "W", argv[0], "; use PANOPT TITLE=xxx instead" );
 
     if (argc > 2)
     {
@@ -4493,88 +4801,102 @@ int codepage_cmd( int argc, char* argv[], char* cmdline )
 /* model config statement                                            */
 /* operands: hardware_model [capacity_model [perm_model temp_model]] */
 /*-------------------------------------------------------------------*/
-int stsi_model_cmd(int argc, char *argv[], char *cmdline)
+int stsi_model_cmd( int argc, char* argv[], char* cmdline )
 {
-    const char *model_name[4] = { "hardware", "capacity", "perm", "temp" };
+    const char* model_name[4] = { "hardware", "capacity", "perm", "temp" };
+    char*            model[4] = { "",         "",         "",     "" };
 
-    UNREFERENCED(cmdline);
-
+    UNREFERENCED( cmdline );
     UPPER_ARGV_0( argv );
 
     /* Update model name if operand is specified */
 
     if (argc > 1)
     {
-        int rc;
-        int m;
-        int n;
-        char *model[4] = { "", "", "", "" };
+        int rc, m, n;
 
         /* Validate argument count */
 
-        if ( argc > 5 )
+        if (argc > 5)
         {
+            // "Invalid number of arguments for %s"
             WRMSG( HHC01455, "E", argv[0] );
             return -1;
         }
 
         /* Validate and set new model and capacity
            numbers according to arguments */
-        for ( m = 0, n = 1; n < argc; m++, n++ )
+        for (m=0, n=1; n < argc; m++, n++)
         {
-            size_t i;
-            size_t len;
+            size_t len, i;
 
-            if ( argv[n] == NULL )
+            if (!argv[n])
                 break;
+
             model[m] = argv[n];
             len = strlen( model[m] );
 
-            if ( len > 16 )
+            if (len > 16)
             {
+                // "Invalid argument %s%s"
                 WRMSG( HHC02205, "E", model[n], "; argument > 16 characters" );
                 return -1;
             }
 
+            /* Normal handling?  (i.e. is special handling character
+               "*" or "=" NOT specified for this field?)
+            */
             if (!(len == 1 && (model[m][0] == '*' || model[m][0] == '=')))
             {
                 for (i=0; i < len; i++)
                 {
-                    if (!isalnum(model[m][i]))
+                    if (!isalnum( model[m][i] ) ||
+                       (!isupper( model[m][i] ) && !isdigit( model[m][i] )))
                     {
                         char msgbuf[64];
+                        MSGBUF( msgbuf, "%s-model = <%s>", model_name[m], model[m] );
 
-                        MSGBUF( msgbuf, "%s-model = <%s>", model_name[m], model[m]);
-                        WRMSG( HHC02205, "E", msgbuf, "; argument contains an invalid character"  );
+                        // "Invalid argument %s%s"
+                        WRMSG( HHC02205, "E", msgbuf, "; argument contains an invalid character (0-9 and uppercase A-Z only)"  );
                         return -1;
                     }
                 }
             }
         }
 
-        if ((rc = set_model(model[0], model[1], model[2], model[3])) != 0)
+        /* TRY setting their requested values... */
+
+        if ((rc = set_model( model[0], model[1], model[2], model[3] )) != 0)
         {
-            if ( rc > 0 && rc <= 4 )
+            /* A non-zero return code indicates which field was bad */
+
+            if (rc > 0 && rc <= 4)
             {
                 char msgbuf[64];
+                MSGBUF( msgbuf, "%s-model = <%s>", model_name[rc-1], model[rc-1] );
 
-                MSGBUF( msgbuf, "%s-model = <%s>", model_name[rc-1], model[rc-1]);
-                WRMSG( HHC02205, "E", msgbuf, "; Characters not valid for field. 0-9 or A-Z only" );
+                // "Invalid argument %s%s"
+                WRMSG( HHC02205, "E", msgbuf, "; argument contains an invalid character (0-9 and uppercase A-Z only)" );
             }
             else
+                // "Invalid argument %s%s"
                 WRMSG( HHC02205, "E", argv[0], "" );
+
             return -1;
         }
 
-        if ( MLVL(VERBOSE) )
+        /* Success: show them the results */
+
+        if (MLVL( VERBOSE ))
         {
             char msgbuf[128];
             MSGBUF( msgbuf, "hardware(%s) capacity(%s) perm(%s) temp(%s)",
                             str_modelhard(), str_modelcapa(), str_modelperm(), str_modeltemp() );
+            // "%-14s set to %s"
             WRMSG( HHC02204, "I", "MODEL", msgbuf );
         }
     }
-    else
+    else /* (no arguments == query current values) */
     {
         char msgbuf[128];
         MSGBUF( msgbuf, "hardware(%s) capacity(%s) perm(%s) temp(%s)",
@@ -4589,47 +4911,55 @@ int stsi_model_cmd(int argc, char *argv[], char *cmdline)
 /*-------------------------------------------------------------------*/
 /* plant config statement                                            */
 /*-------------------------------------------------------------------*/
-int stsi_plant_cmd(int argc, char *argv[], char *cmdline)
+int stsi_plant_cmd( int argc, char* argv[], char* cmdline )
 {
-    UNREFERENCED(cmdline);
-
+    UNREFERENCED( cmdline );
     UPPER_ARGV_0( argv );
 
     /* Update plant name if operand is specified */
-    if ( argc > 2 )
+    if (argc > 2)
     {
+        // "Invalid number of arguments for %s"
         WRMSG( HHC01455, "E", argv[0] );
         return -1;
     }
-    if ( argc == 1 )
+
+    if (argc == 1)  /* (no argument == query current value?) */
     {
+        // "%-14s: %s"
         WRMSG( HHC02203, "I", argv[0], str_plant() );
     }
     else
     {
         size_t i;
 
-        if ( strlen(argv[1]) > 4 )
+        if (strlen( argv[1] ) > 4)
         {
+            // "Invalid argument %s%s"
             WRMSG( HHC02205, "E", argv[1], "; argument > 4 characters" );
             return -1;
         }
 
-        for ( i = 0; i < strlen(argv[1]); i++ )
+        for (i=0; i < strlen( argv[1] ); i++)
         {
-            if ( isalnum(argv[1][i]) )
+            if (isalnum( argv[1][i] ) &&
+               (isupper( argv[1][i] ) || isdigit( argv[1][i] )))
                 continue;
-            WRMSG( HHC02205, "E", argv[1], "; argument contains invalid characters" );
+
+            // "Invalid argument %s%s"
+            WRMSG( HHC02205, "E", argv[1], "; argument contains an invalid character (0-9 and uppercase A-Z only)" );
             return -1;
         }
 
-        if ( set_plant(argv[1]) < 0 )
+        if (set_plant( argv[1] ) < 0)
         {
-            WRMSG( HHC02205, "E", argv[1], "; argument contains invalid characters" );
+            // "Invalid argument %s%s"
+            WRMSG( HHC02205, "E", argv[1], "; argument contains an invalid character (0-9 and uppercase A-Z only)" );
             return -1;
         }
 
-        if ( MLVL(VERBOSE) )
+        if (MLVL( VERBOSE ))
+            // "%-14s set to %s"
             WRMSG( HHC02204, "I", argv[0], str_plant() );
     }
 
@@ -4639,49 +4969,55 @@ int stsi_plant_cmd(int argc, char *argv[], char *cmdline)
 /*-------------------------------------------------------------------*/
 /* manufacturer config statement                                     */
 /*-------------------------------------------------------------------*/
-int stsi_manufacturer_cmd(int argc, char *argv[], char *cmdline)
+int stsi_manufacturer_cmd( int argc, char* argv[], char* cmdline )
 {
-    UNREFERENCED(cmdline);
-
+    UNREFERENCED( cmdline );
     UPPER_ARGV_0( argv );
 
     /* Update manufacturer name if operand is specified */
-    if ( argc > 2 )
+    if (argc > 2)
     {
+        // "Invalid number of arguments for %s"
         WRMSG( HHC01455, "E", argv[0] );
         return -1;
     }
 
-    if ( argc == 1 )
+    if (argc == 1)  /* (no argument == query current value?) */
     {
+        // "%-14s: %s"
         WRMSG( HHC02203, "I", argv[0], str_manufacturer() );
     }
     else
     {
         size_t i;
 
-        if ( strlen(argv[1]) > 16 )
+        if (strlen (argv[1] ) > 16)
         {
+            // "Invalid argument %s%s"
             WRMSG( HHC02205, "E", argv[1], "; argument > 16 characters" );
             return -1;
         }
 
-        for ( i = 0; i < strlen(argv[1]); i++ )
+        for (i=0; i < strlen( argv[1] ); i++)
         {
-            if ( isalnum(argv[1][i]) )
+            if (isalnum( argv[1][i] ) &&
+               (isupper( argv[1][i] ) || isdigit( argv[1][i] )))
                 continue;
 
-            WRMSG( HHC02205, "E", argv[1], "; argument contains invalid characters" );
+            // "Invalid argument %s%s"
+            WRMSG( HHC02205, "E", argv[1], "; argument contains an invalid character (0-9 and uppercase A-Z only)" );
             return -1;
         }
 
-        if ( set_manufacturer(argv[1]) < 0 )
+        if (set_manufacturer( argv[1] ) < 0)
         {
-            WRMSG( HHC02205, "E", argv[1], "; argument contains invalid characters");
+            // "Invalid argument %s%s"
+            WRMSG( HHC02205, "E", argv[1], "; argument contains an invalid character (0-9 and uppercase A-Z only)");
             return -1;
         }
 
-        if ( MLVL(VERBOSE) )
+        if (MLVL( VERBOSE ))
+            // "%-14s set to %s"
             WRMSG( HHC02204, "I", argv[0], str_manufacturer() );
     }
 
@@ -4744,9 +5080,11 @@ int shrdport_cmd( int argc, char* argv[], char* cmdline )
     }
 
     if (MLVL( VERBOSE ))
-        // "%-14s set to %s"
+    {
         MSGBUF( buf, "%hu", sysblk.shrdport );
+        // "%-14s set to %s"
         WRMSG( HHC02204, "I", argv[0], buf );
+    }
 
     return 0;
 }
@@ -4923,7 +5261,7 @@ int cpuverid_cmd( int argc, char* argv[], char* cmdline )
 
     UPPER_ARGV_0( argv );
 
-    if (argc < 1 || argc > 2)
+    if (argc < 1 || argc > 3)
     {
         // "Invalid number of arguments for %s"
         WRMSG( HHC01455, "E", argv[0] );
@@ -4946,8 +5284,23 @@ int cpuverid_cmd( int argc, char* argv[], char* cmdline )
         && (sscanf( argv[1], "%x%c", &version, &c ) == 1)
     )
     {
+        bool force = false;
+
+        /* Check for 'FORCE' option */
+        if (argc == 3)
+        {
+            if (CMD( argv[2], FORCE, 5 ))
+                force = true;
+            else
+            {
+                // "Invalid argument %s%s"
+                WRMSG( HHC02205, "E", argv[2], "" );
+                return -1;
+            }
+        }
+
         /* Update all CPU identifiers */
-        if (!setAllCpuIds_lock( -1, version, -1, -1 ))
+        if (!setAllCpuIds_lock( -1, version, -1, -1, force ))
             return -1;
 
         MSGBUF( chversion,"%02X", sysblk.cpuversion );
@@ -5006,7 +5359,7 @@ int cpumodel_cmd( int argc, char* argv[], char* cmdline )
     )
     {
         /* Update all CPU IDs */
-        if (!setAllCpuIds_lock( cpumodel, -1, -1, -1 ))
+        if (!setAllCpuIds_lock( cpumodel, -1, -1, -1, false ))
             return -1;
 
         MSGBUF( chmodel, "%04X", sysblk.cpumodel );
@@ -5014,8 +5367,14 @@ int cpumodel_cmd( int argc, char* argv[], char* cmdline )
         set_symbol( "CPUMODEL", chmodel );
 
         if (MLVL( VERBOSE ))
+        {
             // "%-14s set to %s"
             WRMSG( HHC02204, "I", argv[0], chmodel );
+
+#if defined( _FEATURE_073_TRANSACT_EXEC_FACILITY )
+            txf_model_warning( FACILITY_ENABLED_ARCH( 073_TRANSACT_EXEC, ARCH_900_IDX ));
+#endif
+        }
     }
     else
     {
@@ -5066,7 +5425,7 @@ int cpuserial_cmd( int argc, char* argv[], char* cmdline )
     )
     {
         /* Update all CPU IDs */
-        if (!setAllCpuIds_lock( -1, -1, cpuserial, -1 ))
+        if (!setAllCpuIds_lock( -1, -1, cpuserial, -1, false ))
             return -1;
 
         /* Show them the now newly-updated SYSBLK value */
@@ -5948,6 +6307,8 @@ int rc;
 /*-------------------------------------------------------------------*/
 int pgmtrace_cmd( int argc, char* argv[], char* cmdline )
 {
+    U64   rupt_mask;
+    U64   prev_sysblk_pgminttr;
     int   abs_rupt_num;
     int       rupt_num;
     BYTE  c;
@@ -6001,11 +6362,21 @@ int pgmtrace_cmd( int argc, char* argv[], char* cmdline )
         return -1;
     }
 
-    /* Add or remove interruption code from mask */
+    /* Save current sysblk.pgminttr setting */
+    prev_sysblk_pgminttr = sysblk.pgminttr;
+
+    /* Build mask for interruption code to be turned on or off */
+    rupt_mask = (1ULL << (abs_rupt_num - 1));
+
+    /* Add or remove interruption code from program interrupt mask */
     if (rupt_num < 0)
-        sysblk.pgminttr &= ~(1ULL << (abs_rupt_num - 1));
+        sysblk.pgminttr &= ~rupt_mask;
     else
-        sysblk.pgminttr |=  (1ULL << (abs_rupt_num - 1));
+        sysblk.pgminttr |=  rupt_mask;
+
+    /* Clear the ostailor settings flag if it's now inaccurate */
+    if (sysblk.pgminttr != prev_sysblk_pgminttr)
+        sysblk.ostailor = 0;
 
     return 0;
 }
@@ -6015,12 +6386,13 @@ int pgmtrace_cmd( int argc, char* argv[], char* cmdline )
 /*-------------------------------------------------------------------*/
 int ostailor_cmd( int argc, char* argv[], char* cmdline )
 {
-    char*  ostailor  = NULL;
-    U64    mask      = 0;
-    bool   b_on      = false;
-    bool   b_off     = false;
-    bool   nolrasoe  = false;
-
+    char*  ostailor  = NULL;        /* (work variable)              */
+    U64    mask      = 0;           /* OS_xxx... pgminttr bits      */
+    U32    ost       = 0;           /* OSTAILOR_xxx... setting flag */
+    bool   b_on      = false;       /* "+ostailor" specified        */
+    bool   b_off     = false;       /* "-ostailor" specified        */
+    bool   nolrasoe  = false;       /* true == No trace LRA Special */
+                                    /*         Operation Exceptions */
     UNREFERENCED( cmdline );
     UPPER_ARGV_0( argv );
 
@@ -6035,20 +6407,76 @@ int ostailor_cmd( int argc, char* argv[], char* cmdline )
     /* If no arguments, display the current setting */
     if (argc < 2)
     {
-        char   msgbuf[64];
+        char   msgbuf [64] = {0};
+        char   msgbuf2[64] = {0};
+
+        if (sysblk.pgminttr == OS_VM          ) ostailor = "VM";
 
         if (sysblk.pgminttr == OS_DEFAULT     ) ostailor = "DEFAULT";
         if (sysblk.pgminttr == OS_QUIET       ) ostailor = "QUIET";
         if (sysblk.pgminttr == OS_NULL        ) ostailor = "NULL";
+
+        if (sysblk.pgminttr == OS_OS390       ) ostailor = "OS/390";
+        if (sysblk.pgminttr == OS_ZOS         ) ostailor = "z/OS";
+        if (sysblk.pgminttr == OS_LINUX       ) ostailor = "LINUX";
+        if (sysblk.pgminttr == OS_OPENSOLARIS ) ostailor = "OpenSolaris";
+
         if (sysblk.pgminttr == OS_VSE
                           && !sysblk.nolrasoe ) ostailor = "VSE";
         if (sysblk.pgminttr == OS_VSE
                           &&  sysblk.nolrasoe ) ostailor = "z/VSE";
-        if (sysblk.pgminttr == OS_ZOS         ) ostailor = "z/OS";
-        if (sysblk.pgminttr == OS_LINUX       ) ostailor = "LINUX";
-        if (sysblk.pgminttr == OS_OPENSOLARIS ) ostailor = "OpenSolaris";
-        if (sysblk.pgminttr == OS_OS390       ) ostailor = "OS/390";
-        if (sysblk.pgminttr == OS_VM          ) ostailor = "VM";
+
+        /* If no exact OSTAILOR match, check if maybe sysblk.ostailor
+           identifies a verifiable previous "+OSTAILOR" setting. */
+        if (!ostailor)
+        {
+            /* Is existing OSTAILOR value still valid? */
+            if (sysblk.ostailor)
+            {
+                /* Yes, verify that it's still accurate */
+
+                U64 test_pgminttr = OS_NULL; // (0xFFFFFFFFFFFFFFFFULL)
+
+                if (sysblk.ostailor & OSTAILOR_VM         ) test_pgminttr &= OS_VM;
+
+                if (sysblk.ostailor & OSTAILOR_DEFAULT    ) test_pgminttr &= OS_DEFAULT;
+                if (sysblk.ostailor & OSTAILOR_QUIET      ) test_pgminttr &= OS_QUIET;
+                if (sysblk.ostailor & OSTAILOR_NULL       ) test_pgminttr &= OS_NULL;
+
+                if (sysblk.ostailor & OSTAILOR_OS390      ) test_pgminttr &= OS_OS390;
+                if (sysblk.ostailor & OSTAILOR_ZOS        ) test_pgminttr &= OS_ZOS;
+                if (sysblk.ostailor & OSTAILOR_LINUX      ) test_pgminttr &= OS_LINUX;
+                if (sysblk.ostailor & OSTAILOR_OPENSOLARIS) test_pgminttr &= OS_OPENSOLARIS;
+
+                if (sysblk.ostailor & OSTAILOR_VSE        ) test_pgminttr &= OS_VSE;
+
+                /* Is sysblk.ostailor still accurate? */
+                if (sysblk.pgminttr == test_pgminttr)
+                {
+                    /* Yep! Format current "xxx+yyy" OSTAILOR setting */
+
+                    if (sysblk.ostailor & OSTAILOR_VM         ) STRLCAT( msgbuf2, "VM"          "+" );
+
+                    if (sysblk.ostailor & OSTAILOR_DEFAULT    ) STRLCAT( msgbuf2, "DEFAULT"     "+" );
+                    if (sysblk.ostailor & OSTAILOR_QUIET      ) STRLCAT( msgbuf2, "QUIET"       "+" );
+                    if (sysblk.ostailor & OSTAILOR_NULL       ) STRLCAT( msgbuf2, "NULL"        "+" );
+
+                    if (sysblk.ostailor & OSTAILOR_OS390      ) STRLCAT( msgbuf2, "OS390"       "+" );
+                    if (sysblk.ostailor & OSTAILOR_ZOS        ) STRLCAT( msgbuf2, "ZOS"         "+" );
+                    if (sysblk.ostailor & OSTAILOR_LINUX      ) STRLCAT( msgbuf2, "LINUX"       "+" );
+                    if (sysblk.ostailor & OSTAILOR_OPENSOLARIS) STRLCAT( msgbuf2, "OPENSOLARIS" "+" );
+
+                    if (sysblk.ostailor & OSTAILOR_VSE        )
+                    {
+                        char* vse = !sysblk.nolrasoe ? "VSE+" : "z/VSE+";
+                        STRLCAT( msgbuf2, vse );
+                    }
+
+                    /* (remove trailing "+") */
+                    ostailor = rtrim( msgbuf2, "+" );
+                }
+            }
+        }
 
         if (!ostailor)
             MSGBUF( msgbuf, "Custom(0x%16.16"PRIX64")", sysblk.pgminttr );
@@ -6072,8 +6500,8 @@ int ostailor_cmd( int argc, char* argv[], char* cmdline )
     }
     else if (ostailor[0] == '-')
     {
-        b_off = true;
         b_on  = false;
+        b_off = true;
         ostailor++;
     }
     else
@@ -6082,20 +6510,23 @@ int ostailor_cmd( int argc, char* argv[], char* cmdline )
         b_off = false;
     }
 
-    nolrasoe = false;
+    nolrasoe = sysblk.nolrasoe;
 
-         if (CMD( ostailor, NONE,    4 )) {   mask = OS_DEFAULT; b_on = false; b_off = false; }
-    else if (CMD( ostailor, DEFAULT, 3 )) {   mask = OS_DEFAULT; b_on = false; b_off = false; }
-    else if (CMD( ostailor, QUIET,   5 )) {   mask = OS_QUIET;   b_on = false; b_off = false; }
-    else if (CMD( ostailor, NULL,    4 )) {   mask = OS_NULL;    b_on = false; b_off = false; }
-    else if (CMD( ostailor, VSE,     2 )) {   mask = OS_VSE;     nolrasoe = false; }
-    else if (CMD( ostailor, Z/VSE,   4 )) {   mask = OS_VSE;     nolrasoe = true;  }
-    else if (CMD( ostailor, Z/VM,    4 ))     mask = OS_VM;
-    else if (CMD( ostailor, Z/OS,    4 ))     mask = OS_ZOS;
-    else if (CMD( ostailor, OpenSolaris, 4 )) mask = OS_OPENSOLARIS;
-    else if (CMD( ostailor, LINUX,   2 ))     mask = OS_LINUX;
-    else if (CMD( ostailor, OS/390,  2 ))     mask = OS_OS390;
-    else if (CMD( ostailor, VM,      2 ))     mask = OS_VM;
+         if (CMD( ostailor, VM,      2 ))     { ost = OSTAILOR_VM;          mask = OS_VM;          }
+    else if (CMD( ostailor, Z/VM,    4 ))     { ost = OSTAILOR_VM;          mask = OS_VM;          }
+
+    else if (CMD( ostailor, NONE,    4 ))     { ost = OSTAILOR_DEFAULT;     mask = OS_DEFAULT; b_on = false; b_off = false; }
+    else if (CMD( ostailor, DEFAULT, 3 ))     { ost = OSTAILOR_DEFAULT;     mask = OS_DEFAULT; b_on = false; b_off = false; }
+    else if (CMD( ostailor, QUIET,   5 ))     { ost = OSTAILOR_QUIET;       mask = OS_QUIET;   b_on = false; b_off = false; }
+    else if (CMD( ostailor, NULL,    4 ))     { ost = OSTAILOR_NULL;        mask = OS_NULL;    b_on = false; b_off = false; }
+
+    else if (CMD( ostailor, Z/OS,    4 ))     { ost = OSTAILOR_ZOS;         mask = OS_ZOS;         }
+    else if (CMD( ostailor, OpenSolaris, 4 )) { ost = OSTAILOR_OPENSOLARIS; mask = OS_OPENSOLARIS; }
+    else if (CMD( ostailor, LINUX,   2 ))     { ost = OSTAILOR_LINUX;       mask = OS_LINUX;       }
+    else if (CMD( ostailor, OS/390,  2 ))     { ost = OSTAILOR_OS390;       mask = OS_OS390;       }
+
+    else if (CMD( ostailor, VSE,     2 ))     { ost = OSTAILOR_VSE;         mask = OS_VSE;     nolrasoe = false; }
+    else if (CMD( ostailor, Z/VSE,   4 ))     { ost = OSTAILOR_VSE;         mask = OS_VSE;     nolrasoe = true;  }
     else
     {
         // "Invalid argument %s%s"
@@ -6103,9 +6534,21 @@ int ostailor_cmd( int argc, char* argv[], char* cmdline )
         return -1;
     }
 
-         if (b_off) sysblk.pgminttr |= ~mask;
-    else if (b_on)  sysblk.pgminttr &=  mask;
-    else            sysblk.pgminttr  =  mask;
+    if (b_on)
+    {
+        sysblk.ostailor |= ost;
+        sysblk.pgminttr &= mask;
+    }
+    else if (b_off)
+    {
+        sysblk.ostailor &= ~ost;
+        sysblk.pgminttr |= ~mask;
+    }
+    else
+    {
+        sysblk.ostailor = ost;
+        sysblk.pgminttr = mask;
+    }
 
     sysblk.nolrasoe = nolrasoe;
 
@@ -6945,12 +7388,19 @@ REGS *regs;
         WRMSG(HHC00816, "W", PTYPSTR(sysblk.pcpu), sysblk.pcpu, "online");
         return 0;
     }
+
     regs = sysblk.regs[sysblk.pcpu];
 
     if (argc < 3 || '*' == *(loadaddr = argv[2]))
     {
-        for (aaddr = 0; aaddr < sysblk.mainsize &&
-            !(STORAGE_KEY(aaddr, regs) & STORKEY_CHANGE); aaddr += 4096)
+        /* Locate the first modified (changed) page */
+        for
+        (
+            aaddr = 0;
+            aaddr < sysblk.mainsize
+                && !(ARCH_DEP( get_4K_storage_key )( aaddr ) & STORKEY_CHANGE);
+            aaddr += STORAGE_KEY_4K_PAGESIZE
+        )
         {
             ;   /* (nop) */
         }
@@ -6973,13 +7423,18 @@ REGS *regs;
 
     if (argc < 4 || '*' == *(loadaddr = argv[3]))
     {
-        for (aaddr2 = sysblk.mainsize - 4096; aaddr2 > 0 &&
-            !(STORAGE_KEY(aaddr2, regs) & STORKEY_CHANGE); aaddr2 -= 4096)
+        /* Locate the last modified (changed) page */
+        for
+        (
+            aaddr2 = sysblk.mainsize - STORAGE_KEY_4K_PAGESIZE;
+            aaddr2 > 0
+              && !(ARCH_DEP( get_4K_storage_key )( aaddr2 ) & STORKEY_CHANGE);
+            aaddr2 -= STORAGE_KEY_4K_PAGESIZE)
         {
             ;   /* (nop) */
         }
 
-        if ( STORAGE_KEY(aaddr2, regs) & STORKEY_CHANGE )
+        if (ARCH_DEP( get_4K_storage_key )( aaddr2 ) & STORKEY_CHANGE)
             aaddr2 |= 0xFFF;
         else
         {
@@ -7048,7 +7503,7 @@ REGS *regs;
     /* Write smaller more manageable chunks until all is written */
     do
     {
-        chunk = (64 * 1024 * 1024);
+        chunk = (64 * ONE_MEGABYTE);
 
         if (chunk > total)
             chunk = total;
@@ -7245,63 +7700,103 @@ int delsym_cmd( int argc, char* argv[], char* cmdline )
 }
 
 /*-------------------------------------------------------------------*/
+/* f? command - display currently defined unusable storage range(s)  */
+/*-------------------------------------------------------------------*/
+int fquest_cmd( int argc, char* argv[], char* cmdline )
+{
+    UNREFERENCED( argc );
+    UNREFERENCED( argv );
+    UNREFERENCED( cmdline );
+
+    switch (sysblk.arch_mode)
+    {
+#if defined(     _370 )
+        case ARCH_370_IDX:
+          return s370_fquest_cmd();
+#endif
+#if defined(     _390 )
+        case ARCH_390_IDX:
+          return s390_fquest_cmd();
+#endif
+#if defined(     _900 )
+        case ARCH_900_IDX:
+          return z900_fquest_cmd();
+#endif
+        default: CRASH();
+    }
+    UNREACHABLE_CODE( return -1 );
+}
+
+/*-------------------------------------------------------------------*/
+/* f- and f+ commands - mark page frame as -unusable or +usable      */
+/*-------------------------------------------------------------------*/
+static int fonoff_cmd( REGS* regs, char* cmdline )
+{
+    switch (sysblk.arch_mode)
+    {
+#if defined(     _370 )
+        case ARCH_370_IDX:
+          return s370_fonoff_cmd( regs, cmdline );
+#endif
+#if defined(     _390 )
+        case ARCH_390_IDX:
+          return s390_fonoff_cmd( regs, cmdline );
+#endif
+#if defined(     _900 )
+        case ARCH_900_IDX:
+          return z900_fonoff_cmd( regs, cmdline );
+#endif
+        default: CRASH();
+    }
+    UNREACHABLE_CODE( return -1 );
+}
+
+/*-------------------------------------------------------------------*/
 /* x+ and x- commands - turn switches on or off                      */
 /*-------------------------------------------------------------------*/
-int OnOffCommand(int argc, char *argv[], char *cmdline)
+int OnOffCommand( int argc, char* argv[], char* cmdline )
 {
-    char   *cmd = cmdline;              /* Copy of panel command     */
-    int     oneorzero;                  /* 1=x+ command, 0=x-        */
-    char   *onoroff;                    /* "on" or "off"             */
-    U64     work64;                     /* 64-bit work variable      */
-    RADR    aaddr;                      /* Absolute storage address  */
+    char*   cmd = cmdline;              /* Copy of panel command     */
+    bool    plus_enable_on;             /* true == x+, false == x-   */
+    char*   onoroff;                    /* x+ == "on", x- == "off"   */
     DEVBLK* dev;
     U16     devnum;
     U16     lcss;
-REGS *regs;
-BYTE c;                                 /* Character work area       */
+    REGS*   regs;
 
-    UNREFERENCED(argc);
-    UNREFERENCED(argv);
+    UNREFERENCED( argc );
+    UNREFERENCED( argv );
 
-    if (cmd[1] == '+') {
-        oneorzero = 1;
+    if (cmd[1] == '+')
+    {
+        plus_enable_on = true;
         onoroff = "ON";
-    } else {
-        oneorzero = 0;
+    }
+    else
+    {
+        plus_enable_on = false;
         onoroff = "OFF";
     }
 
-    OBTAIN_INTLOCK(NULL);
+    OBTAIN_INTLOCK( NULL );
 
-    if (!IS_CPU_ONLINE(sysblk.pcpu))
+    if (!IS_CPU_ONLINE( sysblk.pcpu ))
     {
-        RELEASE_INTLOCK(NULL);
-        WRMSG(HHC00816, "W", PTYPSTR(sysblk.pcpu), sysblk.pcpu, "online");
+        RELEASE_INTLOCK( NULL );
+        // "Processor %s%02X: processor is not %s"
+        WRMSG( HHC00816, "W", PTYPSTR( sysblk.pcpu ), sysblk.pcpu, "online" );
         return 0;
     }
-    regs=sysblk.regs[sysblk.pcpu];
 
+    regs = sysblk.regs[ sysblk.pcpu ];
 
-    // f- and f+ commands - mark frames unusable/usable
+    // f- and f+ commands - mark 4K page frame as -unusable or +usable
 
-    if ((cmd[0] == 'f') && sscanf(cmd+2, "%"SCNx64"%c", &work64, &c) == 1)
+    if (cmd[0] == 'f')
     {
-        char buf[40];
-        aaddr = (RADR) work64;
-        if (aaddr > regs->mainlim)
-        {
-            RELEASE_INTLOCK(NULL);
-            MSGBUF( buf, F_RADR, aaddr);
-            WRMSG(HHC02205, "E", buf, "" );
-            return -1;
-        }
-        STORAGE_KEY(aaddr, regs) &= ~(STORKEY_BADFRM);
-        if (!oneorzero)
-            STORAGE_KEY(aaddr, regs) |= STORKEY_BADFRM;
-        RELEASE_INTLOCK(NULL);
-        MSGBUF( buf, "frame "F_RADR, aaddr);
-        WRMSG(HHC02204, "I", buf, oneorzero ? "usable" : "unusable");
-        return 0;
+        int rc = fonoff_cmd( regs, cmdline );
+        RELEASE_INTLOCK( NULL );
+        return rc;
     }
 
 #if defined( OPTION_CKD_KEY_TRACING )
@@ -7313,10 +7808,10 @@ BYTE c;                                 /* Character work area       */
         for (dev = sysblk.firstdev; dev != NULL; dev = dev->nextdev)
         {
             if (dev->devchar[10] == 0x20)
-                dev->ckdkeytrace = oneorzero;
+                dev->ckdkeytrace = plus_enable_on;
         }
-        RELEASE_INTLOCK(NULL);
-        WRMSG(HHC02204, "I", "CKD key trace", onoroff );
+        RELEASE_INTLOCK( NULL );
+        WRMSG( HHC02204, "I", "CKD key trace", onoroff );
         return 0;
     }
 
@@ -7345,20 +7840,20 @@ BYTE c;                                 /* Character work area       */
         if (cmd[0] == 'o')
         {
             typ = "ORB trace";
-            dev->orbtrace = oneorzero;
+            dev->orbtrace = plus_enable_on;
         }
         else if (cmd[0] == 't')
         {
             typ = "CCW trace";
-            dev->orbtrace = oneorzero;
-            dev->ccwtrace = oneorzero;
+            dev->orbtrace = plus_enable_on;
+            dev->ccwtrace = plus_enable_on;
         }
         else // (cmd[0] == 's')
         {
             typ = "CCW step";
-            dev->orbtrace = oneorzero;
-            dev->ccwtrace = oneorzero;
-            dev->ccwstep  = oneorzero;
+            dev->orbtrace = plus_enable_on;
+            dev->ccwtrace = plus_enable_on;
+            dev->ccwstep  = plus_enable_on;
         }
         MSGBUF( buf, "%s for %1d:%04X", typ, lcss, devnum );
         // "%-14s set to %s"
@@ -8657,3 +9152,5 @@ int cmdlvl_cmd( int argc, char* argv[], char* cmdline )
 }
 
 /* HSCCMD.C End-of-text */
+
+#endif // !defined(_GEN_ARCH)

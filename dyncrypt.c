@@ -315,8 +315,8 @@ static void sha1_getcv(SHA1_CTX *ctx, BYTE icv[20])
   {
     icv[j++] = (ctx->state[i] & 0xff000000) >> 24;
     icv[j++] = (ctx->state[i] & 0x00ff0000) >> 16;
-    icv[j++] = (ctx->state[i] & 0x0000ff00) >> 8;
-    icv[j++] = (ctx->state[i] & 0x000000ff);
+    icv[j++] = (ctx->state[i] & 0x0000ff00) >>  8;
+    icv[j++] = (ctx->state[i] & 0x000000ff) >>  0;
   }
 }
 
@@ -329,10 +329,10 @@ static void sha1_seticv(SHA1_CTX *ctx, BYTE icv[20])
 
   for(i = 0, j = 0; i < 5; i++)
   {
-    ctx->state[i] = icv[j++] << 24;
-    ctx->state[i] |= icv[j++] << 16;
-    ctx->state[i] |= icv[j++] << 8;
-    ctx->state[i] |= icv[j++];
+    ctx->state[i]  = (((U32)icv[j++]) << 24);
+    ctx->state[i] |= (((U32)icv[j++]) << 16);
+    ctx->state[i] |= (((U32)icv[j++]) <<  8);
+    ctx->state[i] |= (((U32)icv[j++]) <<  0);
   }
 }
 
@@ -347,8 +347,8 @@ static void sha256_getcv(SHA2_CTX *ctx, BYTE icv[32])
   {
     icv[j++] = (ctx->state.st32[i] & 0xff000000) >> 24;
     icv[j++] = (ctx->state.st32[i] & 0x00ff0000) >> 16;
-    icv[j++] = (ctx->state.st32[i] & 0x0000ff00) >> 8;
-    icv[j++] = (ctx->state.st32[i] & 0x000000ff);
+    icv[j++] = (ctx->state.st32[i] & 0x0000ff00) >>  8;
+    icv[j++] = (ctx->state.st32[i] & 0x000000ff) >>  0;
   }
 }
 
@@ -361,10 +361,10 @@ static void sha256_seticv(SHA2_CTX *ctx, BYTE icv[32])
 
   for(i = 0, j = 0; i < 8; i++)
   {
-    ctx->state.st32[i]  = icv[j++] << 24;
-    ctx->state.st32[i] |= icv[j++] << 16;
-    ctx->state.st32[i] |= icv[j++] << 8;
-    ctx->state.st32[i] |= icv[j++];
+    ctx->state.st32[i]  = (((U32)icv[j++]) << 24);
+    ctx->state.st32[i] |= (((U32)icv[j++]) << 16);
+    ctx->state.st32[i] |= (((U32)icv[j++]) <<  8);
+    ctx->state.st32[i] |= (((U32)icv[j++]) <<  0);
   }
 }
 
@@ -383,8 +383,8 @@ static void sha512_getcv(SHA2_CTX *ctx, BYTE icv[64])
     icv[j++] = (ctx->state.st64[i] & 0x000000ff00000000LL) >> 32;
     icv[j++] = (ctx->state.st64[i] & 0x00000000ff000000LL) >> 24;
     icv[j++] = (ctx->state.st64[i] & 0x0000000000ff0000LL) >> 16;
-    icv[j++] = (ctx->state.st64[i] & 0x000000000000ff00LL) >> 8;
-    icv[j++] = (ctx->state.st64[i] & 0x00000000000000ffLL);
+    icv[j++] = (ctx->state.st64[i] & 0x000000000000ff00LL) >>  8;
+    icv[j++] = (ctx->state.st64[i] & 0x00000000000000ffLL) >>  0;
   }
 }
 
@@ -397,14 +397,14 @@ static void sha512_seticv(SHA2_CTX *ctx, BYTE icv[64])
 
   for(i = 0, j = 0; i < 8; i++)
   {
-    ctx->state.st64[i]  = (U64) icv[j++] << 56;
-    ctx->state.st64[i] |= (U64) icv[j++] << 48;
-    ctx->state.st64[i] |= (U64) icv[j++] << 40;
-    ctx->state.st64[i] |= (U64) icv[j++] << 32;
-    ctx->state.st64[i] |= (U64) icv[j++] << 24;
-    ctx->state.st64[i] |= (U64) icv[j++] << 16;
-    ctx->state.st64[i] |= (U64) icv[j++] << 8;
-    ctx->state.st64[i] |= (U64) icv[j++];
+    ctx->state.st64[i]  = (((U64)icv[j++]) << 56);
+    ctx->state.st64[i] |= (((U64)icv[j++]) << 48);
+    ctx->state.st64[i] |= (((U64)icv[j++]) << 40);
+    ctx->state.st64[i] |= (((U64)icv[j++]) << 32);
+    ctx->state.st64[i] |= (((U64)icv[j++]) << 24);
+    ctx->state.st64[i] |= (((U64)icv[j++]) << 16);
+    ctx->state.st64[i] |= (((U64)icv[j++]) <<  8);
+    ctx->state.st64[i] |= (((U64)icv[j++]) <<  0);
   }
 }
 
@@ -1002,7 +1002,7 @@ static void ARCH_DEP(kimd_sha)(int r1, int r2, REGS *regs, int klmd)
 #endif /* #ifdef OPTION_KIMD_DEBUG */
 
     /* check for end of data */
-    if(unlikely(GR_A(r2 + 1, regs) < 64))
+    if(unlikely(GR_A(r2 + 1, regs) < (unsigned) message_blocklen))
     {
       if(unlikely(klmd))
         return;
@@ -3996,14 +3996,17 @@ DEF_INST(dyn_compute_intermediate_message_digest)
   int r1;
   int r2;
 
+  RRE(inst, regs, r1, r2);
+
+#if defined( FEATURE_073_TRANSACT_EXEC_FACILITY )
+    if (FACILITY_ENABLED( HERC_TXF_RESTRICT_1, regs ))
+        TRAN_INSTR_CHECK( regs );
+#endif
+
   /* The following is the same as doing a FACILITY_CHECK */
   msa = get_msa(regs);
   if(msa < 0)
     ARCH_DEP(program_interrupt)(regs, PGM_OPERATION_EXCEPTION);
-
-  RRE(inst, regs, r1, r2);
-
-  TRAN_INSTR_CHECK( regs );
 
 #ifdef OPTION_KIMD_DEBUG
   WRMSG(HHC90100, "D", "KIMD: compute intermediate message digest");
@@ -4101,14 +4104,17 @@ DEF_INST(dyn_compute_last_message_digest)
   int r1;
   int r2;
 
+  RRE(inst, regs, r1, r2);
+
+#if defined( FEATURE_073_TRANSACT_EXEC_FACILITY )
+    if (FACILITY_ENABLED( HERC_TXF_RESTRICT_1, regs ))
+        TRAN_INSTR_CHECK( regs );
+#endif
+
   /* The following is the same as doing a FACILITY_CHECK */
   msa = get_msa(regs);
   if(msa < 0)
     ARCH_DEP(program_interrupt)(regs, PGM_OPERATION_EXCEPTION);
-
-  RRE(inst, regs, r1, r2);
-
-  TRAN_INSTR_CHECK( regs );
 
 #ifdef OPTION_KLMD_DEBUG
   WRMSG(HHC90100, "D", "KLMD: compute last message digest");
@@ -4194,14 +4200,17 @@ DEF_INST(dyn_cipher_message)
   int r1;
   int r2;
 
+  RRE(inst, regs, r1, r2);
+
+#if defined( FEATURE_073_TRANSACT_EXEC_FACILITY )
+    if (FACILITY_ENABLED( HERC_TXF_RESTRICT_1, regs ))
+        TRAN_INSTR_CHECK( regs );
+#endif
+
   /* The following is the same as doing a FACILITY_CHECK */
   msa = get_msa(regs);
   if(msa < 0)
     ARCH_DEP(program_interrupt)(regs, PGM_OPERATION_EXCEPTION);
-
-  RRE(inst, regs, r1, r2);
-
-  TRAN_INSTR_CHECK( regs );
 
 #ifdef OPTION_KM_DEBUG
   WRMSG(HHC90100, "D", "KM: cipher message");
@@ -4331,14 +4340,17 @@ DEF_INST(dyn_compute_message_authentication_code)
   int r1;
   int r2;
 
+  RRE(inst, regs, r1, r2);
+
+#if defined( FEATURE_073_TRANSACT_EXEC_FACILITY )
+    if (FACILITY_ENABLED( HERC_TXF_RESTRICT_1, regs ))
+        TRAN_INSTR_CHECK( regs );
+#endif
+
   /* The following is the same as doing a FACILITY_CHECK */
   msa = get_msa(regs);
   if(msa < 0)
     ARCH_DEP(program_interrupt)(regs, PGM_OPERATION_EXCEPTION);
-
-  RRE(inst, regs, r1, r2);
-
-  TRAN_INSTR_CHECK( regs );
 
 #ifdef OPTION_KMAC_DEBUG
   WRMSG(HHC90100, "D", "KMAC: compute message authentication code");
@@ -4432,14 +4444,17 @@ DEF_INST(dyn_cipher_message_with_chaining)
   int r1;
   int r2;
 
+  RRE(inst, regs, r1, r2);
+
+#if defined( FEATURE_073_TRANSACT_EXEC_FACILITY )
+    if (FACILITY_ENABLED( HERC_TXF_RESTRICT_1, regs ))
+        TRAN_INSTR_CHECK( regs );
+#endif
+
   /* The following is the same as doing a FACILITY_CHECK */
   msa = get_msa(regs);
   if(msa < 0)
     ARCH_DEP(program_interrupt)(regs, PGM_OPERATION_EXCEPTION);
-
-  RRE(inst, regs, r1, r2);
-
-  TRAN_INSTR_CHECK( regs );
 
 #ifdef OPTION_KMC_DEBUG
   WRMSG(HHC90100, "D", "KMC: cipher message with chaining");
@@ -4568,14 +4583,17 @@ DEF_INST(dyn_cipher_message_with_counter)
   int r2;
   int r3;
 
+  RRF_M(inst, regs, r1, r2, r3);
+
+#if defined( FEATURE_073_TRANSACT_EXEC_FACILITY )
+    if (FACILITY_ENABLED( HERC_TXF_RESTRICT_1, regs ))
+        TRAN_INSTR_CHECK( regs );
+#endif
+
   /* The following is the same as doing a FACILITY_CHECK */
   msa = get_msa(regs);
   if(msa < 4)
     ARCH_DEP(program_interrupt)(regs, PGM_OPERATION_EXCEPTION);
-
-  RRF_M(inst, regs, r1, r2, r3);
-
-  TRAN_INSTR_CHECK( regs );
 
 #ifdef OPTION_KMCTR_DEBUG
   WRMSG(HHC90100, "D", "KMCTR: cipher message with counter");
@@ -4661,14 +4679,17 @@ DEF_INST(dyn_cipher_message_with_cipher_feedback)
   int r1;
   int r2;
 
+  RRE(inst, regs, r1, r2);
+
+#if defined( FEATURE_073_TRANSACT_EXEC_FACILITY )
+    if (FACILITY_ENABLED( HERC_TXF_RESTRICT_1, regs ))
+        TRAN_INSTR_CHECK( regs );
+#endif
+
   /* The following is the same as doing a FACILITY_CHECK */
   msa = get_msa(regs);
   if(msa < 4)
     ARCH_DEP(program_interrupt)(regs, PGM_OPERATION_EXCEPTION);
-
-  RRE(inst, regs, r1, r2);
-
-  TRAN_INSTR_CHECK( regs );
 
 #ifdef OPTION_KMF_DEBUG
   WRMSG(HHC90100, "D", "KMF: cipher message with cipher feedback");
@@ -4755,14 +4776,17 @@ DEF_INST(dyn_cipher_message_with_output_feedback)
   int r1;
   int r2;
 
+  RRE(inst, regs, r1, r2);
+
+#if defined( FEATURE_073_TRANSACT_EXEC_FACILITY )
+    if (FACILITY_ENABLED( HERC_TXF_RESTRICT_1, regs ))
+        TRAN_INSTR_CHECK( regs );
+#endif
+
   /* The following is the same as doing a FACILITY_CHECK */
   msa = get_msa(regs);
   if(msa < 4)
     ARCH_DEP(program_interrupt)(regs, PGM_OPERATION_EXCEPTION);
-
-  RRE(inst, regs, r1, r2);
-
-  TRAN_INSTR_CHECK( regs );
 
 #ifdef OPTION_KMO_DEBUG
   WRMSG(HHC90100, "D", "KMO: cipher message with output feedback");
@@ -4840,16 +4864,18 @@ DEF_INST(dyn_perform_cryptographic_computation)
     { 0xf0, 0x70, 0x38, 0x38, 0x00, 0x00, 0x28, 0x28, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 }
   };
 
-  TRAN_INSTR_CHECK( regs );
-
   UNREFERENCED(inst);              /* This operation has no operands */
+  INST_UPDATE_PSW(regs, 4, 4);        /* All operands implied        */
+
+#if defined( FEATURE_073_TRANSACT_EXEC_FACILITY )
+    if (FACILITY_ENABLED( HERC_TXF_RESTRICT_1, regs ))
+        TRAN_INSTR_CHECK( regs );
+#endif
 
   /* The following is the same as doing a FACILITY_CHECK */
   if(msa < 4)
     ARCH_DEP(program_interrupt)(regs, PGM_OPERATION_EXCEPTION);
   else if (msa > 4) msa = 4;
-
-  INST_UPDATE_PSW(regs, 4, 4);        /* All operands implied        */
 
 #ifdef OPTION_PCC_DEBUG
   WRMSG(HHC90100, "D", "PCC: perform cryptographic computation");
@@ -4919,12 +4945,13 @@ DEF_INST(dyn_perform_cryptographic_key_management_operation)
   int r1;
   int r2;
 
+  RRE(inst, regs, r1, r2);
+  TRAN_INSTR_CHECK( regs );
+
   /* The following is the same as doing a FACILITY_CHECK */
   msa = get_msa(regs);
   if(msa < 3)
     ARCH_DEP(program_interrupt)(regs, PGM_OPERATION_EXCEPTION);
-
-  RRE(inst, regs, r1, r2);
 
 #ifdef OPTION_PCKMO_DEBUG
   WRMSG(HHC90100, "D", "PCKMO: perform cryptographic key management operation");

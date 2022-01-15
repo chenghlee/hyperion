@@ -977,19 +977,19 @@ BYTE ARCH_DEP(scpinfo_cfg11) =
 
 BYTE ARCH_DEP(scpinfo_cpf)[12] = {
                             0
-#if defined(FEATURE_INTERPRETIVE_EXECUTION)
+#if defined( FEATURE_SIE )
 #if defined(_370) && !defined(FEATURE_001_ZARCH_INSTALLED_FACILITY)
                             | SCCB_CPF0_SIE_370_MODE
 #endif /*defined(_370) && !defined(FEATURE_001_ZARCH_INSTALLED_FACILITY)*/
                             | SCCB_CPF0_SIE_XA_MODE
-#endif /*defined(FEATURE_INTERPRETIVE_EXECUTION)*/
+#endif /* defined( FEATURE_SIE ) */
 //                          | SCCB_CPF0_SIE_SET_II_370_MODE
 #if defined(FEATURE_IO_ASSIST)
                             | SCCB_CPF0_SIE_SET_II_XA_MODE
 #endif /*defined(FEATURE_IO_ASSIST)*/
-#if defined(FEATURE_INTERPRETIVE_EXECUTION)
+#if defined( FEATURE_SIE )
                             | SCCB_CPF0_SIE_NEW_INTERCEPT_FORMAT
-#endif /*defined(FEATURE_INTERPRETIVE_EXECUTION)*/
+#endif /* defined( FEATURE_SIE ) */
 #if defined(FEATURE_STORAGE_KEY_ASSIST)
                             | SCCB_CPF0_STORAGE_KEY_ASSIST
 #endif /*defined(FEATURE_STORAGE_KEY_ASSIST)*/
@@ -1001,9 +1001,9 @@ BYTE ARCH_DEP(scpinfo_cpf)[12] = {
 #if defined(FEATURE_IO_ASSIST)
                             | SCCB_CPF1_IO_INTERPRETATION_LEVEL_2
 #endif /*defined(FEATURE_IO_ASSIST)*/
-#if defined(FEATURE_INTERPRETIVE_EXECUTION)
+#if defined( FEATURE_SIE )
                             | SCCB_CPF1_GUEST_PER_ENHANCED
-#endif /*defined(FEATURE_INTERPRETIVE_EXECUTION)*/
+#endif /* defined( FEATURE_SIE ) */
 //                          | SCCB_CPF1_SIGP_INTERPRETATION_ASSIST
 #if defined(FEATURE_STORAGE_KEY_ASSIST)
                             | SCCB_CPF1_RCP_BYPASS_FACILITY
@@ -1098,7 +1098,7 @@ int             i;                      /* Array subscripts          */
 U32             realinc;                /* Storage size in increments*/
 U32             incsizemb;              /* Increment size in MB      */
 U32             sccb_absolute_addr;     /* Absolute address of SCCB  */
-U32             sccblen;                /* Length of SCCB            */
+U16             sccblen;                /* Length of SCCB            */
 SCCB_HEADER    *sccb;                   /* -> SCCB header            */
 SCCB_SCP_INFO  *sccbscp;                /* -> SCCB SCP information   */
 SCCB_CPU_INFO  *sccbcpu;                /* -> SCCB CPU information   */
@@ -1149,6 +1149,7 @@ BYTE            *xstmap;                /* Xstore bitmap, zero means
 
     RRE(inst, regs, r1, r2);
 
+    TRAN_INSTR_CHECK( regs );
     PRIV_CHECK(regs);
 
     SIE_INTERCEPT(regs);
@@ -1161,29 +1162,51 @@ BYTE            *xstmap;                /* Xstore bitmap, zero means
     /* R2 is real address of service call control block */
     sccb_real_addr = regs->GR_L(r2);
 
-    /* Obtain the absolute address of the SCCB */
-    sccb_absolute_addr = APPLY_PREFIXING(sccb_real_addr, regs->PX);
-
     /* Program check if SCCB is not on a doubleword boundary */
-    if ( sccb_absolute_addr & 0x00000007 )
-        ARCH_DEP(program_interrupt) (regs, PGM_SPECIFICATION_EXCEPTION);
+    if (sccb_real_addr & 0x00000007)
+        ARCH_DEP( program_interrupt )( regs, PGM_SPECIFICATION_EXCEPTION );
 
-    /* Program check if SCCB is outside main storage */
-    if ( sccb_absolute_addr > regs->mainlim )
-        ARCH_DEP(program_interrupt) (regs, PGM_ADDRESSING_EXCEPTION);
+    /* Program check if SCCB falls outside of main storage */
+    if (sccb_real_addr > (regs->mainlim - sizeof( SCCB_HEADER )))
+        ARCH_DEP( program_interrupt )( regs, PGM_ADDRESSING_EXCEPTION );
+
+    /* Obtain the absolute address of the SCCB */
+    sccb_absolute_addr = APPLY_PREFIXING( sccb_real_addr, regs->PX );
+
+    /* Specification Exception if SCCB not below 2GB */
+    if (sccb_absolute_addr >= (0x80000000 - sizeof( SCCB_HEADER )))
+        ARCH_DEP( program_interrupt )( regs, PGM_SPECIFICATION_EXCEPTION );
 
     /* Point to service call control block */
     sccb = (SCCB_HEADER*)(regs->mainstor + sccb_absolute_addr);
 
     /* Load SCCB length from header */
-    FETCH_HW(sccblen, sccb->length);
+    FETCH_HW( sccblen, sccb->length );
 
     /* Set the main storage reference bit */
-    STORAGE_KEY(sccb_absolute_addr, regs) |= STORKEY_REF;
+    ARCH_DEP( or_storage_key )( sccb_absolute_addr, STORKEY_REF );
 
-    /* Program check if end of SCCB falls outside main storage */
-    if ( sccb_absolute_addr + sccblen > regs->mainlim + 1)
-        ARCH_DEP(program_interrupt) (regs, PGM_ADDRESSING_EXCEPTION);
+    /* Specification Exception if SCCB size less than 8 */
+    if (sccblen < sizeof( SCCB_HEADER ))
+        ARCH_DEP( program_interrupt )( regs, PGM_SPECIFICATION_EXCEPTION );
+
+    /* Program check if SCCB falls outside of main storage,
+       isn't below 2GB or overlaps low core or prefix area. */
+    {
+        U64 sccb_first_byte = (U64) sccb_absolute_addr;
+        U64 sccb_last_byte  = (U64) sccb_absolute_addr + sccblen - 1;
+
+        if (0
+            || sccb_first_byte < PSA_SIZE
+            || sccb_last_byte > 0x80000000
+            || (sccb_first_byte >= regs->PX && sccb_first_byte < (regs->PX + PSA_SIZE))
+            || (sccb_last_byte  >= regs->PX && sccb_last_byte  < (regs->PX + PSA_SIZE))
+        )
+            ARCH_DEP( program_interrupt )( regs, PGM_SPECIFICATION_EXCEPTION );
+
+        if (sccb_last_byte > regs->mainlim)
+            ARCH_DEP( program_interrupt )( regs, PGM_ADDRESSING_EXCEPTION );
+    }
 
     /* Obtain lock if immediate response is not requested */
     if (!(sccb->flag & SCCB_FLAG_SYNC)
@@ -1229,7 +1252,7 @@ BYTE            *xstmap;                /* Xstore bitmap, zero means
     read_scpinfo:
 
         /* Set the main storage change bit */
-        STORAGE_KEY(sccb_absolute_addr, regs) |= STORKEY_CHANGE;
+        ARCH_DEP( or_storage_key )( sccb_absolute_addr, STORKEY_CHANGE );
 
         /* Set response code X'0100' if SCCB crosses a page boundary */
         if ((sccb_absolute_addr & STORAGE_KEY_PAGEMASK) !=
@@ -1372,7 +1395,6 @@ BYTE            *xstmap;                /* Xstore bitmap, zero means
             if(!IS_CPU_ONLINE(i))
                 sccbcpu->cpf[2] |= SCCB_CPF2_VECTOR_FEATURE_STANDBY_STATE;
 #endif
-
         }
 
 #if defined(FEATURE_MPF_INFO)
@@ -1386,11 +1408,10 @@ BYTE            *xstmap;                /* Xstore bitmap, zero means
         /* Set response code X'0010' in SCCB header */
         sccb->reas = SCCB_REAS_NONE;
         sccb->resp = SCCB_RESP_INFO;
-
         break;
 
 docheckstop:
-        ARCH_DEP( checkstop_config )();
+        ARCH_DEP( checkstop_all_cpus )( regs );
         RELEASE_INTLOCK( regs );
         longjmp( regs->progjmp, SIE_NO_INTERCEPT );
         UNREACHABLE_CODE( return );
@@ -1398,7 +1419,7 @@ docheckstop:
     case SCLP_READ_CHP_INFO:
 
         /* Set the main storage change bit */
-        STORAGE_KEY(sccb_absolute_addr, regs) |= STORKEY_CHANGE;
+        ARCH_DEP( or_storage_key )( sccb_absolute_addr, STORKEY_CHANGE );
 
         /* Set response code X'0100' if SCCB crosses a page boundary */
         if ((sccb_absolute_addr & STORAGE_KEY_PAGEMASK) !=
@@ -1465,13 +1486,12 @@ docheckstop:
         /* Set response code X'0010' in SCCB header */
         sccb->reas = SCCB_REAS_NONE;
         sccb->resp = SCCB_RESP_INFO;
-
         break;
 
     case SCLP_READ_CSI_INFO:
 
         /* Set the main storage change bit */
-        STORAGE_KEY(sccb_absolute_addr, regs) |= STORKEY_CHANGE;
+        ARCH_DEP( or_storage_key )( sccb_absolute_addr, STORKEY_CHANGE );
 
         /* Set response code X'0100' if SCCB crosses a page boundary */
         if ((sccb_absolute_addr & STORAGE_KEY_PAGEMASK) !=
@@ -1505,14 +1525,13 @@ docheckstop:
         /* Set response code X'0010' in SCCB header */
         sccb->reas = SCCB_REAS_NONE;
         sccb->resp = SCCB_RESP_INFO;
-
         break;
 
 #ifdef FEATURE_SYSTEM_CONSOLE
     case SCLP_WRITE_EVENT_DATA:
 
         /* Set the main storage change bit */
-        STORAGE_KEY(sccb_absolute_addr, regs) |= STORKEY_CHANGE;
+        ARCH_DEP( or_storage_key )( sccb_absolute_addr, STORKEY_CHANGE );
 
         /* Set response code X'0100' if SCCB crosses a page boundary */
         if ((sccb_absolute_addr & STORAGE_KEY_PAGEMASK) !=
@@ -1591,9 +1610,7 @@ docheckstop:
             /* Set response code X'0020' in SCCB header */
             sccb->reas = SCCB_REAS_NONE;
             sccb->resp = SCCB_RESP_COMPLETE;
-
             break;
-
 
         case SCCB_EVD_TYPE_CPIDENT:
             sclp_cpident(sccb);
@@ -1621,13 +1638,11 @@ docheckstop:
             break;
 #endif /*defined(FEATURE_INTEGRATED_3270_CONSOLE)*/
 
-
 #if defined(FEATURE_INTEGRATED_ASCII_CONSOLE)
         case SCCB_EVD_TYPE_VT220:
             sclp_sysa_write(sccb);
             break;
 #endif /*defined(FEATURE_INTEGRATED_ASCII_CONSOLE)*/
-
 
         default:
 
@@ -1639,9 +1654,7 @@ docheckstop:
             /* Set response code X'73F0' in SCCB header */
             sccb->reas = SCCB_REAS_SYNTAX_ERROR;
             sccb->resp = SCCB_RESP_SYNTAX_ERROR;
-
             break;
-
         }
 
         break;
@@ -1649,7 +1662,7 @@ docheckstop:
     case SCLP_READ_EVENT_DATA:
 
         /* Set the main storage change bit */
-        STORAGE_KEY(sccb_absolute_addr, regs) |= STORKEY_CHANGE;
+        ARCH_DEP( or_storage_key )( sccb_absolute_addr, STORKEY_CHANGE );
 
         /* Set response code X'0100' if SCCB crosses a page boundary */
         if ((sccb_absolute_addr & STORAGE_KEY_PAGEMASK) !=
@@ -1674,7 +1687,6 @@ docheckstop:
             sclp_opcmd_event(sccb, SCCB_EVD_TYPE_OPCMD);
             break;
         }
-
 
 #if defined(FEATURE_SCEDIO)
         if(SCLP_RECV_ENABLED(SCEDIO) && sclp_attn_pending(SCCB_EVD_TYPE_SCEDIO))
@@ -1705,7 +1717,6 @@ docheckstop:
             break;
         }
 #endif /*defined(FEATURE_INTEGRATED_3270_CONSOLE)*/
-
 
 #if defined(FEATURE_INTEGRATED_ASCII_CONSOLE)
         if(SCLP_RECV_ENABLED(VT220) && sclp_attn_pending(SCCB_EVD_TYPE_VT220))
@@ -1739,14 +1750,12 @@ docheckstop:
             sccb->reas = SCCB_REAS_NO_EVENTS;
             sccb->resp = SCCB_RESP_NO_EVENTS;
         }
-
         break;
-
 
     case SCLP_WRITE_EVENT_MASK:
 
         /* Set the main storage change bit */
-        STORAGE_KEY(sccb_absolute_addr, regs) |= STORKEY_CHANGE;
+        ARCH_DEP( or_storage_key )( sccb_absolute_addr, STORKEY_CHANGE );
 
         /* Set response code X'0100' if SCCB crosses a page boundary */
         if ((sccb_absolute_addr & STORAGE_KEY_PAGEMASK) !=
@@ -1812,7 +1821,7 @@ docheckstop:
    case SCLP_READ_XST_MAP:
 
         /* Set the main storage change bit */
-        STORAGE_KEY(sccb_absolute_addr, regs) |= STORKEY_CHANGE;
+        ARCH_DEP( or_storage_key )( sccb_absolute_addr, STORKEY_CHANGE );
 
         /* Set response code X'0100' if SCCB crosses a page boundary */
         if ((sccb_absolute_addr & STORAGE_KEY_PAGEMASK) !=
@@ -1977,7 +1986,6 @@ docheckstop:
         /* Set response code X'01F0' for invalid SCLP command */
         sccb->reas = SCCB_REAS_INVALID_CMD;
         sccb->resp = SCCB_RESP_REJECT;
-
         break;
 
     } /* end switch(sclp_command) */
@@ -2006,7 +2014,6 @@ docheckstop:
 
 
 #endif /*defined(FEATURE_SERVICE_PROCESSOR)*/
-
 
 #if !defined(_GEN_ARCH)
 

@@ -1,4 +1,5 @@
 /* FEATALL.H    (C) Copyright Jan Jaeger, 2000-2012                  */
+/*              (C) and others 2013-2021                             */
 /*              Architecture-dependent macro definitions             */
 /*                                                                   */
 /*   Released under "The Q Public License Version 1"                 */
@@ -40,39 +41,34 @@
 /* problem and wish to test a possible permanent fix for it.         */
 /*                                                                   */
 /*-------------------------------------------------------------------*/
-// Fishtest...
 
-#define FISHTEST_TXF_STATS              // gather/track TXF metrics
-
-//#define OPTION_TXF_SINGLE_THREAD        // one transaction at a time
-
-/*-------------------------------------------------------------------*/
-
-#define OPTION_DEPRECATE_TXF_LASTACC    // Deprecate 'txf_lastacc'
-#define OPTION_FIX_SIE_ICODE_BUG        // fix possible SIE icode bug
-#define OPTION_NO_TXF_MADDR_L_ABORT     // Don't call abort_transaction directly from txf_maddr_l
-#define OPTION_HARDWARE_SYNC_ALL        // All PERFORM_SERIALIZATION
-//#define OPTION_HARDWARE_SYNC_BCR_ONLY   // ONLY the BCR instructions
-#if defined( OPTION_HARDWARE_SYNC_ALL ) && defined( OPTION_HARDWARE_SYNC_BCR_ONLY )
-  #error OPTION_HARDWARE_SYNC_ALL and OPTION_HARDWARE_SYNC_BCR_ONLY are mutually exclusive!
-#endif
+#define OPTION_USE_SKAIP_AS_LOCK        // Use SKAIP as lock, not RCP
+#define OPTION_SIE2BK_FLD_COPY          // SIE2BK 'fld' is NOT a mask
 #define OPTION_IODELAY_KLUDGE           // IODELAY kludge for Linux
 #define OPTION_MVS_TELNET_WORKAROUND    // Handle non-std MVS telnet
-#define OPTION_NO_E3_OPTINST            // (temporary?)
-#define OPTION_GH275_PIC12_FIX          // GitHub #275 PIC 12 fix
 #define OPTION_SIE_PURGE_DAT_ALWAYS     // Ivan 2016-07-30: purge DAT
-                                        // ALWAYS at entry to SIE
+                                        // ALWAYS at start SIE mode
+//#define NO_OPTINST                      // Doesn't really help much?
+#define OPTION_NO_E3_OPTINST            // Problematic!
+
 /*-------------------------------------------------------------------*/
+/*              Normal default OPTIONs and FEATUREs                  */
+/*-------------------------------------------------------------------*/
+
+//efine OPTION_SKEY_ABS_CHECK           /* skey debugging option     */
+//efine OPTION_ATOMIC_SKEYS             /* Update skeys atomically   */
 
 #define VECTOR_SECTION_SIZE         128 /* Vector section size       */
 #define VECTOR_PARTIAL_SUM_NUMBER     1 /* Vector partial sum number */
 
 #define CKD_MAXFILES                 27 /* Max files per CKD volume  */
 
+#define PANEL_REFRESH_RATE_MIN    (1000 / CLK_TCK)  /* (likely 1ms!) */
+#define PANEL_REFRESH_RATE_MAX     5000 /* Arbitrary, but reasonable */
 #define PANEL_REFRESH_RATE_FAST      50 /* Fast refresh rate (msecs) */
 #define PANEL_REFRESH_RATE_SLOW     500 /* Slow refresh rate (msecs) */
 
-#define MIN_TOD_UPDATE_USECS          1 /* Min TOD updt freq (usecs) */
+#define MIN_TOD_UPDATE_USECS         50 /* Min TOD updt freq (usecs) */
 #define DEF_TOD_UPDATE_USECS         50 /* Def TOD updt freq (usecs) */
 #define MAX_TOD_UPDATE_USECS    1000000 /* Max TOD updt freq (usecs) */
 
@@ -126,6 +122,12 @@
   #error Either OPTION_WATCHDOG or OPTION_NO_WATCHDOG must be specified, not both
 #elif !defined( OPTION_WATCHDOG ) && !defined( OPTION_NO_WATCHDOG )
   #define OPTION_WATCHDOG
+#endif
+
+#define OPTION_HARDWARE_SYNC_ALL        // All PERFORM_SERIALIZATION
+//#define OPTION_HARDWARE_SYNC_BCR_ONLY   // ONLY the BCR instructions
+#if defined( OPTION_HARDWARE_SYNC_ALL ) && defined( OPTION_HARDWARE_SYNC_BCR_ONLY )
+  #error OPTION_HARDWARE_SYNC_ALL and OPTION_HARDWARE_SYNC_BCR_ONLY are mutually exclusive!
 #endif
 
 /*-------------------------------------------------------------------*/
@@ -243,6 +245,7 @@
 #undef  FEATURE_054_EE_CMPSC_FACILITY
 #undef  FEATURE_057_MSA_EXTENSION_FACILITY_5
 #undef  FEATURE_058_MISC_INSTR_EXT_FACILITY_2
+#undef  FEATURE_061_MISC_INSTR_EXT_FACILITY_3
 #undef  FEATURE_066_RES_REF_BITS_MULT_FACILITY
 #undef  FEATURE_067_CPU_MEAS_COUNTER_FACILITY
 #undef  FEATURE_068_CPU_MEAS_SAMPLNG_FACILITY
@@ -255,6 +258,7 @@
 #undef  DYNINST_077_MSA_EXTENSION_FACILITY_4               /*dyncrypt*/
 #undef  FEATURE_078_ENHANCED_DAT_FACILITY_2
 #undef  FEATURE_080_DFP_PACK_CONV_FACILITY
+#undef  FEATURE_081_PPA_IN_ORDER_FACILITY
 #undef  FEATURE_129_ZVECTOR_FACILITY
 #undef  FEATURE_130_INSTR_EXEC_PROT_FACILITY
 #undef  FEATURE_131_SIDE_EFFECT_ACCESS_FACILITY
@@ -319,7 +323,6 @@
 #undef  FEATURE_INCORRECT_LENGTH_INDICATION_SUPPRESSION
 #undef  FEATURE_INTEGRATED_3270_CONSOLE
 #undef  FEATURE_INTEGRATED_ASCII_CONSOLE
-#undef  FEATURE_INTERPRETIVE_EXECUTION
 #undef  FEATURE_INTERVAL_TIMER
 #undef  FEATURE_IO_ASSIST
 #undef  FEATURE_LINKAGE_STACK
@@ -358,6 +361,7 @@
 #undef  FEATURE_SEGMENT_PROTECTION
 #undef  FEATURE_SERVICE_PROCESSOR
 #undef  FEATURE_SET_ADDRESS_SPACE_CONTROL_FAST
+#undef  FEATURE_SIE
 #undef  FEATURE_SQUARE_ROOT
 #undef  FEATURE_STORAGE_KEY_ASSIST
 #undef  FEATURE_STORAGE_PROTECTION_OVERRIDE
@@ -373,5 +377,6 @@
 #undef  FEATURE_VM_BLOCKIO
 #undef  FEATURE_WAITSTATE_ASSIST
 #undef  FEATURE_TCPIP_EXTENSION
+#undef  FEATURE_ZVM_ESSA
 
 /* end of FEATALL.H */

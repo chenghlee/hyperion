@@ -49,7 +49,7 @@ int     i1, i2;                         /* FP register subscripts    */
 
     RRE(inst, regs, r1, r2);
 
-    TRAN_FLOAT_INSTR_CHECK( regs );
+    CONTRAN_INSTR_CHECK( regs );
     HFPREG2_CHECK(r1, r2, regs);
 
     i1 = FPR2I(r1);
@@ -72,7 +72,7 @@ int     i1, i2;                         /* FP register subscripts    */
 
     RRE(inst, regs, r1, r2);
 
-    TRAN_FLOAT_INSTR_CHECK( regs );
+    CONTRAN_INSTR_CHECK( regs );
     HFPREG2_CHECK(r1, r2, regs);
 
     i1 = FPR2I(r1);
@@ -96,7 +96,7 @@ U32     sign;                           /* Work area for sign bit    */
 
     RRF_M(inst, regs, r1, r2, r3);
 
-    TRAN_FLOAT_INSTR_CHECK( regs );
+    CONTRAN_INSTR_CHECK( regs );
     HFPREG2_CHECK(r1, r2, regs);
     HFPREG_CHECK(r3, regs);
 
@@ -128,7 +128,7 @@ int     i1, i2;                         /* FP register subscripts    */
 
     RRE(inst, regs, r1, r2);
 
-    TRAN_FLOAT_INSTR_CHECK( regs );
+    CONTRAN_INSTR_CHECK( regs );
     HFPREG2_CHECK(r1, r2, regs);
 
     i1 = FPR2I(r1);
@@ -153,7 +153,7 @@ int     i1;                             /* FP register subscript     */
 
     RRE(inst, regs, r1, r2);
 
-    TRAN_FLOAT_INSTR_CHECK( regs );
+    CONTRAN_INSTR_CHECK( regs );
     HFPREG_CHECK(r1, regs);
 
     i1 = FPR2I(r1);
@@ -175,7 +175,7 @@ int     i2;                             /* FP register subscript     */
 
     RRE(inst, regs, r1, r2);
 
-    TRAN_FLOAT_INSTR_CHECK( regs );
+    CONTRAN_INSTR_CHECK( regs );
     HFPREG_CHECK(r2, regs);
 
     i2 = FPR2I(r2);
@@ -199,7 +199,7 @@ VADR            effective_addr2;        /* Effective address         */
 
     S(inst, regs, b2, effective_addr2);
 
-    TRAN_FLOAT_INSTR_CHECK( regs );
+    CONTRAN_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
 
     /* Set DFP rounding mode in FPC register from address bits 61-63 */
@@ -291,7 +291,7 @@ BYTE            dxc;                    /* Data exception code       */
 
     S(inst, regs, b2, effective_addr2);
 
-    TRAN_FLOAT_INSTR_CHECK( regs );
+    CONTRAN_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
 
     /* Load new FPC register contents from operand location */
@@ -330,7 +330,7 @@ BYTE            dxc;                    /* Data exception code       */
 
     RRE(inst, regs, r1, r2);
 
-    TRAN_FLOAT_INSTR_CHECK( regs );
+    CONTRAN_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
 
     /* Load new FPC register contents from R1 register bits 32-63 */

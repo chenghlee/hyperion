@@ -506,7 +506,7 @@ BYTE            serial[12+1] = {0};     /* Dasd serial number        */
         if (devhdr.dh_fileseq != fileseq
             && !(devhdr.dh_fileseq == 0 && fileseq == 1))
         {
-            // "%1d:%04X CKD file %s: ckd file out of sequence"
+            // "%1d:%04X CKD file %s: ckd file out of sequence or bad size"
             WRMSG( HHC00408, "E", LCSS_DEVNUM, filename );
             return -1;
         }
@@ -1517,7 +1517,7 @@ int shift;  /* num of bits to shift left 'high cyl' in sense6 */
 
     } /* end switch(format) */
 
-    /* Sense byte 27 bit 0 indicates 24-byte compatability sense data*/
+    /* Sense byte 27 bit 0 indicates 24-byte compatibility sense data*/
     dev->sense[27] = 0x80;
 
     /* Sense bytes 29-30 contain the cylinder address */
@@ -2106,7 +2106,7 @@ int             rc;                     /* Return code               */
     /* Pad the I/O buffer with zeroes if necessary */
     while (len < dev->ckdcurdl) buf[len++] = '\0';
 
-    // "%1d:%04X CKD file %s: ipdating cyl %d head %d record %d dl %d"
+    // "%1d:%04X CKD file %s: updating cyl %d head %d record %d dl %d"
     LOGDEVTR( HHC00441, "I",  dev->filename,
               dev->ckdcurcyl, dev->ckdcurhead, dev->ckdcurrec, dev->ckdcurdl );
 

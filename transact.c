@@ -1,4 +1,4 @@
-/* TRANSACT.C   (C) Copyright "Fish" (David B. Trout), 2017-2020     */
+/* TRANSACT.C   (C) Copyright "Fish" (David B. Trout), 2017-2021     */
 /*              (C) Copyright Bob Wood, 2019-2020                    */
 /*      Defines Transactional Execution Facility instructions        */
 /*                                                                   */
@@ -12,6 +12,25 @@
 /* z/Architecture Principles of Operation". Specifically chapter 5   */
 /* "Program Execution" pages 5-89 to page 5-109 contain a detailed   */
 /* description of the "Transactional-Execution Facility".            */
+/*-------------------------------------------------------------------*/
+
+/*-------------------------------------------------------------------*/
+/*                  Credit where credit is due                       */
+/*-------------------------------------------------------------------*/
+/* The overall design of Hercules's Transactional-Execution Facility */
+/* was originally designed by Bob Wood so he gets most of the credit */
+/* for what you see. Fish only gets credit for minor corrections and */
+/* enhancements to Bob's design. I just wanted to make that clear.   */
+/* It was only Fish which then -- along with LOTS of help from MANY  */
+/* other fellow Hercules developers -- that made various minor fixes */
+/* and enhancements to Bob's original design to reach the point of   */
+/* what you see here. But it is Bob Wood that is the TRUE HERCULEAN  */
+/* that should get the bulk of the credit for Hercules's overall TXF */
+/* (Transactional Execution Facility) implementation. THANKS BOB!    */
+/* And a special THANK YOU to Peter J. and Jürgen W. too for all of  */
+/* the MANY long hours each of you put in testing and bug hunting!   */
+/* Thank you all! You're the greatest! The Hercules project is truly */
+/* indebted to each and every one of you! Thank you! :`)             */
 /*-------------------------------------------------------------------*/
 
 #include "hstdinc.h"
@@ -60,18 +79,12 @@
   #undef  PTT_TXF
   #define PTT_TXF( ... )              // (nothing)
 #endif
-
 #endif // DID_TXF_DEBUGGING
 
 #if defined( FEATURE_049_PROCESSOR_ASSIST_FACILITY )
 /*-------------------------------------------------------------------*/
 /* B2E8 PPA   - Perform Processor Assist                     [RRF-c] */
 /*-------------------------------------------------------------------*/
-
-#define PPA_MAX_HELP_THRESHOLD  16
-#define PPA_MED_HELP_THRESHOLD   8
-#define PPA_MIN_HELP_THRESHOLD   1
-
 DEF_INST( perform_processor_assist )
 {
 int     r1, r2;                         /* Operand register numbers  */
@@ -93,29 +106,33 @@ U32     abort_count;                    /* Transaction Abort count   */
     {
     case 1: // Transaction Abort Assist
     {
-        /* Provide least amount of assistance required */
-        if (abort_count >= PPA_MAX_HELP_THRESHOLD)
-        {
-            /* Provide maximal assistance */
-            // TODO... do something useful
-        }
-        else if (abort_count >= PPA_MED_HELP_THRESHOLD)
-        {
-            /* Provide medium assistance */
-            // TODO... do something useful
-        }
-        else if (abort_count >= PPA_MIN_HELP_THRESHOLD)
-        {
-            /* Provide minimal assistance */
-            // TODO... do something useful
-        }
-        else // zero!
-        {
-            /* Provide NO assistance at all */
-            // (why are you wasting my time?!)
-        }
+        regs->txf_PPA = abort_count;
         return;
     }
+#if defined( FEATURE_081_PPA_IN_ORDER_FACILITY )
+    case 15: // In-order Execution Assist
+    {
+        /*
+           "When the function code in the M3 field is 15 and the
+            PPA-in-order facility is installed, the processor is
+            requested to complete processing all instructions prior
+            to this PPA instruction, as observed by this CPU, before
+            attempting storage-operand references for any instruction
+            after this PPA instruction."
+
+           "The R1 and R2 fields are ignored and the instruction is
+            executed as a no-operation."
+
+           "The in-order-execution assist does not necessarily perform
+            any of the steps for architectural serialization described
+            in the section "CPU Serialization" on page 5-130."
+        */
+
+        /* Hercules does not currently support this assist */
+
+        return;  /* (ignore unsupported assists) */
+    }
+#endif // defined(  FEATURE_081_PPA_IN_ORDER_FACILITY )
 
     default:     /* (unknown/unsupported assist) */
         return;  /* (ignore unsupported assists) */
@@ -178,10 +195,17 @@ void ARCH_DEP( set_txf_aie )( REGS* regs )
     regs->txf_aie      = regs->ip - 6 + 256; // (minus-6 for TBEGINC)
     regs->txf_aie_aiv  = regs->AIV;
 
-    if (regs->txf_aie > (regs->aip + ZPAGEFRAME_PAGESIZE))
+    /* Is aie in next page? */
+    if (regs->txf_aie >= (regs->aip + ZPAGEFRAME_PAGESIZE))
     {
+        /* Define aie offset into next page for vstore.h */
         regs->txf_aie_aiv2 = regs->txf_aie_aiv + ZPAGEFRAME_PAGESIZE;
         regs->txf_aie_off2 = regs->txf_aie - (regs->aip + ZPAGEFRAME_PAGESIZE);
+    }
+    else
+    {
+        /* Prevent vstore.h next page offset match */
+        regs->txf_aie_aiv2 = ~regs->txf_aie_aiv;
     }
 }
 
@@ -197,7 +221,7 @@ BYTE       *altaddr;
 BYTE       *saveaddr;
 BYTE       *mainaddr;
 TPAGEMAP   *pmap;
-int         txf_tnd, txf_tac;
+int         txf_tnd, txf_tac, slot;
 
     S( inst, regs, b2, effective_addr2 );
 
@@ -225,11 +249,11 @@ int         txf_tnd, txf_tac;
     {
         /* Not currently in transactional-execution mode.
            Set CC 2 and treat as no-op (i.e. just return
-           since there is no active transaction to end!)
+           since there is no active transaction to end)
         */
         PTT_TXF( "*TXF end", 0, 0, 0 );
-        regs->psw.cc = 2;   /* CPU wasn't in transaction mode! */
-        return;             /* Nothing to do! Just return! */
+        regs->psw.cc = 2;   /* CPU wasn't in transaction mode */
+        return;             /* Nothing to do. Just return. */
     }
 
     /* CPU was in transaction-execution mode at start of operation */
@@ -247,6 +271,7 @@ int         txf_tnd, txf_tac;
         U64    txf_aie_aiv;      /* (saved original value) */
         U64    txf_aie_aiv2;     /* (saved original value) */
         int    txf_aie_off2;     /* (saved original value) */
+        BYTE   refchg;           /* (storagekey work flag) */
 
         SYNCHRONIZE_CPUS( regs );
 
@@ -258,6 +283,8 @@ int         txf_tnd, txf_tac;
             txf_tac = regs->txf_tac;
         }
         RELEASE_TXFLOCK( regs );
+
+        TXF_TRACE_INIT( regs );
 
         /* Still in transaction-execution mode? */
         if (txf_tnd)
@@ -281,7 +308,7 @@ int         txf_tnd, txf_tac;
             {
                 // "TXF: %s%02X: %sSuccessful %s Nested TEND for TND %d => %d"
                 WRMSG( HHC17700, "D", TXF_CPUAD( regs ), TXF_QSIE( regs ),
-                    regs->txf_contran ? "Cons" : "Uncons", txf_tnd + 1, txf_tnd );
+                    TXF_CONSTRAINED( regs->txf_contran ), txf_tnd + 1, txf_tnd );
             }
 
             /* If we're now at or below the highest nesting level
@@ -303,9 +330,6 @@ int         txf_tnd, txf_tac;
 
             /* Set PIFC for this nesting level */
             regs->txf_pifc = regs->txf_pifctab[ txf_tnd - 1 ];
-
-            /* Reset CONSTRAINED trans instruction fetch constraint */
-            ARCH_DEP( reset_txf_aie )( regs );
 
             /* Remain in transactional-execution mode */
             PTT_TXF( "TXF end", 0, regs->txf_contran, txf_tnd );
@@ -361,9 +385,6 @@ int         txf_tnd, txf_tac;
         /*  storage now, or the transation will be aborted with    */
         /*  a conflict, since that means that some other CPU or    */
         /*  the channel subsystem has stored into the cache line.  */
-        /*  Additionally, if some other CPU fetched from a cache   */
-        /*  line that we transactionally stored into, then that    */
-        /*  is also a conflict causing our transaction to fail.    */
         /*---------------------------------------------------------*/
 
         regs->txf_conflict = 0;
@@ -383,7 +404,7 @@ int         txf_tnd, txf_tac;
                     continue;
 
                 /*--------------------------------------*/
-                /*          TRANSACTION FAILURE!        */
+                /*          TRANSACTION FAILURE         */
                 /*--------------------------------------*/
 
                 if (pmap->virtpageaddr)
@@ -411,7 +432,7 @@ int         txf_tnd, txf_tac;
         }
 
         /*---------------------------------------------------------*/
-        /*                 TRANSACTION SUCCESS!                    */
+        /*                 TRANSACTION SUCCESS                     */
         /*---------------------------------------------------------*/
         /*  We have now validated all of the cache lines that we   */
         /*  touched, and all other CPUs are dormant.  Now update   */
@@ -422,7 +443,7 @@ int         txf_tnd, txf_tac;
         {
             // "TXF: %s%02X: %sSuccessful Outermost %s TEND"
             WRMSG( HHC17701, "D", TXF_CPUAD( regs ), TXF_QSIE( regs ),
-                txf_contran ? "Cons" : "Uncons" );
+                TXF_CONSTRAINED( txf_contran ));
         }
 
         /* Commit all of our transactional changes */
@@ -430,6 +451,8 @@ int         txf_tnd, txf_tac;
 
         for (i=0; i < regs->txf_pgcnt; i++, pmap++)
         {
+            refchg = STORKEY_REF; // (wouldn't be in map if it wasn't!)
+
             if (TXF_TRACE_PAGES( regs, txf_contran ))
             {
                 // "TXF: %s%02X: %svirt 0x%16.16"PRIX64", abs 0x%16.16"PRIX64", alt 0x%16.16"PRIX64
@@ -448,6 +471,7 @@ int         txf_tnd, txf_tac;
                 altaddr  = pmap->altpageaddr  + (j << ZCACHE_LINE_SHIFT);
 
                 memcpy( mainaddr, altaddr, ZCACHE_LINE_SIZE );
+                refchg |= STORKEY_CHANGE;
 
                 if (TXF_TRACE_LINES( regs, txf_contran ))
                 {
@@ -455,49 +479,50 @@ int         txf_tnd, txf_tac;
                     dump_cache( regs, TXF_DUMP_PFX( HHC17707 ), j, altaddr );
                 }
             }
+
+            ARCH_DEP( or_storage_key )( MAIN_TO_ABS( pmap->mainpageaddr ), refchg );
         }
 
         /* Mark the page map as now being empty */
         regs->txf_pgcnt = 0;
 
         /*------------------------------------------*/
-        /*  We are done! Release INTLOCK and exit.  */
+        /*  We are done. Release INTLOCK and exit.  */
         /*------------------------------------------*/
 
         PTT_TXF( "TXF end", 0, 0, 0 );
 
-        /* Exiting from transactional-execution mode... */
-        UPDATE_SYSBLK_TRANSCPUS( -1 );
-
         /*---------------------------------------------*/
-        /*  Trace CONSTRAINED failure retry success    */
+        /*          Trace failure retry success        */
         /*---------------------------------------------*/
         if (1
             && MLVL( VERBOSE )
-            && regs->txf_caborts
+            && regs->txf_aborts
             && TXF_TRACE( regs, FAILURE, txf_contran )
         )
         {
-            // "TXF: %s%02X: %sCONSTRAINED transaction succeeded after %d retries"
+            // "TXF: %s%02X: %s%s transaction succeeded after %d retries"
             WRMSG( HHC17718, "D", TXF_CPUAD( regs ), TXF_QSIE( regs ),
-                regs->txf_caborts );
+                TXF_CONSTRAINED( txf_contran ), regs->txf_aborts );
         }
 
-#if defined( FISHTEST_TXF_STATS )
-        {
-            int n = regs->txf_caborts < 9 ? regs->txf_caborts : 9-1;
-            atomic_update64( &sysblk.txf_ctrans,       +1 );
-            atomic_update64( &sysblk.txf_caborts[ n ], +1 );
-        }
-#endif
-        /* Transaction suceeded. Reset abort count */
-        regs->txf_caborts = 0;
+        /* Track TXF statistics */
+        slot = regs->txf_aborts < TXF_STATS_RETRY_SLOTS ?
+               regs->txf_aborts : TXF_STATS_RETRY_SLOTS - 1;
+        TXF_STATS( retries[ slot ], txf_contran );
 
-#if defined( OPTION_TXF_SINGLE_THREAD )
-        /* Release transaction lock */
-        if (txf_contran)
-            RELEASE_TXF_TRANLOCK();
-#endif
+        /* Track retries high watermark */
+        if ((U64)regs->txf_aborts > sysblk.txf_stats[ txf_contran ].txf_retries_hwm)
+            sysblk.txf_stats[ txf_contran ].txf_retries_hwm = (U64)regs->txf_aborts;
+
+        /* Reset abort count */
+        regs->txf_aborts = 0;
+
+        /* Reset PPA assistance */
+        regs->txf_PPA = 0;
+
+        /* Reset CONSTRAINED trans instruction fetch constraint */
+        ARCH_DEP( reset_txf_aie )( regs );
 
         PERFORM_SERIALIZATION( regs );
     }
@@ -674,12 +699,7 @@ VADR    effective_addr1;                /* Effective address         */
     /* CONSTRAINED: ignore some i2 bits */
     i2 &= ~(TXF_CTL_FLOAT | TXF_CTL_PIFC);
 
-#if defined( OPTION_TXF_SINGLE_THREAD )
-    /* Obtain transaction lock */
-    if (!regs->txf_tnd)
-        OBTAIN_TXF_TRANLOCK();
-#endif
-
+    /* Obtain interrupt lock so "process_tbegin" can do SYNCHRONIZE_CPUS */
     OBTAIN_INTLOCK( regs );
     {
         /* Let our helper function do all the grunt work */
@@ -695,7 +715,7 @@ VADR    effective_addr1;                /* Effective address         */
 /*-------------------------------------------------------------------*/
 /*       process_tbegin  --  common TBEGIN/TBEGINC logic             */
 /*-------------------------------------------------------------------*/
-/*    The interrupt lock (INTLOCK) *MUST* be held upon entry!        */
+/*    The interrupt lock (INTLOCK) *MUST* be held upon entry         */
 /*-------------------------------------------------------------------*/
 void ARCH_DEP( process_tbegin )( bool txf_contran, REGS* regs, S16 i2,
                                  U64 tdba, int b1 )
@@ -718,6 +738,9 @@ TPAGEMAP   *pmap;
         UNREACHABLE_CODE( return );
     }
 
+    /* Count transaction */
+    atomic_update32( &sysblk.txf_counter, +1 );
+
     CONTRAN_INSTR_CHECK( regs );    /* Unallowed in CONSTRAINED mode */
 
     /*---------------------------------------------*/
@@ -732,6 +755,8 @@ TPAGEMAP   *pmap;
     /* set cc=0 at transaction start */
     regs->psw.cc = TXF_CC_SUCCESS;
 
+    TXF_TRACE_INIT( regs );
+
     /* first/outermost transaction? */
     if (regs->txf_tnd == 1)
     {
@@ -739,7 +764,9 @@ TPAGEMAP   *pmap;
         /*              BEGIN OUTERMOST TRANSACTION                  */
         /*-----------------------------------------------------------*/
 
-        UPDATE_SYSBLK_TRANSCPUS( +1 );  /* bump transacting CPUs ctr */
+        /* Count total transactions */
+        if (!regs->txf_aborts)
+            TXF_STATS( trans, txf_contran );
 
         /* Set internal TDB to invalid until it's actually populated */
         memset( &regs->txf_tdb, 0, sizeof( TDB ));
@@ -764,9 +791,6 @@ TPAGEMAP   *pmap;
         regs->txf_tac        = 0;          /* clear the abort code   */
         regs->txf_conflict   = 0;          /* clear conflict address */
         regs->txf_piid       = 0;          /* program interrupt id   */
-#if !defined( OPTION_DEPRECATE_TXF_LASTACC )
-        regs->txf_lastacc    = 0;          /* last access type       */
-#endif
         regs->txf_lastarn    = 0;          /* last access arn        */
         regs->txf_why        = 0;          /* no abort cause (yet)   */
 
@@ -793,11 +817,10 @@ TPAGEMAP   *pmap;
             memcpy( &origpsw, &regs->psw, sizeof( PSW ));
             {
                 n = txf_contran ? -6 : 0;
-                regs->psw.IA = PSW_IA( regs, n );
+                regs->psw.IA = PSW_IA_FROM_IP( regs, n );
                 memcpy( &regs->txf_tapsw, &regs->psw, sizeof( PSW ));
                 regs->txf_ip  = regs->ip;
                 regs->txf_aip = regs->aip;
-                regs->txf_aim = regs->aim;
                 regs->txf_aiv = regs->aiv;
             }
             memcpy( &regs->psw, &origpsw, sizeof( PSW ));
@@ -827,6 +850,7 @@ TPAGEMAP   *pmap;
                     break;
 
                 /* Fall through to choose when to randomly abort */
+                /* FALLTHRU */
 
             case TDC_ALWAYS_RANDOM:         /* ALWAYS randomly abort */
             {
@@ -883,7 +907,7 @@ TPAGEMAP   *pmap;
                the CPU is already in the unconstrained TX mode),
                then execution simply proceeds as if this were a
                unconstrained transaction. (The TX mode does NOT
-               switch to constrained mode!)
+               switch to constrained mode)
 
                In this case, the effective F control is zeroed,
                and the effective PIFC remains unchanged. This
@@ -932,17 +956,17 @@ TPAGEMAP   *pmap;
     }
 
     /*--------------------------------------------------------------*/
-    /* Report failed CONSTRAINED transaction retries                */
+    /*           Report failed transaction retries                  */
     /*--------------------------------------------------------------*/
     if (1
         && MLVL( VERBOSE )
-        && regs->txf_caborts
+        && regs->txf_aborts
         && TXF_TRACE( regs, FAILURE, regs->txf_contran )
     )
     {
-        // "TXF: %s%02X: %sCONSTRAINED transaction retry #%d..."
+        // "TXF: %s%02X: %s%s transaction retry #%d..."
         WRMSG( HHC17717, "D", TXF_CPUAD( regs ), TXF_QSIE( regs ),
-            regs->txf_caborts );
+            TXF_CONSTRAINED( regs->txf_contran ), regs->txf_aborts );
     }
 
 } /* end ARCH_DEP( process_tbegin ) */
@@ -981,7 +1005,6 @@ static const int tac2cc[20] =
     TXF_CC_TRANSIENT        //  19  TAC_GUARDED
 };
 #endif /* defined( _FEATURE_073_TRANSACT_EXEC_FACILITY ) */
-
 
 /*-------------------------------------------------------------------*/
 /*                      abort_transaction                            */
@@ -1025,7 +1048,7 @@ void ARCH_DEP( abort_transaction )( REGS* regs, int raw_retry, int txf_tac, cons
     UNREFERENCED( txf_tac   );
     UNREFERENCED( loc       );
 
-    CRASH();   /* Should NEVER be called for S/370 or S/390! */
+    CRASH();   /* Should NEVER be called for S/370 or S/390 */
 
 #else /* only Z900 supports Transactional-Execution Facility */
 
@@ -1040,26 +1063,17 @@ TDB*       tb_tdb   = NULL; /* TBEGIN-specified TDB @ operand-1 addr */
 VADR       txf_atia;        /* Aborted Transaction Instruction Addr. */
 int        retry;           /* Actual retry code                     */
 
+    UNREFERENCED( loc );
+
+    PTT_TXF( "*TXF abort", raw_retry, txf_tac, regs->txf_contran );
+
     /* Set the initial Transaction Abort Code */
     if (!regs->txf_tac)
         regs->txf_tac = txf_tac;
 
-    /* Identify who called us (if appropriate) */
-    if (1
-        && TXF_TRACING()            // (debug tracing enabled?)
-        && MLVL( VERBOSE )          // (verbose debug messages?)
-                                    // (non-specific tracing or
-                                    // tracing matches specifics...)
-        && TXF_TRACE_CPU( regs )
-        && TXF_TRACE_TND( regs )
-        && TXF_TRACE_WHY( regs )
-        && TXF_TRACE_TAC( regs )
-        && TXF_TRACE_CFAILS( regs )
-    )
-        // "TXF: %s%02X: %sabort_transaction called from %s"
-        WRMSG( HHC17722, "D", TXF_CPUAD( regs ), TXF_QSIE( regs ), TRIMLOC( loc ));
+    TXF_TRACE_INIT( regs );
 
-    // LOGIC ERROR if CPU not in transactional-execution mode!
+    // LOGIC ERROR if CPU not in transactional-execution mode
     if (!regs->txf_tnd)
         CRASH();
 
@@ -1071,17 +1085,19 @@ int        retry;           /* Actual retry code                     */
     {
         /* Normal instruction abort: the PREVIOUS instruction
            is the one where the abort actually occurred at. */
-        txf_atia = PSW_IA( regs, -REAL_ILC( regs ));
+        txf_atia = PSW_IA_FROM_IP( regs, -REAL_ILC( regs ));
+        PTT_TXF( "TXF ATIA", txf_atia, 0, -REAL_ILC( regs ) );
     }
     else // (raw_retry < 0)
     {
         /* Instruction dispatch abort: the CURRENT instruction
            address is where the abort actually occurred at. */
-        txf_atia = PSW_IA( regs, 0 );
+        txf_atia = PSW_IA_FROM_IP( regs, 0 );
+        PTT_TXF( "TXF ATIA", txf_atia, 0, 0 );
     }
 
     /* Obtain the interrupt lock if we don't already have it */
-    if (sysblk.intowner == regs->cpuad)
+    if (IS_INTLOCK_HELD( regs ))
         had_INTLOCK = true;
     else
     {
@@ -1091,23 +1107,40 @@ int        retry;           /* Actual retry code                     */
 
     PERFORM_SERIALIZATION( regs );
 
-    PTT_TXF( "TXF abort", 0, regs->txf_contran, regs->txf_tnd );
-
     /*---------------------------------------------*/
-    /*  Failure of CONSTRAINED transaction retry?  */
+    /*       Failure of transaction retry?         */
     /*---------------------------------------------*/
     if (1
         && MLVL( VERBOSE )
-        && regs->txf_caborts
+        && regs->txf_aborts
         && TXF_TRACE( regs, FAILURE, regs->txf_contran )
     )
     {
-        // "TXF: %s%02X: %sCONSTRAINED transaction retry #%d FAILED!"
+        // "TXF: %s%02X: %s%s transaction retry #%d FAILED!"
         WRMSG( HHC17719, "D", TXF_CPUAD( regs ), TXF_QSIE( regs ),
-            regs->txf_caborts );
+            TXF_CONSTRAINED( regs->txf_contran ), regs->txf_aborts );
     }
 
-    regs->txf_caborts = regs->txf_contran ? ++regs->txf_caborts : 0;
+    /*---------------------------------------------*/
+    /*          Count the abort/retry              */
+    /*---------------------------------------------*/
+
+    /* Count total retries for this transaction */
+    regs->txf_aborts++;
+
+    /* Provide PPA assist for constrained transactions too */
+    if (regs->txf_contran)
+        regs->txf_PPA = regs->txf_aborts;
+
+    /* Track total aborts by cause (TAC) */
+    if (regs->txf_tac == TAC_MISC)
+        TXF_STATS( aborts_by_tac_misc, regs->txf_contran );
+    else
+    {
+        int slot = regs->txf_tac < TXF_STATS_TAC_SLOTS ?
+                   regs->txf_tac : 0; // (0 == "other")
+        TXF_STATS( aborts_by_tac[ slot ], regs->txf_contran );
+    }
 
     /*---------------------------------------------*/
     /*  Clean up the transaction flags             */
@@ -1137,7 +1170,7 @@ int        retry;           /* Actual retry code                     */
         // "TXF: %s%02X: %sFailed %s %s Transaction for TND %d: %s = %s, why =%s"
         WRMSG( HHC17703, "D", TXF_CPUAD( regs ), TXF_QSIE( regs ),
             txf_tnd > 1 ? "Nested" : "Outermost",
-            txf_contran ? "Cons" : "Uncons", txf_tnd,
+            TXF_CONSTRAINED( txf_contran ), txf_tnd,
             tac2short( txf_tac ), tac2long( txf_tac ), why );
 
         /* If this is a delayed abort, log who detected/requested it */
@@ -1229,16 +1262,11 @@ int        retry;           /* Actual retry code                     */
     }
     RELEASE_TXFLOCK( regs );
 
-    /*---------------------------------------------*/
-    /*  Decrement count of transacting CPUs        */
-    /*---------------------------------------------*/
-    UPDATE_SYSBLK_TRANSCPUS( -1 );
-
     /* Reset CONSTRAINED trans instruction fetch constraint */
     ARCH_DEP( reset_txf_aie )( regs );
 
     /*-----------------------------------------------------*/
-    /*    Trace program interrupt before updating PSW      */
+    /*    Trace program interrupt BEFORE updating PSW      */
     /*-----------------------------------------------------*/
     /*  If the retry code is ABORT_RETRY_PGMCHK, then we   */
     /*  will eventually be calling the program_interrupt   */
@@ -1246,7 +1274,7 @@ int        retry;           /* Actual retry code                     */
     /*  so we MUST trace the program interrupt here. We    */
     /*  CANNOT let the program_interrupt function do that  */
     /*  for us like it normally does since it would report */
-    /*  the wrong PSW! Thus we MUST do it ourselves here.  */
+    /*  the wrong PSW. Thus we MUST do it ourselves here.  */
     /*-----------------------------------------------------*/
 
     if (retry == ABORT_RETRY_PGMCHK)
@@ -1261,12 +1289,18 @@ int        retry;           /* Actual retry code                     */
                instruction has not been decoded yet (and the PSW
                and 'ip' pointer bumped appropriately (instead,
                it is pointing directly AT the failing instruction
-               and not past it like normal)), we must report this
-               program interrupt slightly differently (without
-               any PSW or instruction pointer adjustment).
+               and not past it like normal)), we must bump the ip
+               past the instruction that program checked so that
+               the 'trace_program_interrupt' function can then
+               back it up to point to the correct instruction.
             */
             ilc = ILC( *regs->ip );
-            ARCH_DEP( trace_program_interrupt_ip )( regs, regs->ip, pcode, ilc );
+            regs->ip += ilc;
+            {
+                PTT_TXF( "TXF trpi+ilc", regs->ip, ilc, 0 );
+                ARCH_DEP( trace_program_interrupt )( regs, pcode, ilc );
+            }
+            regs->ip -= ilc;
         }
         else /* Normal program interrupt after instruction decode */
         {
@@ -1274,11 +1308,8 @@ int        retry;           /* Actual retry code                     */
             ilc = ARCH_DEP( fix_program_interrupt_PSW )( regs );
 
             /* Trace program checks other than PER event */
-            regs->ip -= ilc;
-            {
-                ARCH_DEP( trace_program_interrupt_ip )( regs, regs->ip, pcode, ilc );
-            }
-            regs->ip += ilc;
+            PTT_TXF( "TXF trpi", regs->ip, ilc, 0 );
+            ARCH_DEP( trace_program_interrupt )( regs, pcode, ilc );
         }
 
         /* Save the program interrupt id */
@@ -1290,12 +1321,16 @@ int        retry;           /* Actual retry code                     */
     /*  Set the current PSW to the Transaction Abort PSW  */
     /*----------------------------------------------------*/
 
+    /* PROGRAMMING NOTE: it's CRITICAL to invalidate the aia BEFORE
+       setting the current PSW to the Transaction Abort PSW, since
+       INVALIDATE_AIA *might* update the PSW's instruction address
+       to a value different from what txf_tapsw says it should be!
+    */
+    INVALIDATE_AIA( regs ); // (do *before* PSW memcpy!)
     memcpy( &regs->psw, &regs->txf_tapsw, sizeof( PSW ));
     regs->ip  = regs->txf_ip;
     regs->aip = regs->txf_aip;
-    regs->aim = regs->txf_aim;
     regs->aiv = regs->txf_aiv;
-    INVALIDATE_AIA( regs );
 
     /*---------------------------------------------*/
     /*     Set the condition code in the PSW       */
@@ -1414,10 +1449,16 @@ int        retry;           /* Actual retry code                     */
     /*----------------------------------------------------*/
 
     if (pi_tdb)
+    {
         memcpy( pi_tdb, &regs->txf_tdb, sizeof( TDB ));
+        ARCH_DEP( or_storage_key )( MAIN_TO_ABS( pi_tdb ), (STORKEY_REF | STORKEY_CHANGE) );
+    }
 
     if (tb_tdb)
+    {
         memcpy( tb_tdb, &regs->txf_tdb, sizeof( TDB ));
+        ARCH_DEP( or_storage_key )( MAIN_TO_ABS( tb_tdb ), (STORKEY_REF | STORKEY_CHANGE) );
+    }
 
     /* Trace TDB if requested */
     if (TXF_TRACE_TDB( regs, txf_contran ))
@@ -1452,12 +1493,6 @@ int        retry;           /* Actual retry code                     */
         PERFORM_SERIALIZATION( regs );
         RELEASE_INTLOCK( regs );
     }
-
-#if defined( OPTION_TXF_SINGLE_THREAD )
-    /* Release transaction lock */
-    if (txf_contran)
-        RELEASE_TXF_TRANLOCK();
-#endif
 
     /*----------------------------------------------------*/
     /*       RETURN TO CALLER OR JUMP AS REQUESTED        */
@@ -1550,11 +1585,10 @@ DLL_EXPORT void ARCH_DEP( txf_do_pi_filtering )( REGS* regs, int pcode )
 bool    filt;                   /* true == filter the interrupt      */
 int     txclass;                /* Transactional Execution Class     */
 int     fcc, ucc;               /* Filtered/Unfiltered conditon code */
-int     ilc;                    /* Instruction Length Code           */
 
     PTT_TXF( "TXF filt?", pcode, regs->txf_contran, regs->txf_tnd );
 
-    /* We shouldn't even be called if no transaction is active! */
+    /* We shouldn't even be called if no transaction is active */
     if (!regs->txf_tnd)
         CRASH();
 
@@ -1586,12 +1620,7 @@ int     ilc;                    /* Instruction Length Code           */
     case PGM_REGION_THIRD_TRANSLATION_EXCEPTION:
 
         /* Did interrupt occur during instruction fetch? */
-        if (1
-#if !defined( OPTION_DEPRECATE_TXF_LASTACC )
-            && regs->txf_lastacc == ACCTYPE_INSTFETCH
-#endif
-            && regs->txf_lastarn == USE_INST_SPACE
-        )
+        if (regs->txf_lastarn == USE_INST_SPACE)
         {
             txclass = 1;        /* Class 1 can't be filtered */
             filt = false;
@@ -1717,7 +1746,7 @@ int     ilc;                    /* Instruction Length Code           */
     /*   Can interrupt ABSOLUTELY be filtered?   */
     /*-------------------------------------------*/
 
-    if (filt)  /* NOW we can rely this flag! */
+    if (filt)  /* NOW we can rely this flag */
     {
         /*--------------------------------------*/
         /* TAC_FPGM: filtered Program Interrupt */
@@ -1733,22 +1762,6 @@ int     ilc;                    /* Instruction Length Code           */
     /*---------------------------------------------*/
     /*  TAC_UPGM: unfilterable Program Interrupt   */
     /*---------------------------------------------*/
-    /* We must report the program interrupt BEFORE */
-    /* abort_transaction gets called as it updates */
-    /* the PSW to the Transaction Abort PSW and we */
-    /* want to report the actual TRUE location of  */
-    /* where the program interrupt truly occurred. */
-    /*---------------------------------------------*/
-
-    /* Fix PSW and get instruction length (ilc) */
-    ilc = ARCH_DEP( fix_program_interrupt_PSW )( regs );
-
-    /* Trace program checks other than PER event */
-    regs->psw.IA -= ilc;
-    {
-        ARCH_DEP( trace_program_interrupt )( regs, pcode, ilc );
-    }
-    regs->psw.IA += ilc;
 
     /* Abort the transaction and return to the caller */
     regs->psw.cc = ucc;
@@ -1847,12 +1860,14 @@ TPAGEMAP*  pmap = regs->txf_pagesmap;
 }
 
 /*-------------------------------------------------------------------*/
-/*       Delay-Abort all active transactions due to CSP/CSPG         */
+/*             Delay-Abort all active transactions                   */
 /*-------------------------------------------------------------------*/
 void txf_abort_all( U16 cpuad, int why, const char* location )
 {
     int    cpu;
     REGS*  regs;
+
+    why |= TXF_WHY_DELAYED_ABORT;
 
     for (cpu=0, regs = sysblk.regs[ 0 ];
         cpu < sysblk.maxcpu; regs = sysblk.regs[ ++cpu ])
@@ -1875,11 +1890,11 @@ void txf_abort_all( U16 cpuad, int why, const char* location )
             )
             {
                 regs->txf_tac   =  TAC_MISC;
-                regs->txf_why  |=  why | TXF_WHY_DELAYED_ABORT;
+                regs->txf_why  |=  why;
                 regs->txf_who   =  cpuad;
                 regs->txf_loc   =  TRIMLOC( location );
 
-                PTT_TXF( "*TXF h CSP/G", regs->cpuad, regs->txf_contran, regs->txf_tnd );
+                PTT_TXF( "*TXF h delay", regs->cpuad, regs->txf_contran, regs->txf_tnd );
             }
 
             /* (check guestregs too just to be sure) */
@@ -1891,135 +1906,19 @@ void txf_abort_all( U16 cpuad, int why, const char* location )
             )
             {
                 GUESTREGS->txf_tac   =  TAC_MISC;
-                GUESTREGS->txf_why  |=  why | TXF_WHY_DELAYED_ABORT;
+                GUESTREGS->txf_why  |=  why;
                 GUESTREGS->txf_who   =  cpuad;
                 GUESTREGS->txf_loc   =  TRIMLOC( location );
 
-                PTT_TXF( "*TXF g CSP/G", GUESTREGS->cpuad, GUESTREGS->txf_contran, GUESTREGS->txf_tnd );
+                PTT_TXF( "*TXF g delay", GUESTREGS->cpuad, GUESTREGS->txf_contran, GUESTREGS->txf_tnd );
             }
         }
         RELEASE_TXFLOCK( regs );
     }
 }
 
-/*-------------------------------------------------------------------*/
-/*                    Fetch Conflict Scan                            */
-/*-------------------------------------------------------------------*/
-/* This function is called by txf_maddr_l for FETCH accesses when    */
-/* the caller is NOT in TXF mode. (This function does NOT need to    */
-/* be called for CPUs which are still in TXF mode.)                  */
-/*                                                                   */
-/* It checks if the FETCH being done by the executing CPU/channel    */
-/* (identified by the 'cpuad' argument) conflicts with any CPU's     */
-/* currently executing a transaction. If it does, then that CPU's    */
-/* transaction is scheduled for an eventual abort by setting its     */
-/* abort code. This is called a DELAYED ABORT since the other CPU's  */
-/* transaction is not being directly aborted (since it can't be!)    */
-/* but rather is simply being scheduled (triggered) for an EVENTUAL  */
-/* abort which won't occur until it reaches its TEND instruction.    */
-/*                                                                   */
-/* We do this since we cannot directly abort the transaction since   */
-/* it's not us. It's some other CPU in the middle of executing its   */
-/* stream of instructions. Instead, we must simply do something to   */
-/* let it know that its transaction needs to fail. We do this by     */
-/* setting its abort code for it to eventually notice whenever it    */
-/* eventually reaches its TEND instruction.                          */
-/*                                                                   */
-/* The "cpuad" argument identifies the CPU that originally called    */
-/* the txf_maddr_l function (that then called us) that is doing the  */
-/* checking. If it's the channel subsystem that is calling, then     */
-/* the cpuad will be set to (-1) instead, to indicate that.          */
-/*                                                                   */
-/* The "regs" argument is the regs context of the potential OTHER    */
-/* CPU whose transaction that this FETCH might conflict with. This   */
-/* is the CPU whose transactional page map we need to scan. If our   */
-/* FETCH conflicts with any of its transactional cache lines, then   */
-/* we schedule it for an eventual abort (i.e. delayed abort).        */
-/*-------------------------------------------------------------------*/
-static inline void txf_fetch_conflict_scan
-(
-    REGS*        regs,          /* REGS of the CPU we are checking */
-    const U64    addrpage,      /* Address of page being fetched   */
-    const int    cacheidx,      /* First cache line being fetched  */
-    const int    cacheidxe,     /* Last cache line being fetched   */
-    const int    cpuad,         /* Debug: Who's doing the fetching */
-    const char*  location       /* Debug: where conflict detected  */
-)
-{
-    OBTAIN_TXFLOCK( regs );
-    {
-        int i, k;
-        const TPAGEMAP* pmap;
-
-        /* Skip CPU if it's not in TXF mode or has already been aborted */
-        if (0
-            || !regs->txf_tnd       // (not in TXF mode)
-            ||  regs->txf_tac       // (already aborted)
-        )
-        {
-            RELEASE_TXFLOCK( regs );
-            return;
-        }
-
-        /* Scan this CPU's page map... */
-        for (pmap = regs->txf_pagesmap, i=0; i < regs->txf_pgcnt; i++, pmap++)
-        {
-            /* (skip if not same page as the one we're to check) */
-            if ((U64)pmap->mainpageaddr != addrpage)
-                continue;
-
-            /* Check for fetch conflict with this CPU */
-            for (k = cacheidx; k <= cacheidxe; k++)
-            {
-                /* If this CPU's transaction hasn't accessed the cache
-                   line yet, then there obviously is no conflict yet.
-                */
-                if (pmap->cachemap[k] == CM_CLEAN)
-                    continue;
-
-                /* If they only fetched from the same cache line too,
-                   then there is obviously no conflict yet.
-                */
-                if (pmap->cachemap[k] == CM_FETCHED)
-                    continue;
-
-                /* Otherwise since this CPU's transaction did a store
-                   into the same cache line that the caller is currently
-                   fetching from, we must abort this CPU's transaction
-                   since the caller would otherwise be fetching a stale
-                   cache line.
-                */
-                regs->txf_tac   =  TAC_FETCH_CNF;
-                regs->txf_why  |=  TXF_WHY_CONFLICT;
-                regs->txf_who   =  cpuad;
-                regs->txf_loc   =  TRIMLOC( location );
-
-                /* Save the logical address where the conflict
-                   occurred if we were able to determine that.
-                   Setting it to a non-zero value causes the
-                   TDB_CTV (Conflict-Token Validity) flag to
-                   be set in the Transaction Diagnostic Block
-                   providing information to the user regarding
-                   their failure.
-                */
-                if (pmap->virtpageaddr)
-                    regs->txf_conflict = pmap->virtpageaddr + (cacheidx << ZCACHE_LINE_SHIFT);
-                else
-                    regs->txf_conflict = 0;
-
-                PTT_TXF( "*TXF cnflct!", regs->cpuad, regs->txf_conflict, regs->txf_contran );
-                break;
-
-            } // end for cache line loop...
-
-        } // end for page map loop...
-    }
-
-    RELEASE_TXFLOCK( regs );
-}
-
 //---------------------------------------------------------------------
-//                   Keep Otimization Enabled!
+//                   Keep Otimization Enabled
 //---------------------------------------------------------------------
 // PROGRAMMING NOTE: because the 'txf_maddr_l' function is an integral
 // part of address translation its performance is absolutely critical.
@@ -2040,67 +1939,36 @@ static inline void txf_fetch_conflict_scan
 #endif
 
 /*-------------------------------------------------------------------*/
-/*     Transactional Address Translation and Conflict Check          */
+/*              Transactional Address Translation                    */
 /*-------------------------------------------------------------------*/
 /*                                                                   */
 /*  This function is called after every 'maddr_l' dynamic address    */
-/*  translation and by channel.c to, either POSSIBLY "translate"     */
-/*  the passed address to an alternate in a different page (only     */
-/*  for 'maddr_l' calls) and/or to check if the passed address       */
-/*  conflicts with the address of any currently transacting CPU      */
-/*  (if either a 'maddr_l' call or a channel.c call).                */
+/*  translation call for any CPU in transactional-execution mode     */
+/*  to "translate" the passed address to an alternate address in     */
+/*  a different page. Both vaddr and regs must be valid.             */
 /*                                                                   */
-/*  If called by the 'maddr_l' address translation function, both    */
-/*  vaddr and regs must be valid.  When called by channel.c however  */
-/*  (conflict check only), they should both be passed as zero.       */
+/*  The real storage address is mapped to an alternate address and   */
+/*  the contents of the real page are saved.  The cache line being   */
+/*  accessed within the page is marked as having been accessed.      */
 /*                                                                   */
-/*  If the CPU is in transactional execution mode (CONSTRAINED or    */
-/*  unconstrained), the maddr real storage address is saved in the   */
-/*  transaction data area, and then it is mapped to an alternate     */
-/*  address.  The contents of the real page are also saved.  The     */
-/*  cache line within the page is marked as having been fetched or   */
-/*  stored.   The first time that a cache line is accessed, it is    */
-/*  captured from the real page.  When a cache line or page is       */
-/*  captured, two copies are made.  One copy is presented to the     */
-/*  caller, and one is a save copy which will be used to see if the  */
-/*  cache line has changed.  In order to make sure that the capture  */
-/*  is clean, the two copies must match.  If they do not match,      */
-/*  the copy is retried up to MAX_CAPTURE_TRIES times.  If a copy    */
-/*  cannot be made in that many tries, the transaction is aborted    */
-/*  with a fetch conflict.  Note: it is OK to use real addresses     */
-/*  here because the transaction will be aborted if the real page    */
-/*  is invalidated.                                                  */
-/*                                                                   */
-/*  If the CPU is not executing any transaction, then only 'maddr'   */
-/*  is checked to see if it conflicts with any transactions that     */
-/*  might be executing on any other CPU (i.e. no translation is      */
-/*  performed; the 'maddr' value that was passed is returned).       */
-/*                                                                   */
-/*  Otherwise if the CPU is executing a transaction, 'maddr' is      */
-/*  mapped (translated) to an alternate page from the page map as    */
-/*  explained further above and it is that alternate address that    */
-/*  is then returned to the caller.                                  */
-/*                                                                   */
-/*  In both cases (maddr_l call or channel.c call) the address is    */
-/*  checked for conflict against any currently transacting CPU and   */
-/*  if so, the transacting CPU's transaction is aborted. Otherwise   */
-/*  the translated/untranslated address is returned to the caller.   */
+/*  The first time that a cache line is accessed, it is captured     */
+/*  from the real page.  When a cache line or page is captured two   */
+/*  copies are made:  one copy is presented to the caller and one    */
+/*  is a saved copy to be used at TEND commit time to see if that    */
+/*  cache line was changed by anyone.                                */
 /*                                                                   */
 /*  Input:                                                           */
-/*       vaddr    Logical address as passed to maddr_l or NULL       */
+/*       vaddr    Logical address as passed to maddr_l               */
 /*       len      Length of data access for cache line purposes      */
 /*       arn      Access register number as passed to maddr_l        */
-/*       regs     Pointer to the CPU register context or NULL        */
+/*       regs     Pointer to the CPU register context                */
 /*       acctype  Type of access: READ, WRITE, INSTFETCH, etc.       */
 /*       maddr    Guest absolute storage MAINADDR address output     */
-/*                from 'maddr_l' address translation call or the     */
-/*                absolute storage address being fetched or stored   */
-/*                by channel.c for a check-conflict-only call.       */
+/*                from 'maddr_l' address translation call            */
 /*                                                                   */
 /* Returns:                                                          */
-/*      Either the same value as passed in 'maddr' or POSSIBLY a     */
-/*      corresponding alternate address from the CPU's transaction   */
-/*      page map (TPAGEMAP) if the CPU is executing a transaction.   */
+/*      An alternate address from the transacting CPU's transaction  */
+/*      page map (TPAGEMAP).                                         */
 /*                                                                   */
 /*-------------------------------------------------------------------*/
 DLL_EXPORT BYTE* txf_maddr_l( const U64  vaddr,   const size_t  len,
@@ -2124,56 +1992,43 @@ DLL_EXPORT BYTE* txf_maddr_l( const U64  vaddr,   const size_t  len,
 
     TPAGEMAP*  pmap;            /* Pointer to Transaction Page Map   */
 
-#if defined( FISHTEST_TXF_STATS )
-    if ( (acctype & (ACC_READ                        ))) atomic_update64( &sysblk.acc_read,  +1 );
-    if ( (acctype & (ACC_WRITE                       ))) atomic_update64( &sysblk.acc_write, +1 );
-    if ( (acctype & (ACC_CHECK                       ))) atomic_update64( &sysblk.acc_check, +1 );
-    if (!(acctype & (ACC_READ | ACC_WRITE            ))) atomic_update64( &sysblk.acc_notrw, +1 );
-    if (!(acctype & (ACC_READ | ACC_WRITE | ACC_CHECK))) atomic_update64( &sysblk.acc_none,  +1 );
-#endif
+    ASSERT( regs && regs->txf_tnd );      /* (sanity check) */
 
-    /* Quick exit if no CPUs executing any transactions.
-
-       PROGRAMMING NOTE: We need this test here too (as well as in
-       the dat.h maddr_l function) since THIS function can also be
-       called directly by the channel via the TXF_FETCHREF and
-       TXF_STOREREF macros to check if the storage it is fetching
-       from or storing into conflicts with any active transactions.
-    */
-    if (!sysblk.txf_transcpus)
-        return maddr;
+    /* Check if our transaction has already been aborted */
+    if (regs->txf_tac)
+    {
+        PTT_TXF( "*TXF mad TAC", regs->txf_tac, regs->txf_contran, regs->txf_tnd );
+        if (!(regs->txf_why & TXF_WHY_DELAYED_ABORT))
+        {
+            regs->txf_why  |=  TXF_WHY_DELAYED_ABORT;
+            regs->txf_who   =  regs->cpuad;
+            regs->txf_loc   =  TRIMLOC( PTT_LOC );
+        }
+        ABORT_TRANS( regs, ABORT_RETRY_CC, regs->txf_tac );
+        UNREACHABLE_CODE( return maddr );
+    }
 
     /* Normalize access type for TXF usage */
     txf_acctype = TXF_ACCTYPE( acctype );
 
-    /*---------------------------------------------------------------*/
-    /*                       STORE access                            */
-    /*---------------------------------------------------------------*/
-    /* For STORE accesses it doesn't matter whether who is calling   */
-    /* is in TXF mode or not. Just do the store. No conflict check   */
-    /* is needed. Store conflicts will be detected at TEND. Besides  */
-    /* that, we do NOT want to prematurely abort a CPU's transaction */
-    /* since we don't know yet whose will reach TEND first. If our   */
-    /* transaction ends first, then it will succeed and theirs will  */
-    /* fail (due to the store conflict from our atomic commit of our */
-    /* store). Otherwise if they reach TEND first, then their's will */
-    /* succeed and ours will fail for the very same exact reason.    */
-    /*---------------------------------------------------------------*/
-    if (TXF_IS_STORE_ACCTYPE())
+    /*  Constrained transactions constraint #4: "The transaction's
+        storage operands access no more than four octowords. Note:
+        LOAD ON CONDITION and STORE ON CONDITION are considered to
+        reference storage regardless of the condition code."
+        (SA22-7832-12, page 5-109)
+    */
+    if (regs->txf_contran && len > (4 * ZOCTOWORD_SIZE))
     {
-        /* For non-TXF callers just return the untranslated address */
-        if (!regs || !regs->txf_tnd)
-            return maddr;   /* (no TXF translation needed) */
+        int txf_tac = TXF_IS_FETCH_ACCTYPE() ? TAC_FETCH_OVF
+                                             : TAC_STORE_OVF;
+        regs->txf_why |= TXF_WHY_CONSTRAINT_4;
+        PTT_TXF( "*TXF mad len", txf_tac, regs->txf_contran, regs->txf_tnd );
+        ABORT_TRANS( regs, ABORT_RETRY_CC, txf_tac );
+        UNREACHABLE_CODE( return maddr );
     }
 
-    /* Save last translation access type and arn */
-    if (regs && regs->txf_tnd)
-    {
-#if !defined( OPTION_DEPRECATE_TXF_LASTACC )
-        regs->txf_lastacc = txf_acctype;
-#endif
-        regs->txf_lastarn = arn;
-    }
+    /* Save last translation arn */
+    regs->txf_lastarn = arn;
 
     /* Calculate range of cache lines for this storage access */
 
@@ -2197,112 +2052,10 @@ DLL_EXPORT BYTE* txf_maddr_l( const U64  vaddr,   const size_t  len,
 
         /* Data ends on this cache line */
         cacheidxe = endingoff >> ZCACHE_LINE_SHIFT;
+
+        if (cacheidxe > (ZCACHE_LINE_PAGE - 1))
+            cacheidxe = (ZCACHE_LINE_PAGE - 1);
     }
-
-    /*---------------------------------------------------------------*/
-    /*                         FETCH access                          */
-    /*---------------------------------------------------------------*/
-    /* For FETCHES, if the caller is NOT in TXF mode, then we need   */
-    /* to abort all CPUs currently in TXF mode if they did a STORE   */
-    /* to the same cache line, since they would otherwise not know   */
-    /* that someone fetched an otherwise stale cache line that their */
-    /* transaction was wanting to atomically update.                 */
-    /*                                                               */
-    /* For FETCHES where the caller IS in TXF mode however, we skip  */
-    /* the conflict check altogether. Instead, we simply update our  */
-    /* cache map to record the fact that we fetched from that cache  */
-    /* line, and we'll detect the conflict when we eventually reach  */
-    /* TEND and notice that the cache line was modified (isn't the   */
-    /* same at that time as when the transaction started).           */
-    /*                                                               */
-    /* For STORE accesses we always skip all conflict checking too   */
-    /* as previously explained further above. And besides, all our   */
-    /* stores are made to our alternate page anyway and not actual   */
-    /* live storage. That won't occur until we eventually reach TEND */
-    /* and do the atomic commit of all of our accumulated stores.    */
-    /*---------------------------------------------------------------*/
-    if (1
-        && TXF_IS_FETCH_ACCTYPE()
-        && (!regs || !regs->txf_tnd)
-    )
-    {
-        REGS*        rchk;      /* Pointer to other CPU's regs     */
-        int          cpuad;     /* Debug: Who was doing accessing  */
-        const char*  location;  /* Debug: where conflict detected  */
-
-        cpuad = regs ? HOSTREGS->cpuad : -1;
-        location = TRIMLOC( PTT_LOC );
-
-        for (i=0; i < sysblk.hicpu; i++)
-        {
-            /* Point to this CPU's hostregs */
-            rchk = sysblk.regs[i];
-
-            /* Skip non-existent CPUs or CPUs that aren't running */
-            if (0
-                || !rchk
-                ||  rchk->cpustate != CPUSTATE_STARTED
-            )
-                continue;
-
-            /* HOSTREGS */
-            txf_fetch_conflict_scan
-            (
-                rchk,
-                addrpage, cacheidx, cacheidxe, cpuad, location
-            );
-
-            /* Is there a guestregs too? */
-            if (!GUEST( rchk ))
-                continue;
-
-            /* GUESTREGS */
-            txf_fetch_conflict_scan
-            (
-                GUEST( rchk),
-                addrpage, cacheidx, cacheidxe, cpuad, location
-            );
-        }
-    }
-
-    /* Return now if channel conflict-check-only call
-       or if our CPU is not executing any transaction */
-    if (!regs || !regs->txf_tnd)
-        return maddr;
-
-#if !defined( OPTION_NO_TXF_MADDR_L_ABORT )
-
-    /* Otherwise check if our own CPU's transaction was aborted */
-    if (regs->txf_tac)
-    {
-        PTT_TXF( "*TXF mad TAC", regs->txf_tac, regs->txf_contran, regs->txf_tnd );
-        if (!(regs->txf_why & TXF_WHY_DELAYED_ABORT))
-        {
-            regs->txf_why  |=  TXF_WHY_DELAYED_ABORT;
-            regs->txf_who   =  regs->cpuad;
-            regs->txf_loc   =  TRIMLOC( PTT_LOC );
-        }
-        ABORT_TRANS( regs, ABORT_RETRY_CC, regs->txf_tac );
-        UNREACHABLE_CODE( return maddr );
-    }
-#endif // OPTION_NO_TXF_MADDR_L_ABORT
-
-    /*-----------------------------------------------------------*/
-    /*                  TXF Translation Call                     */
-    /*-----------------------------------------------------------*/
-    /*  We will return an alternate real address to the caller,  */
-    /*  which will be visible only to this transacting CPU.      */
-    /*                                                           */
-    /*  When/if the transaction is commited, the alternate page  */
-    /*  will be copied to the real page, as long as there were   */
-    /*  no changes to any of the cache lines that we accessed    */
-    /*  (we mark every cache line we fetch from or store into).  */
-    /*                                                           */
-    /*  All cache lines we accessed must not have changed in     */
-    /*  the original page, or our transaction aborts.  We can    */
-    /*  safely use real addresses here because if a page fault   */
-    /*  occurs the transaction aborts anyway and we start over.  */
-    /*-----------------------------------------------------------*/
 
     /* Check if we have already captured this page and if not,
        capture it and save a copy.  The copy is used at commit
@@ -2332,7 +2085,6 @@ DLL_EXPORT BYTE* txf_maddr_l( const U64  vaddr,   const size_t  len,
             regs->txf_why |= TXF_WHY_MAX_PAGES;
 
             PTT_TXF( "*TXF mad max", txf_tac, regs->txf_contran, regs->txf_tnd );
-            regs->txf_why |= TXF_WHY_MAX_PAGES;
             ABORT_TRANS( regs, ABORT_RETRY_CC, txf_tac );
             UNREACHABLE_CODE( return maddr );
         }
@@ -2342,26 +2094,9 @@ DLL_EXPORT BYTE* txf_maddr_l( const U64  vaddr,   const size_t  len,
         altpage  = pmap->altpageaddr;
         savepage = altpage + ZPAGEFRAME_PAGESIZE;
 
-        /* Try to capture a clean copy of this page */
-        for (i=0; i < MAX_CAPTURE_TRIES; i++)
-        {
-            memcpy( altpage,  pageaddr, ZPAGEFRAME_PAGESIZE );
-            memcpy( savepage, pageaddr, ZPAGEFRAME_PAGESIZE );
-
-            if (memcmp( altpage, savepage, ZPAGEFRAME_PAGESIZE ) == 0)
-                break;
-        }
-
-        /* Abort if unable to obtain clean capture of this page */
-        if (i >= MAX_CAPTURE_TRIES)
-        {
-            // "TXF: %s%02X: %sUnable to obtain clean capture of page"
-            WRMSG( HHC17711, "E", TXF_CPUAD( regs ), TXF_QSIE( regs ));
-            PTT_TXF( "*TXF mad cap", TAC_FETCH_CNF, regs->txf_contran, regs->txf_tnd );
-            regs->txf_why |= TXF_WHY_CAPTURE_FAIL;
-            ABORT_TRANS( regs, ABORT_RETRY_CC, TAC_FETCH_CNF );
-            UNREACHABLE_CODE( return maddr );
-        }
+        /* Capture a copy of this page */
+        memcpy( altpage,  pageaddr, ZPAGEFRAME_PAGESIZE );
+        memcpy( savepage, altpage,  ZPAGEFRAME_PAGESIZE );
 
         /* Finish mapping this page */
         pmap->mainpageaddr = (BYTE*) addrpage;
@@ -2389,25 +2124,8 @@ DLL_EXPORT BYTE* txf_maddr_l( const U64  vaddr,   const size_t  len,
             altpagec  = pmap->altpageaddr  + (cacheidx << ZCACHE_LINE_SHIFT);
             savepagec = altpagec + ZPAGEFRAME_PAGESIZE;
 
-            for (i=0; i < MAX_CAPTURE_TRIES; i++)
-            {
-                memcpy( altpagec,  pageaddrc, ZCACHE_LINE_SIZE );
-                memcpy( savepagec, pageaddrc, ZCACHE_LINE_SIZE );
-
-                if (memcmp( altpagec, savepagec, ZCACHE_LINE_SIZE ) == 0)
-                    break;
-            }
-
-            /* Abort if unable to cleanly refresh this cache line */
-            if (i >= MAX_CAPTURE_TRIES)
-            {
-                // "TXF: %s%02X: %sUnable to cleanly refresh cache line"
-                WRMSG( HHC17712, "E", TXF_CPUAD( regs ), TXF_QSIE( regs ));
-                PTT_TXF( "*TXF mad cac", TAC_FETCH_CNF, regs->txf_contran, regs->txf_tnd );
-                regs->txf_why |= TXF_WHY_CAPTURE_FAIL;
-                ABORT_TRANS( regs, ABORT_RETRY_CC, TAC_FETCH_CNF );
-                UNREACHABLE_CODE( return maddr );
-            }
+            memcpy( altpagec,  pageaddrc, ZCACHE_LINE_SIZE );
+            memcpy( savepagec, altpagec,  ZCACHE_LINE_SIZE );
 
             /* Remember how we accessed this cache line */
             pmap->cachemap[ cacheidx ] = cmtype;
@@ -2421,14 +2139,14 @@ DLL_EXPORT BYTE* txf_maddr_l( const U64  vaddr,   const size_t  len,
 
         case CM_STORED:
 
-            /* Cache lines marked CM_STORED must stay that way! */
+            /* Cache lines marked CM_STORED must stay that way */
             break;
 
         } /* switch (pmap->cachemap[cacheidx]) */
 
     } /* for (; cacheidx <= cacheidxe; cacheidx++) */
 
-    /* Done! Return alternate address */
+    /* Done. Return alternate address */
     PTT_TXF( "TXF maddr_l", maddr, len, regs->txf_tnd );
     return maddr;
 
@@ -2447,10 +2165,12 @@ DLL_EXPORT BYTE* txf_maddr_l( const U64  vaddr,   const size_t  len,
 /*-------------------------------------------------------------------*/
 static const char* tac_names[] =
 {
-    /*   0 */   "0",                "0",
-    /*   1 */   "1",                "1",
+    //          Short name          Long name
+
+    /*   0 */   "TAC 0",            "(undefined Abort Code)",
+    /*   1 */   "TAC 1",            "(undefined Abort Code)",
     /*   2 */   "TAC_EXT",          "External interruption",
-    /*   3 */   "3",                "3",
+    /*   3 */   "TAC 3",            "(undefined Abort Code)",
     /*   4 */   "TAC_UPGM",         "PGM Interruption (Unfiltered)",
     /*   5 */   "TAC_MCK",          "Machine-check Interruption",
     /*   6 */   "TAC_IO",           "I/O Interruption",
@@ -2464,8 +2184,8 @@ static const char* tac_names[] =
     /*  14 */   "TAC_FETCH_OTH",    "Cache (fetch related)",
     /*  15 */   "TAC_STORE_OTH",    "Cache (store related)",
     /*  16 */   "TAC_CACHE_OTH",    "Cache (other)",
-    /*  17 */   "17",               "17",
-    /*  18 */   "18",               "18",
+    /*  17 */   "TAC 17",           "(undefined Abort Code)",
+    /*  18 */   "TAC 18",           "(undefined Abort Code)",
     /*  19 */   "TAC_GUARDED",      "Guarded-Storage Event related",
 
 //  /*  20 */   "TAC_?????",        "Some future TAC code...",
@@ -2523,10 +2243,10 @@ const char* txf_why_str( char* buffer, int buffsize, int why )
         , TXF_WHY_FORMAT( TXF_WHY_TRAN_SET_ADDRESSING_MODE ) // 25
         , TXF_WHY_FORMAT( TXF_WHY_TRAN_MISC_INSTR          ) // 26
         , TXF_WHY_FORMAT( TXF_WHY_NESTING                  ) // 27
-        , TXF_WHY_FORMAT( TXF_WHY_CAPTURE_FAIL             ) // 28
-        , ""                                                 // 29
-        , ""                                                 // 30
-        , ""                                                 // 31
+        , TXF_WHY_FORMAT( TXF_WHY_STORKEY                  ) // 28
+        , TXF_WHY_FORMAT( TXF_WHY_IPTE_INSTR               ) // 29
+        , TXF_WHY_FORMAT( TXF_WHY_IDTE_INSTR               ) // 30
+        , TXF_WHY_FORMAT( TXF_WHY_CONSTRAINT_4             ) // 31
         , ""                                                 // 32
     );
     return buffer;
@@ -2657,7 +2377,7 @@ void dump_tdb( REGS* regs, TDB* tdb )
             RADR   real_atia;
 
             /* Point the PSW to the aborted instruction */
-            UPD_PSW_IA( tregs, atia );
+            SET_PSW_IA_AND_MAYBE_IP( tregs, atia );
 
             /* Get absolute mainstor addr of that instruction */
             if ((xcode = ARCH_DEP( virt_to_real )( &real_atia,
@@ -2686,13 +2406,13 @@ void dump_tdb( REGS* regs, TDB* tdb )
                         memcpy( inst, ip, sizeof( inst ));
                         ilc = ILC( inst[0] );
 
-                                     n += snprintf( buf + n, sizeof( buf )-n, "%16.16"PRIX64" ", atia );
-                                     n += snprintf( buf + n, sizeof( buf )-n, "INST=%2.2X%2.2X", inst[0], inst[1] );
-                        if (ilc > 2) n += snprintf( buf + n, sizeof( buf )-n, "%2.2X%2.2X",      inst[2], inst[3] );
-                        if (ilc > 4) n += snprintf( buf + n, sizeof( buf )-n, "%2.2X%2.2X",      inst[4], inst[5] );
-                                     n += snprintf( buf + n, sizeof( buf )-n, " %s", (ilc < 4) ? "        " 
-                                                                                   : (ilc < 6) ? "    "
-                                                                                   :             "" );
+                                     n += idx_snprintf( n, buf, sizeof( buf ), "%16.16"PRIX64" ", atia );
+                                     n += idx_snprintf( n, buf, sizeof( buf ), "INST=%2.2X%2.2X", inst[0], inst[1] );
+                        if (ilc > 2){n += idx_snprintf( n, buf, sizeof( buf ), "%2.2X%2.2X",      inst[2], inst[3] );}
+                        if (ilc > 4){n += idx_snprintf( n, buf, sizeof( buf ), "%2.2X%2.2X",      inst[4], inst[5] );}
+                                     n += idx_snprintf( n, buf, sizeof( buf ), " %s", (ilc < 4) ? "        "
+                                                                                    : (ilc < 6) ? "    "
+                                                                                    :             "" );
                         n += PRINT_INST( inst, buf + n );
 
                         // "AAAAAAAAAAAAAAAA INST=112233445566 XXXXX op1,op2                name"
@@ -2737,6 +2457,131 @@ void dump_tdb( REGS* regs, TDB* tdb )
         GRPAIR_FMT( 10 );
         GRPAIR_FMT( 12 );
         GRPAIR_FMT( 14 );
+    }
+}
+
+/*-------------------------------------------------------------------*/
+/*                    TXF capable model numbers                      */
+/*-------------------------------------------------------------------*/
+
+struct TXFMODELS
+{
+    const U16    cpumodel;      // hex model number
+    const char*  pszModel;      // (same things as char string)
+    const char*  pszSymbol;     // DEFSYM symbol name
+};
+typedef struct TXFMODELS  TXFMODELS;
+
+#define TXF_MODEL( model, name )    { 0x ## model, #model, #name }
+
+static const TXFMODELS txf_models[] =
+{
+    // REF: https://www-01.ibm.com/servers/resourcelink/lib03060.nsf/pages/lsprITRzOSv2r3?OpenDocument#ibm-top
+
+    TXF_MODEL( 1090, zPDT   ),
+    TXF_MODEL( 2827, EC12   ),
+    TXF_MODEL( 2828, BC12   ),
+    TXF_MODEL( 2964, z13    ),
+    TXF_MODEL( 2965, z13s   ),
+    TXF_MODEL( 3906, z14    ),
+    TXF_MODEL( 3907, z14ZR1 ),
+    TXF_MODEL( 8561, z15    ),
+    TXF_MODEL( 8562, z15T02 ),
+};
+
+/*-------------------------------------------------------------------*/
+/* Boolean helper to return whether cpu model is TXF capable or not  */
+/*-------------------------------------------------------------------*/
+bool is_TXF_model( U16 cpumodel )
+{
+    size_t i;
+    for (i=0; i < _countof( txf_models ); i++)
+        if (cpumodel == txf_models[i].cpumodel)
+            return true;
+    return false;
+}
+
+/*-------------------------------------------------------------------*/
+/* Helper function to define DEFSYM symbols for TXF models by name   */
+/*-------------------------------------------------------------------*/
+void defsym_TXF_models()
+{
+    size_t i;
+    for (i=0; i < _countof( txf_models ); i++)
+        // e.g. "CPUMODEL $(z13s)"  ==>  "CPUMODEL 2965"
+        set_symbol( txf_models[i].pszSymbol, txf_models[i].pszModel );
+}
+
+/*-------------------------------------------------------------------*/
+/* Helper function to issue HHC02385W CPU Model warning if needed    */
+/*-------------------------------------------------------------------*/
+void txf_model_warning( bool txf_enabled_or_enabling_txf )
+{
+    if (1
+        && sysblk.arch_mode == ARCH_900_IDX
+        && txf_enabled_or_enabling_txf
+        && sysblk.config_processed
+        && !is_TXF_model( sysblk.cpumodel )
+        && MLVL( VERBOSE )
+    )
+    {
+        // "CPUMODEL %04X does not technically support TXF"
+        WRMSG( HHC02385, "W", sysblk.cpumodel );
+    }
+}
+
+/*-------------------------------------------------------------------*/
+/* Helper function to set a proper TXF timerint value                */
+/*-------------------------------------------------------------------*/
+void txf_set_timerint( bool txf_enabled_or_enabling_txf )
+{
+    if (0
+        || !sysblk.config_processed
+        || sysblk.arch_mode != ARCH_900_IDX
+    )
+        return;
+
+    if (txf_enabled_or_enabling_txf)
+    {
+        if (sysblk.timerint >= MIN_TXF_TIMERINT)
+        {
+            /* Use the user's defined timerint value for TXF */
+            sysblk.txf_timerint = sysblk.timerint;
+        }
+        else
+        {
+            // "TXF: TIMERINT %d is too small; using default of %d instead"
+            WRMSG( HHC17736, "W", sysblk.timerint, DEF_TXF_TIMERINT );
+
+            sysblk.txf_timerint = sysblk.timerint = DEF_TXF_TIMERINT;
+        }
+
+        /* Start the rubato_thread if it hasn't been started yet */
+        obtain_lock( &sysblk.rublock );
+        {
+            if (!sysblk.rubtid)
+            {
+                int rc = create_thread( &sysblk.rubtid, DETACHED,
+                     rubato_thread, NULL, RUBATO_THREAD_NAME );
+                if (rc)
+                    // "Error in function create_thread(): %s"
+                    WRMSG( HHC00102, "E", strerror( rc ));
+            }
+        }
+        release_lock( &sysblk.rublock );
+    }
+    else
+    {
+        /* Stop the rubato_thread if it's still running */
+        obtain_lock( &sysblk.rublock );
+        {
+            /* Tell rubato_thread to please exit */
+            sysblk.rubtid = 0;
+        }
+        release_lock( &sysblk.rublock );
+
+        /* Reset the timerint value back to its original value */
+        sysblk.timerint = sysblk.cfg_timerint;
     }
 }
 

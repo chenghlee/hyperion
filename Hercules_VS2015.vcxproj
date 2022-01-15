@@ -372,6 +372,7 @@
     <ClCompile Include="getopt.c" />
     <ClCompile Include="hao.c" />
     <ClCompile Include="hchan.c" />
+    <ClCompile Include="hbyteswp.c" />
     <ClCompile Include="hconsole.c" />
     <ClCompile Include="hdiagf18.c" />
     <ClCompile Include="hdl.c" />
@@ -403,6 +404,7 @@
     <ClCompile Include="httpserv.c" />
     <ClCompile Include="ieee.c" />
     <ClCompile Include="impl.c" />
+    <ClCompile Include="inline.c" />
     <ClCompile Include="io.c" />
     <ClCompile Include="ipl.c" />
     <ClCompile Include="loadmem.c" />
@@ -410,8 +412,8 @@
     <ClCompile Include="logger.c" />
     <ClCompile Include="logmsg.c" />
     <ClCompile Include="losc.c" />
-    <ClCompile Include="ltdl.c" />
     <ClCompile Include="machchk.c" />
+    <ClCompile Include="machdep.c" />
     <ClCompile Include="maketape.c" />
     <ClCompile Include="memrchr.c" />
     <ClCompile Include="mpc.c" />
@@ -435,6 +437,7 @@
     <ClCompile Include="service.c" />
     <ClCompile Include="shared.c" />
     <ClCompile Include="sie.c" />
+    <ClCompile Include="skey.c" />
     <ClCompile Include="sllib.c" />
     <ClCompile Include="sockdev.c" />
     <ClCompile Include="sr.c" />
@@ -456,6 +459,7 @@
     <ClCompile Include="vm.c" />
     <ClCompile Include="vmd250.c" />
     <ClCompile Include="vmfplc2.c" />
+    <ClCompile Include="vstore.c" />
     <ClCompile Include="w32ctca.c" />
     <ClCompile Include="w32stape.c" />
     <ClCompile Include="w32util.c" />
@@ -465,6 +469,7 @@
   </ItemGroup>
   <ItemGroup>
     <None Include=".travis.yml" />
+    <None Include="CODEOWNERS" />
     <None Include="crypto\lib\crypto32.pdb" />
     <None Include="crypto\lib\crypto32d.pdb" />
     <None Include="crypto\lib\crypto64.pdb" />
@@ -484,6 +489,9 @@
     <None Include="Hercules_VS2019.sln" />
     <None Include="Hercules_VS2019.vcxproj" />
     <None Include="Hercules_VS2019.vcxproj.filters" />
+    <None Include="Hercules_VS2022.sln" />
+    <None Include="Hercules_VS2022.vcxproj" />
+    <None Include="Hercules_VS2022.vcxproj.filters" />
     <None Include="SoftFloat\lib\SoftFloat32.pdb" />
     <None Include="SoftFloat\lib\SoftFloat32d.pdb" />
     <None Include="SoftFloat\lib\SoftFloat64.pdb" />
@@ -701,6 +709,7 @@
     <None Include="readme\README.RXVT4APL.md" />
     <None Include="readme\README.S37X.md" />
     <None Include="readme\README.SETUID.md" />
+    <None Include="readme\README.SNA.md" />
     <None Include="readme\README.SUN.md" />
     <None Include="readme\README.TAPE.md" />
     <None Include="readme\README.TCPIP.md" />
@@ -869,13 +878,13 @@
     <None Include="tests\cipher.assemble" />
     <None Include="tests\cipher.listing" />
     <None Include="tests\cipher.tst" />
-    <None Include="tests\cmd-abs-2K.subtst" />
-    <None Include="tests\cmd-abs-4K.subtst" />
-    <None Include="tests\cmd-abs.tst" />
-    <None Include="tests\cmd-rv-2K.subtst" />
-    <None Include="tests\cmd-rv-4K-32.subtst" />
-    <None Include="tests\cmd-rv-4K-64.subtst" />
-    <None Include="tests\cmd-rv.tst" />
+    <None Include="tests\cmd-abs-2K.subxxx" />
+    <None Include="tests\cmd-abs-4K.subxxx" />
+    <None Include="tests\cmd-abs.xxx" />
+    <None Include="tests\cmd-rv-2K.subxxx" />
+    <None Include="tests\cmd-rv-4K-32.subxxx" />
+    <None Include="tests\cmd-rv-4K-64.subxxx" />
+    <None Include="tests\cmd-rv.xxx" />
     <None Include="tests\cr.tst" />
     <None Include="tests\cpu0off.core" />
     <None Include="tests\dotest" />
@@ -884,6 +893,15 @@
     <None Include="tests\FAC53.list" />
     <None Include="tests\FAC53.pdf" />
     <None Include="tests\FAC53.tst" />
+    <None Include="tests\FAC5861.asm" />
+    <None Include="tests\FAC5861.core" />
+    <None Include="tests\FAC5861.list" />
+    <None Include="tests\FAC5861.pdf" />
+    <None Include="tests\FAC5861.tst" />
+    <None Include="tests\fix-page.asm" />
+    <None Include="tests\fix-page.core" />
+    <None Include="tests\fix-page.list" />
+    <None Include="tests\fix-page.tst" />
     <None Include="tests\csxtr.assemble" />
     <None Include="tests\csxtr.listing" />
     <None Include="tests\csxtr.tst" />
@@ -926,6 +944,11 @@
     <None Include="tests\mvcle.assemble" />
     <None Include="tests\mvcle.listing" />
     <None Include="tests\mvcle.tst" />
+    <None Include="tests\mvcos-001.asm" />
+    <None Include="tests\mvcos-001.core" />
+    <None Include="tests\mvcos-001.list" />
+    <None Include="tests\mvcos-001.pdf" />
+    <None Include="tests\mvcos-001.tst" />
     <None Include="tests\pfpo.asm" />
     <None Include="tests\pfpo.core" />
     <None Include="tests\pfpo.list" />
@@ -958,12 +981,23 @@
     <None Include="tests\sigp.assemble" />
     <None Include="tests\sigp.listing" />
     <None Include="tests\sigp.tst" />
-    <None Include="tests\ssk370.tst" />
+    <None Include="tests\skey370.core" />
+    <None Include="tests\skey390z.core" />
+    <None Include="tests\skey370.TXTCARDS" />
+    <None Include="tests\skey370.asm" />
+    <None Include="tests\skey390z.asm" />
+    <None Include="tests\skey370.list" />
+    <None Include="tests\skey370.pdf" />
+    <None Include="tests\skey390z.list" />
+    <None Include="tests\skey390z.pdf" />
+    <None Include="tests\skey370.tst" />
+    <None Include="tests\skey390z.tst" />
+    <None Include="tests\ssk370.xxx" />
     <None Include="tests\sske.assemble" />
     <None Include="tests\sske.listing" />
     <None Include="tests\sske.tst" />
-    <None Include="tests\sske370.tst" />
-    <None Include="tests\sske390.tst" />
+    <None Include="tests\sske370.xxx" />
+    <None Include="tests\sske390.xxx" />
     <None Include="tests\stfl.asm" />
     <None Include="tests\stfl.core" />
     <None Include="tests\stfl.list" />
@@ -985,6 +1019,7 @@
     <None Include="tests\str-001-srst.list" />
     <None Include="tests\str-001-srst.tst" />
     <None Include="tests\stidp.tst" />
+    <None Include="tests\stidp-force.tst" />
     <None Include="tests\tape.asm" />
     <None Include="tests\tape.aws" />
     <None Include="tests\tape.core" />
@@ -1004,9 +1039,7 @@
     <None Include="util\awssl-v19g" />
     <None Include="util\awswrite.jcl" />
     <None Include="util\bldlvlck" />
-    <None Include="util\cckddump.hla" />
-    <None Include="util\cckddu64.hla" />
-    <None Include="util\cckdload.hla" />
+    <None Include="util\cckddump-cckdload.zip" />
     <None Include="util\configure.ac" />
     <None Include="util\dasdlist" />
     <None Include="util\dasdlist.bat" />
@@ -1029,7 +1062,6 @@
     <ClInclude Include="cckddasd.h" />
     <ClInclude Include="ccnowarn.h" />
     <ClInclude Include="ccwarn.h" />
-    <ClInclude Include="chain.h" />
     <ClInclude Include="chsc.h" />
     <ClInclude Include="clock.h" />
     <ClInclude Include="cmdtab.h" />
@@ -1122,7 +1154,6 @@
     <ClInclude Include="instfmts.h" />
     <ClInclude Include="linklist.h" />
     <ClInclude Include="logger.h" />
-    <ClInclude Include="ltdl.h" />
     <ClInclude Include="machdep.h" />
     <ClInclude Include="memrchr.h" />
     <ClInclude Include="mpc.h" />
@@ -1139,6 +1170,8 @@
     <ClInclude Include="scsiutil.h" />
     <ClInclude Include="service.h" />
     <ClInclude Include="shared.h" />
+    <ClInclude Include="sie.h" />
+    <ClInclude Include="skey.h" />
     <ClInclude Include="sllib.h" />
     <ClInclude Include="sockdev.h" />
     <ClInclude Include="SoftFloat\include\softfloat.h" />

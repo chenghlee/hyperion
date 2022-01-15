@@ -1,4 +1,4 @@
-/* W32UTIL.C    (C) Copyright "Fish" (David B. Trout), 2005-2012     */
+/* W32UTIL.C    (C) Copyright "Fish" (David B. Trout), 2005-2021     */
 /*              (C) Copyright TurboHercules, SAS 2010-2011           */
 /*              Windows porting functions                            */
 /*                                                                   */
@@ -1017,7 +1017,7 @@ static INLINE U64 FileTime2us (const FILETIME ft)
 
 static INLINE void FileTime2timeval (const FILETIME ft, struct timeval* tv)
 {
-    us2timeval( FileTime2us( ft ), tv );    // Convert to timeval
+    usecs2timeval( FileTime2us( ft ), tv );    // Convert to timeval
 }
 
 
@@ -3084,7 +3084,7 @@ DLL_EXPORT int inet_aton( const char* cp, struct in_addr* addr )
 // Do '_get_osfhandle'.
 //
 // If '_get_osfhandle' error, then it's either already a HANDLE (SOCKET probably),
-// or else a bona fide invalid file descriptor or invalid SOCKET handle, so do a
+// or else a bonafide invalid file descriptor or invalid SOCKET handle, so do a
 // normal FD_SET.
 //
 // Otherwise ('_get_osfhandle' success), then it WAS a file descriptor
@@ -4175,7 +4175,7 @@ DLL_EXPORT pid_t w32_poor_mans_fork ( char* pszCommandLine, int* pnWriteToChildS
         return -1;
     }
 
-    SET_THREAD_NAME_ID( dwThreadId, "w32_read_piped_process_stdOUT_output_thread" );
+    SET_THREAD_NAME_ID( dwThreadId, "w32_pipe_stdOUT" );
 
     //////////////////////////////////////////////////
     // Stderr...
@@ -4218,7 +4218,7 @@ DLL_EXPORT pid_t w32_poor_mans_fork ( char* pszCommandLine, int* pnWriteToChildS
         return -1;
     }
 
-    SET_THREAD_NAME_ID( dwThreadId, "w32_read_piped_process_stdERR_output_thread" );
+    SET_THREAD_NAME_ID( dwThreadId, "w32_pipe_stdERR" );
 
     // Piped process capture handling...
 
@@ -4712,6 +4712,22 @@ DLL_EXPORT int w32_hopen( const char* path, int oflag, ... )
 
     err = _sopen_s( &fh, path, oflag, sh_flg, pmode );
 
+    // If only read-only access was requested and permission was denied,
+    // then the file is already opened with write access by someone else.
+    // Try again without requesting write access denial to others. This
+    // allows batch utilities such as "dasdls" to open and read the file
+    // even though e.g. Hercules already has it opened with write access.
+
+    if (1
+        && !(oflag & (_O_WRONLY | _O_RDWR))   // (open == read only?)
+        && EACCES == err                      // (permission denied?)
+    )
+    {
+        sh_flg = _SH_DENYNO;  // (no read or write denials this time)
+        err = _sopen_s( &fh, path, oflag, sh_flg, pmode );
+    }
+
+    // Issue an error message only if verbose debugging is enabled
     if (1
         && err != 0
         && MLVL( DEBUG )
@@ -4720,6 +4736,7 @@ DLL_EXPORT int w32_hopen( const char* path, int oflag, ... )
     {
         char msgbuf[MAX_PATH * 2];
         MSGBUF( msgbuf, "Error opening '%s'; errno(%d) %s", path, err, strerror(err) );
+        // "DBG: %s"
         WRMSG( HHC90000, "D", msgbuf );
     }
     return fh;

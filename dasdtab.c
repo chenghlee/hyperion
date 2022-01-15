@@ -406,7 +406,7 @@ int altcyls;                            /* Number alternate cyls     */
     devchar[5]  = ckd->model;                   // Device model
     store_fw(devchar+6, cu->sctlfeat |          // Device and SD facilities
       (cu->devt == 0x3990 &&                    // ... or in 24-byte sense
-       ckd->devt == 0x3380));                   // ... compatability for 3380
+       ckd->devt == 0x3380));                   // ... compatibility for 3380
                                                 // ... hosted on 3990 controller
     devchar[10] = ckd->devclass;                // Device class code
     devchar[11] = ckd->code;                    // Device type code
@@ -489,6 +489,20 @@ int altcyls;                            /* Number alternate cyls     */
     /* alternate tracks.                                             */
     /*---------------------------------------------------------------*/
     devchar[57] = 0xff;                         // real device type code
+
+    /*---------------------------------------------------------------*/
+    /*  https://www.vm.ibm.com/pubs/cp720/RDCBK.HTML                 */
+    /*                                                               */
+    /*  NAME       : HCPRDCBK                                        */
+    /*  DESCRIPTION: Real Device Characteristics Block               */
+    /*  DSECT      : RDCBK                                           */
+    /*   ...                                                         */
+    /*  003A  58 Bitstring  2 RDC5859    DASD SPECIFIC RESERVED      */
+    /*  003C  60 Signed     4 RDCMCYL32  NUMBER OF PRIMARY CYLINDERS */
+    /*                                                               */
+    /*---------------------------------------------------------------*/
+
+    store_fw( devchar+60, cyls - altcyls );     // Primary cylinders
 
     return 64;
 }

@@ -2,6 +2,7 @@
 /*              (C) Copyright "Fish" (David B. Trout), 2002-2012     */
 /*              (C) Copyright Jan Jaeger, 2003-2012                  */
 /*              (C) Copyright TurboHercules, SAS 2010-2011           */
+/*              (C) and others 2013-2021                             */
 /*              Defines all Hercules Configuration statements        */
 /*              and panel commands                                   */
 /*                                                                   */
@@ -339,6 +340,15 @@
 #define cpumodel_cmd_desc       "Set CPU model number"
 #define cpuserial_cmd_desc      "Set CPU serial number"
 #define cpuverid_cmd_desc       "Set CPU verion number"
+#define cpuverid_cmd_help       \
+                                \
+  "Format: \"cpuverid xx [force]\" where 'xx' is the 2 hexadecimal digit\n"     \
+  "CPU version code stored by the STIDP instruction when the architecture\n"    \
+  "mode is S/370 or ESA390. If the architecture mode is z/Arch, then the\n"     \
+  "version code is always stored as '00' and the value specified here is\n"     \
+  "ignored unless the 'FORCE' option is specified. The default version code\n"  \
+   "is 'FD' unless set to a different value.\n"
+
 #define cr_cmd_desc             "Display or alter control registers"
 #define cr_cmd_help             \
                                 \
@@ -519,7 +529,20 @@
 
 #define exit_cmd_desc           "(Synonym for 'quit')"
 #define ext_cmd_desc            "Generate external interrupt"
-#define f_cmd_desc              "Mark frames unusable/usable"
+
+#define fquest_cmd_desc         "Query unusable page frame range(s)"
+#define f_cmd_desc              "Mark page frame(s) as +usable/-unusable"
+#define f_cmd_help              \
+                                \
+  "Format: \"f{+/-} addr[.len]\" or \"f{+/-} addr[-addr2]\" to mark an area\n"  \
+  "of storage as being either +usable or -unusable where 'addr' is absolute\n"  \
+  "address of the range of storage to be modified. Guest operating systems\n"   \
+  "can then use the B22C 'TB' (Test Block) instruction to determine whether\n"  \
+  "a given page is usable or not and react accordingly. Note that Hercules\n"   \
+  "does not prevent unusable frames from being used anyway. That is to say\n"   \
+  "frames marked as unusable can still be accessed normally without error.\n"   \
+  "Use \"f?\" to display the currently defined -unusable storage range(s).\n"
+
 #define facility_cmd_desc       "Enable/Disable/Query z/Arch STFLE Facility bits"
 #define facility_cmd_help       \
                                 \
@@ -528,11 +551,11 @@
   "        FACILITY  QUERY  <facility> | bit | ALL\n"                            \
   "        FACILITY  QUERY  ENABLED | DISABLED   [ LONG ]\n"                     \
   "\n"                                                                           \
+  "'facility' is the SHORT facility name to be enabled, disabled or queried.\n"  \
+  "The facility may also be specified by explicit bit number or via 'BITnnn'.\n" \
   "ALL is a synonym for SHORT. RAW displays the hex string. ENABLED displays\n"  \
   "only facilities which are enabled. DISABLED shows only disabled failities.\n" \
-  "LONG sorts the display by Long Description. SHORT is the default. <facility>\n" \
-  "is the SHORT facility name to be enabled or disabled. bit may be entered\n"   \
-  "as either a numeric bit number or 'BITnnn'.\n"
+  "LONG sorts the display by Long Description. SHORT is the default.\n"
 
 #define fcb_cmd_desc            "Display a printer's current FCB"
 #define fcb_cmd_help            "Format: \"fcb <devnum>\""
@@ -844,21 +867,25 @@
   "hardware     specifies the hardware model setting. Specifying an \"=\"\n"    \
   "             resets the hardware model to \"EMULATOR\"; specifying an\n"     \
   "             \"*\" leaves the current hardware model setting intact.\n"      \
+  "             Valid characters are 0-9 and uppercase A-Z only.\n"             \
   "             The default hardware model is \"EMULATOR\".\n"                  \
   "\n"                                                                          \
   "capacity     specifies the capacity model setting. Specifying an \"=\"\n"    \
   "             copies the current hardware model; specifying an \"*\" \n"      \
-  "             leaves the current capacity model setting intact. The\n"        \
-  "             default capacity model is \"EMULATOR\".\n"                      \
+  "             leaves the current capacity model setting intact.\n"            \
+  "             Valid characters are 0-9 and uppercase A-Z only.\n"             \
+  "             The default capacity model is \"EMULATOR\".\n"                  \
   "\n"                                                                          \
   "permanent    specifies the permanent model setting. Specifying an\n"         \
   "             \"=\" copies the current capacity model; specifying an\n"       \
   "             \"*\" leaves the current permanent model setting intact.\n"     \
+  "             Valid characters are 0-9 and uppercase A-Z only.\n"             \
   "             The default permanent model is \"\" (null string).\n"           \
   "\n"                                                                          \
   "temporary    specifies the temporary model setting. Specifying an\n"         \
   "             \"=\" copies the current permanent model; specifying an\n"      \
   "             \"*\" leaves the current temporary model setting intact.\n"     \
+  "             Valid characters are 0-9 and uppercase A-Z only.\n"             \
   "             The default temporary model is \"\" (null string).\n"
 
 #define modpath_cmd_desc        "Set module load path"
@@ -963,51 +990,48 @@
   "them. SEE ALSO the 'pgmtrace' command which allows you to further fine\n"    \
   "tune the tracing of program interrupt exceptions.\n"
 
-#define panopt_cmd_desc         "Display or set panel options"
+#define panopt_cmd_desc         "Set or display panel options"
 #define panopt_cmd_help         \
                                 \
-  "Format: \"panopt [MSGCOLOR=NO|YES] [FULLPATH|NAMEONLY]\" sets or displays\n"     \
-  "panel options. MSGCOLOR=YES displays colorized panel messages. NO (default)\n"   \
-  "displays normal uncolorized panel messages. NAMEONLY requests the extended\n"    \
-  "panel screen (that displays the list of devices and is reached by pressing\n"    \
-  "the ESC key) to display only the emulated device's base filename. FULLPATH\n"    \
-  "displays the file's full path filename. Enter the command with no arguments\n"   \
-  "to display the current settings.\n"
+  "Format:\n"                                                                       \
+  "\n"                                                                              \
+  "  panopt [FULLpath|NAMEonly] [RATE=n] [MSGCOLOR=NO|DARK|LIGHT] [TITLE=xxx]\n"    \
+  "\n"                                                                              \
+  "NAMEONLY requests the extended panel screen (that displays the list of\n"        \
+  "devices and is reached by pressing the ESC key) to display the emulated\n"       \
+  "device's base filename only, whereas FULLPATH (the default) displays the\n"      \
+  "file's full path filename.\n"                                                    \
+  "\n"                                                                              \
+  "RATE=nnn sets the panel refresh rate to nnn milliseconds. RATE=FAST sets\n"      \
+  "the refresh rate to " QSTR(PANEL_REFRESH_RATE_FAST) " milliseconds. RATE=SLOW sets the refresh rate to\n" \
+  QSTR(PANEL_REFRESH_RATE_SLOW) " milliseconds.\n"                                  \
+  "\n"                                                                              \
+  "MSGCOLOR=DARK displays colorized panel messages meant for dark colored\n"        \
+  "panels (e.g. white text on black background) whereas MSGCOLOR=LIGHT is\n"        \
+  "meant for light colored panels (e.g. black text on white background).\n"         \
+  "\n"                                                                              \
+  "TITLE=xxx sets an optional console window title-bar string to be used in\n"      \
+  "place of the default supplied by the windowing system. The entire TITLE=\n"      \
+  "argument should be enclosed within double quotes if it contains any blanks\n"    \
+  "(e.g. use \"TITLE=my title\" and not TITLE=\"my title\" which is an error).\n"   \
+  "An empty string (\"TITLE=\") will remove the existing console title. The\n"      \
+  "default console title is the string consisting of:\n"                            \
+  "\n"                                                                              \
+  "     LPARNAME - SYSTYPE * SYSNAME * SYSPLEX - System Status: color\n"            \
+  "\n"                                                                              \
+  "SYSTYPE, SYSNAME, and SYSPLEX are populated by the system call SCLP Control\n"   \
+  "Program Identification. If a value is blank then that field is not shown.\n"     \
+  "\n"                                                                              \
+  "System Status colors are:\n"                                                     \
+  "\n"                                                                              \
+  "     GREEN       everything is working correctly\n"                              \
+  "     YELLOW      one or more CPUs are not running\n"                             \
+  "     RED         one or more CPUs are in a disabled wait state\n"                \
+  "\n"                                                                              \
+  "Enter PANOPT without any arguments at all to display the current settings.\n"
 
-#define panrate_cmd_desc        "Display or set rate at which console refreshes"
-#define panrate_cmd_help        \
-                                \
-  "Format: \"panrate [nnn | fast | slow]\".\n"                                               \
-  "Sets or displays the panel refresh rate.\n"                                               \
-  "panrate nnn sets the refresh rate to nnn milliseconds.\n"                                 \
-  "panrate fast sets the refresh rate to " QSTR(PANEL_REFRESH_RATE_FAST) " milliseconds.\n"  \
-  "panrate slow sets the refresh rate to " QSTR(PANEL_REFRESH_RATE_SLOW) " milliseconds.\n"  \
-  "If no operand is specified, panrate displays the current refresh rate.\n"
-
-#define pantitle_cmd_desc       "Display or set console title"
-#define pantitle_cmd_help       \
-                                \
-  "Format: pantitle [\"title string\"]\n"                                       \
-  "        pantitle \"\"\n"                                                     \
-  "\n"                                                                          \
-  "Sets or displays the optional console window title-bar\n"                    \
-  "string to be used in place of the default supplied by\n"                     \
-  "the windowing system. The value should be enclosed within\n"                 \
-  "double quotes if there are embedded blanks.\n"                               \
-  "\n"                                                                          \
-  "An empty string (\"\") will remove the existing console title.\n"            \
-  "\n"                                                                          \
-  "The default console title will be a string consisting of\n"                  \
-  "LPARNAME - SYSTYPE * SYSNAME * SYSPLEX - System Status: color\n"             \
-  "\n"                                                                          \
-  "SYSTYPE, SYSNAME, and SYSPLEX are populated by the system call\n"            \
-  "SCLP Control Program Identification. If a value is blank, then\n"            \
-  "that field is not presented.\n"                                              \
-  "\n"                                                                          \
-  "System Status colors: GREEN  - is every thing working correctly\n"           \
-  "                      YELLOW - one or more CPUs are not running\n"           \
-  "                      RED    - one or more CPUs are in a disabled\n"         \
-  "                               wait state\n"
+#define panrate_cmd_desc        "(deprecated; use PANOPT RATE=nnn instead)"
+#define pantitle_cmd_desc       "(deprecated; use PANOPT TITLE=xxx instead)"
 
 #define pgmprdos_cmd_desc       "Set LPP license setting"
 #define pgmprdos_cmd_help       \
@@ -1096,6 +1120,7 @@
   "     (no)lcs1         trace LCS timing events\n"                                 \
   "     (no)lcs2         trace LCS general debugging events\n"                      \
   "     (no)qeth         trace QETH general debugging events\n"                     \
+  "     (no)xxx          trace undefined/generic/custom events\n"                   \
   "\n"                                                                              \
   "options:   (should be specified last, after any events are specified)\n"         \
   "\n"                                                                              \
@@ -1523,6 +1548,7 @@
   "asking for confirmation.\n"
 
 #define start_cmd_desc          "Start CPU (or printer/punch device if argument given)"
+#define startall_cmd_desc       "Start all CPU's"
 #define start_cmd_help          \
                                 \
   "Entering the 'start' command by itself starts the target cpu if it\n"        \
@@ -1530,8 +1556,8 @@
   "the specified printer or punch device's virtual start button. Use the\n"     \
   "'cpu' command beforehand to choose which processor you wish to start.\n"
 
-#define startall_cmd_desc       "Start all CPU's"
 #define stop_cmd_desc           "Stop CPU (or printer/punch device if argument given)"
+#define stopall_cmd_desc        "Stop all CPU's"
 #define stop_cmd_help           \
                                 \
   "Entering the 'stop' command by itself stops the target cpu if it is\n"       \
@@ -1540,7 +1566,6 @@
   "an INTREQ (Intervention Required) status. Use the 'cpu' command before\n"    \
   "issuing the stop command to choose which processor you wish to stop.\n"
 
-#define stopall_cmd_desc        "Stop all CPU's"
 #define store_cmd_desc          "Store CPU status at absolute zero"
 #define suspend_cmd_desc        "Suspend hercules"
 #define symptom_cmd_desc        "Alias for traceopt"
@@ -1630,12 +1655,14 @@
                                 \
   "Format:\n"                                                                   \
   "\n"                                                                          \
-  "   txf  [0 | [INSTR] [U] [C] [GOOD] [BAD] [TDB] [Pages|Lines]\n"             \
-  "        [WHY hhhhhhhh] [TAC nnn] [TND nn] [CPU nnn] [CFAILS nn] ]\n"         \
+  "   txf  [0 | STATS | [INSTR] [U] [C] [GOOD] [BAD] [TDB] [Pages|Lines]\n"     \
+  "        [WHY hhhhhhhh] [TAC nnn] [TND nn] [CPU nnn] [FAILS nn] ]\n"          \
   "\n"                                                                          \
   "Where:\n"                                                                    \
   "\n"                                                                          \
   "   0       Disables all txf tracing.\n"                                      \
+  "\n"                                                                          \
+  "   STATS   Display statistics.\n"                                            \
   "\n"                                                                          \
   "   INSTR   Enables instruction tracing of ONLY transactions.\n"              \
   "           Either 'U' or 'C' or both must also be specified.\n"              \
@@ -1658,7 +1685,7 @@
   "   TAC     Trace only when abort code = nnn.\n"                              \
   "   TND     Trace only when nesting depth >= nn.\n"                           \
   "   CPU     Trace only when transaction executes on CPU nnn.\n"               \
-  "   CFAILS  Trace only when constrained cabort count >= nn.\n"                \
+  "   FAILS   Trace only when abort count >= nn.\n"                             \
   "\n"                                                                          \
   "Enter 'txf' by itself to display the current options. Use 'txf 0'\n"         \
   "to disable all txf tracing. If 'INSTR' is not specified then only\n"         \
@@ -1677,21 +1704,28 @@
   "Specifies the internal timers update interval, in microseconds.\n"           \
   "This parameter specifies how frequently Hercules's internal\n"               \
   "timers-update thread updates the TOD Clock, CPU Timer, and other\n"          \
-  "architectural related clock/timer values. The default interval\n"            \
-  "is 50 microseconds, which strikes a reasonable balance between\n"            \
-  "clock accuracy and overall host performance. The minimum allowed\n"          \
-  "value is 1 microsecond and the maximum is 1000000 microseconds\n"            \
-  "(i.e. one second). Also note that due to host system limitations\n"          \
-  "and/or design, some hosts may end up rounding or coalescing such\n"          \
-  "short intervals to a longer millisecond interval instead.\n"                 \
+  "architectural related clock/timer values.\n"                                 \
   "\n"                                                                          \
-  "CAUTION! While lower TIMERINT values may help increase the accuracy\n"       \
-  "of your guest's TOD Clock and CPU Timer values, it may also have\n"          \
-  "a SEVERE NEGATIVE IMPACT on host operating system performance. This\n"       \
-  "is especially true when a low TIMERINT value is coupled with a high\n"       \
-  "HERCPRIO and TODPRIO priority setting. You should exercise EXTREME\n"        \
-  "CAUTION when choosing your desired TIMERINT value in relationship\n"         \
-  "to your chosen HERCPRIO and TODPRIO priority settings.\n"
+  "When the z/Arch Transactional-Execution Facility (073_TRANSACT_EXEC)\n"      \
+  "is not installed or enabled, the minimum and default intervals are 1\n"      \
+  "and 50 microseconds respectively, which strikes a reasonable balance\n"      \
+  "between clock accuracy and overall host performance.\n"                      \
+  "\n"                                                                          \
+  "When the z/Arch Transactional-Execution Facility *is* installed and\n"       \
+  "enabled the minimum and default intervals are 200 and 400 microseconds.\n"   \
+  "\n"                                                                          \
+  "The maximum allowed interval is 1000000 microseconds (one second).\n"        \
+  "\n"                                                                          \
+  "Also note that due to host system limitations and/or design, some\n"         \
+  "hosts may round up and/or coalesce short microsecond intervals to a\n"       \
+  "much longer millisecond interval instead.\n"                                 \
+  "\n"                                                                          \
+  "CAUTION! While lower TIMERINT values MAY help increase the accuracy\n"       \
+  "of your guest's TOD Clock and CPU Timer values, it could also have a\n"      \
+  "SEVERE NEGATIVE IMPACT on host operating system performance as well.\n"      \
+  "You should exercise EXTREME CAUTION when choosing your TIMERINT value\n"     \
+  "in relationship to the actual process priority (nice value) of the\n"        \
+  "Hercules process itself.\n"
 
 #define tlb_cmd_desc            "Display TLB tables"
 #define toddrag_cmd_desc        "Display or set TOD clock drag factor"
@@ -1807,8 +1841,8 @@ COMMAND( "log",                     log_cmd,                SYSCMD,             
 COMMAND( "logopt",                  logopt_cmd,             SYSCMD,             logopt_cmd_desc,        logopt_cmd_help     )
 COMMAND( "mt",                      mt_cmd,                 SYSCMD,             mt_cmd_desc,            mt_cmd_help         )
 COMMAND( "panopt",                  panopt_cmd,             SYSCMD,             panopt_cmd_desc,        panopt_cmd_help     )
-COMMAND( "panrate",                 panrate_cmd,            SYSCMD,             panrate_cmd_desc,       panrate_cmd_help    )
-COMMAND( "pantitle",                pantitle_cmd,           SYSCMD,             pantitle_cmd_desc,      pantitle_cmd_help   )
+COMMAND( "panrate",                 panrate_cmd,            SYSCMD,             panrate_cmd_desc,       NULL                )
+COMMAND( "pantitle",                pantitle_cmd,           SYSCMD,             pantitle_cmd_desc,      NULL                )
 CMDABBR( "qcpuid",          5,      qcpuid_cmd,             SYSCMD,             qcpuid_cmd_desc,        qcpuid_cmd_help     )
 COMMAND( "qpid",                    qpid_cmd,               SYSCMD,             qpid_cmd_desc,          NULL                )
 CMDABBR( "qports",          5,      qports_cmd,             SYSCMD,             qports_cmd_desc,        NULL                )
@@ -1838,6 +1872,7 @@ COMMAND( "cr",                      cr_cmd,                 SYSCMDNOPER,        
 COMMAND( "cscript",                 cscript_cmd,            SYSCMDNOPER,        cscript_cmd_desc,       cscript_cmd_help    )
 COMMAND( "ctc",                     ctc_cmd,                SYSCMDNOPER,        ctc_cmd_desc,           ctc_cmd_help        )
 COMMAND( "ds",                      ds_cmd,                 SYSCMDNOPER,        ds_cmd_desc,            NULL                )
+COMMAND( "f?",                      fquest_cmd,             SYSCMDNOPER,        fquest_cmd_desc,        NULL                )
 COMMAND( "fpc",                     fpc_cmd,                SYSCMDNOPER,        fpc_cmd_desc,           fpc_cmd_help        )
 COMMAND( "fpr",                     fpr_cmd,                SYSCMDNOPER,        fpr_cmd_desc,           fpr_cmd_help        )
 COMMAND( "g",                       g_cmd,                  SYSCMDNOPER,        g_cmd_desc,             NULL                )
@@ -1905,7 +1940,7 @@ COMMAND( "cnslport",                cnslport_cmd,           SYSCFGNDIAG8,       
 COMMAND( "cpuidfmt",                cpuidfmt_cmd,           SYSCFGNDIAG8,       cpuidfmt_cmd_desc,      NULL                )
 COMMAND( "cpumodel",                cpumodel_cmd,           SYSCFGNDIAG8,       cpumodel_cmd_desc,      NULL                )
 COMMAND( "cpuserial",               cpuserial_cmd,          SYSCFGNDIAG8,       cpuserial_cmd_desc,     NULL                )
-COMMAND( "cpuverid",                cpuverid_cmd,           SYSCFGNDIAG8,       cpuverid_cmd_desc,      NULL                )
+COMMAND( "cpuverid",                cpuverid_cmd,           SYSCFGNDIAG8,       cpuverid_cmd_desc,      cpuverid_cmd_help   )
 COMMAND( "diag8cmd",                diag8_cmd,              SYSCFGNDIAG8,       diag8_cmd_desc,         diag8_cmd_help      )
 COMMAND( "engines",                 engines_cmd,            SYSCFGNDIAG8,       engines_cmd_desc,       NULL                )
 COMMAND( "lparname",                lparname_cmd,           SYSCFGNDIAG8,       lparname_cmd_desc,      lparname_cmd_help   )
@@ -1977,9 +2012,10 @@ COMMAND( "dumpdev",                 lddev_cmd,              SYSCMD,             
 #if !defined( _FW_REF )
 
         // PROGRAMMING NOTE: the following "+/-" commands ("f+adr", "t+dev",
-        // etc) are directly routed by cmdtab.c's 'CallHercCmd' function.
+        // etc) are directly routed by cmdtab.c's "CallHercCmd" function
+        // directly to the "OnOffCommand" command function in hsccmd.c.
 
-COMMAND( "f{+/-}adr",               NULL,                   SYSCMDNOPER,        f_cmd_desc,             NULL                )
+COMMAND( "f{+/-}adr",               NULL,                   SYSCMDNOPER,        f_cmd_desc,             f_cmd_help          )
 COMMAND( "s{+/-}dev",               NULL,                   SYSCMDNOPER,        sdev_cmd_desc,          NULL                )
 COMMAND( "o{+/-}dev",               NULL,                   SYSCMDNOPER,        odev_cmd_desc,          NULL                )
 COMMAND( "t{+/-}dev",               NULL,                   SYSCMDNOPER,        tdev_cmd_desc,          NULL                )
