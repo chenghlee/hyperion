@@ -1,4 +1,2 @@
-aclocal-amflags.patch
-autoconf-libtool.patch
 htmldoc-install.patch
 rexx-libname.patch

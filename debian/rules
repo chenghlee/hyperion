@@ -41,6 +41,7 @@ CONFIGURE_ARGS := --prefix=/usr \
 	--mandir=/usr/share/man \
 	--docdir=/usr/share/doc/hercules \
 	--htmldir=/usr/share/doc/hercules/html \
+	--enable-option-checking \
 	--disable-object-rexx \
 	--enable-regina-rexx \
 	--enable-ipv6 \
