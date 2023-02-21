@@ -63,20 +63,16 @@ DISABLE_GCC_UNUSED_SET_WARNING;
 /* CCW Tracing helper macros                                         */
 /*-------------------------------------------------------------------*/
 
-#ifndef CCW_TRACE_OR_STEP
-#define CCW_TRACE_OR_STEP( dev )    ((dev)->ccwtrace || (dev)->ccwstep)
-#endif
-
 #ifndef CCW_TRACING_ACTIVE
-#define CCW_TRACING_ACTIVE( dev, tracethis )    (CCW_TRACE_OR_STEP( dev ) \
-                                                    || ( tracethis ))
+#define CCW_TRACING_ACTIVE( dev, tracethis )    ((dev)->ccwtrace \
+                                                 || ( tracethis ))
 #endif
 
 #ifndef SKIP_CH9UC
 #define SKIP_CH9UC( dev, chanstat, unitstat )                       \
                                                                     \
     (1                                                              \
-     && !CCW_TRACE_OR_STEP( dev )                                   \
+     && !(dev)->ccwtrace                                            \
      && !CPU_STEPPING_OR_TRACING_ALL                                \
      && sysblk.noch9oflow                                           \
      && is_ch9oflow( dev, chanstat, unitstat )                      \
@@ -691,18 +687,24 @@ BYTE    workarea[17];                   /* Character string work     */
 } /* end function format_iobuf_data */
 
 
-#if DEBUG_DUMP
+#if !DEBUG_DUMP
+#define DUMP( _desc, _addr, _len )
+#define DUMP_STORAGE( _desc, _addr, _len )
+#else
 /*-------------------------------------------------------------------*/
 /* Dump data block                                                   */
 /*-------------------------------------------------------------------*/
-#define dump(_desc,_addr,_len)                                         \
-       _dump((char *)(_desc),(BYTE *)(_addr),(u_int)(_len))
-static void
-_dump ( const char *description, BYTE *addr, const u_int len )
+
+#define DUMP( _desc, _addr, _len ) \
+       _dump( (char*)(_desc), (BYTE*)(_addr), (u_int)(_len), \
+               __FILE__, __LINE__, __FUNCTION__ )
+
+static void _dump ( const char *description, BYTE *addr, const u_int len,
+                    const char* file, int line, const char* func )
 {
 int     i;
-int     k = MIN(len, IOBUF_MINSIZE);
-BYTE   *limit;
+int     k = MIN( len, IOBUF_MINSIZE );
+BYTE*   limit;
 char    msgbuf[133];
 
     if (k)
@@ -710,99 +712,139 @@ char    msgbuf[133];
         /* Set limit */
         limit = addr + k;
 
-        if (description &&
-            description != NULL &&
-            description[0])
-            WRMSG(HHC90000, "I", description);
-        for (i = 0; addr < limit; addr += 16, i += 16, k -= 16)
+        if (description && description[0])
+            fwritemsg
+            (
+                file, line, func, WRMSG_NORMAL, stdout,
+                MSG( HHC01390, "D", description )
+            );
+
+        for (i=0; addr < limit; addr += 16, i += 16, k -= 16)
         {
-            MSGBUF(msgbuf, "%4.4X  => ", i);
-            format_data(msgbuf+9, sizeof(msgbuf)-9, addr,  k);
-            WRMSG(HHC90000, "I", msgbuf);
+            MSGBUF( msgbuf, "%4.4X  => ", i );
+            format_data( msgbuf+9, sizeof( msgbuf ) - 9, addr,  k );
+            fwritemsg
+            (
+                file, line, func, WRMSG_NORMAL, stdout,
+                MSG( HHC01390, "D", msgbuf )
+            );
         }
     }
-
-} /* end function dump */
+}
 
 
 /*-------------------------------------------------------------------*/
 /* Dump Storage                                                      */
 /*-------------------------------------------------------------------*/
-#define dump_storage(_desc,_addr,_len)                                 \
-       _dump_storage                                                   \
-       ((char *)(_desc),(RADR)(_addr),(u_int)(_len))
-static void
-_dump_storage ( const char *description,
-                RADR addr, const u_int len )
+
+#define DUMP_STORAGE( _desc, _addr, _len ) \
+       _dump_storage( (char*)(_desc), (RADR)(_addr), (u_int)(_len), \
+                       __FILE__, __LINE__, __FUNCTION__ )
+
+static void _dump_storage( const char* description, RADR addr, const u_int len,
+                           const char* file, int line, const char* func )
 {
-
-
 u_int   k;                              /* Amount of storage to dump */
-BYTE   *storage;                        /* Real storage address      */
-BYTE   *limit;                          /* Display limit             */
+BYTE*   storage;                        /* Real storage address      */
+BYTE*   limit;                          /* Display limit             */
 char    msgbuf[133];                    /* Message buffer            */
 
     /* Set length to fully reside within defined storage */
-    k = CAPPED_BUFFLEN(addr,len,NULL);
+    k = CAPPED_BUFFLEN( addr, len, NULL );
 
     if (k)
     {
-        k = MIN(k, IOBUF_MINSIZE);
+        k       = MIN( k, IOBUF_MINSIZE );
         storage = sysblk.mainstor + addr;
-        limit = storage + k;
-        if (description &&
-            description != NULL &&
-            description[0])
-            WRMSG(HHC90000, "I", description);
-        if (sysblk.mainsize > 2*ONE_GIGABYTE)
-            for (; storage < limit; addr += 16, storage += 16, k -= 16)
-            {
-                MSGBUF(msgbuf, "%16.16"PRIX64" => ", addr);
-                format_data(msgbuf+20, sizeof(msgbuf)-20, storage, k);
-                WRMSG(HHC90000, "I", msgbuf);
-            }
-        else
-            for (; storage < limit; addr += 16, storage += 16, k -= 16)
-            {
-                MSGBUF(msgbuf, "%8.8X => ", (u_int)addr);
-                format_data(msgbuf+12, sizeof(msgbuf)-12, storage, k);
-                WRMSG(HHC90000, "I", msgbuf);
-            }
-    }
+        limit   = storage + k;
 
-} /* end function dump_storage */
-#endif
+        if (description && description[0])
+            fwritemsg
+            (
+                file, line, func, WRMSG_NORMAL, stdout,
+                MSG( HHC01391, "D", description )
+            );
+
+        if (sysblk.mainsize > (2 * ONE_GIGABYTE))
+        {
+            for (; storage < limit; addr += 16, storage += 16, k -= 16)
+            {
+                MSGBUF( msgbuf, "%16.16"PRIX64" => ", addr );
+                format_data( msgbuf+20, sizeof( msgbuf ) - 20, storage, k );
+                fwritemsg
+                (
+                    file, line, func, WRMSG_NORMAL, stdout,
+                    MSG( HHC01391, "D", msgbuf )
+                );
+            }
+        }
+        else
+        {
+            for (; storage < limit; addr += 16, storage += 16, k -= 16)
+            {
+                MSGBUF( msgbuf, "%8.8X => ", (u_int)addr );
+                format_data( msgbuf+12, sizeof( msgbuf ) - 12, storage, k );
+                fwritemsg
+                (
+                    file, line, func, WRMSG_NORMAL, stdout,
+                    MSG( HHC01391, "D", msgbuf )
+                );
+            }
+        }
+    }
+}
+#endif // DEBUG_DUMP
+
 
 /*-------------------------------------------------------------------*/
 /* Display channel command word and data                             */
 /*-------------------------------------------------------------------*/
-static void
-display_ccw ( const DEVBLK *dev, const BYTE ccw[], const U32 addr,
-              const U32 count, const U8 flags )
+
+#define DISPLAY_CCW( _dev, _ccw, _addr, _count, _flags ) \
+    _display_ccw( (_dev), (_ccw), (_addr), (_count), (_flags), \
+                  __FILE__, __LINE__, __FUNCTION__ )
+
+static void _display_ccw ( const DEVBLK* dev, const BYTE ccw[], const U32 addr,
+                          const U32 count, const U8 flags,
+                          const char* file, int line, const char* func )
 {
-BYTE    area[64];                       /* Data display area         */
+    BYTE area[64];
 
-    UNREFERENCED(flags);
+    UNREFERENCED( flags );
 
-    if (IS_CCW_READ(ccw[0])             ||
-        IS_CCW_IMMEDIATE(dev, ccw[0])   ||
-        IS_CCW_TIC(ccw[0])              ||
-        IS_CCW_SENSE(ccw[0]))
+    if (0
+        || IS_CCW_READ      (      ccw[0] )
+        || IS_CCW_IMMEDIATE ( dev, ccw[0] )
+        || IS_CCW_TIC       (      ccw[0] )
+        || IS_CCW_SENSE     (      ccw[0] )
+    )
         area[0] = 0;
     else
-        format_iobuf_data (addr, area, dev, count);
+        format_iobuf_data( addr, area, dev, count );
 
     // "%1d:%04X CHAN: ccw %2.2X%2.2X%2.2X%2.2X %2.2X%2.2X%2.2X%2.2X%s"
-    WRMSG (HHC01315, "I", LCSS_DEVNUM,
+    fwritemsg
+    (
+        file, line, func, WRMSG_NORMAL, stdout,
+        MSG
+        (
+            HHC01315, "I", LCSS_DEVNUM,
             ccw[0], ccw[1], ccw[2], ccw[3],
-            ccw[4], ccw[5], ccw[6], ccw[7], area);
+            ccw[4], ccw[5], ccw[6], ccw[7], area
+        )
+    );
+}
 
-} /* end function display_ccw */
 
 /*-------------------------------------------------------------------*/
 /* Display interpretation of first two sense bytes                   */
 /*-------------------------------------------------------------------*/
-static void display_sense( const DEVBLK* dev )
+
+#define DISPLAY_SENSE( _dev ) \
+    _display_sense( (_dev), __FILE__, __LINE__, __FUNCTION__ )
+
+static void _display_sense( const DEVBLK* dev,
+                            const char* file, int line, const char* func )
 {
     char snsbuf[128];
 
@@ -833,33 +875,58 @@ static void display_sense( const DEVBLK* dev )
         );
 
     // "%1d:%04X CHAN: sense %s"
-    WRMSG( HHC01314, "I", LCSS_DEVNUM, snsbuf );
+    fwritemsg
+    (
+        file, line, func, WRMSG_NORMAL, stdout,
+        MSG( HHC01314, "I", LCSS_DEVNUM, snsbuf )
+    );
 }
+
 
 /*-------------------------------------------------------------------*/
 /* Display IDAW and Data                                             */
 /*-------------------------------------------------------------------*/
-static void
-display_idaw ( const DEVBLK *dev, const BYTE type, const BYTE flag,
-               const RADR addr, const U16 count )
+
+#define DISPLAY_IDAW( _dev, _type, _flag, _addr, _count ) \
+    _display_idaw( (_dev), (_type), (_flag), (_addr), (_count), \
+                    __FILE__, __LINE__, __FUNCTION__ )
+
+static void _display_idaw( const DEVBLK* dev, const BYTE type, const BYTE flag,
+                           const RADR addr, const U16 count,
+                           const char* file, int line, const char* func )
 {
-BYTE    area[64];                       /* Data display area         */
+    BYTE area[64];
 
     format_iobuf_data( addr, area, dev, count );
 
-    switch(type)
+    switch (type)
     {
         case PF_IDAW1:
-            WRMSG (HHC01302, "I", LCSS_DEVNUM,
-                                  (U32)addr, count, area);
+            // "%1d:%04X CHAN: idaw %8.8"PRIX32", len %3.3"PRIX16": %s"
+            fwritemsg
+            (
+                file, line, func, WRMSG_NORMAL, stdout,
+                MSG( HHC01302, "I", LCSS_DEVNUM, (U32)addr, count, area )
+            );
             break;
+
         case PF_IDAW2:
-            WRMSG (HHC01303, "I", LCSS_DEVNUM,
-                                  (U64)addr, count, area);
+            // "%1d:%04X CHAN: idaw %16.16"PRIX64", len %4.4"PRIX16": %s"
+            fwritemsg
+            (
+                file, line, func, WRMSG_NORMAL, stdout,
+                MSG( HHC01303, "I", LCSS_DEVNUM, (U64)addr, count, area )
+            );
             break;
+
         case PF_MIDAW:
-            WRMSG (HHC01301, "I", LCSS_DEVNUM,
-                                  flag, count, (U64)addr, area);
+            // "%1d:%04X CHAN: midaw %2.2X %4.4"PRIX16" %16.16"PRIX64": %s"
+            fwritemsg
+            (
+                file, line, func, WRMSG_NORMAL, stdout,
+                MSG( HHC01301, "I", LCSS_DEVNUM, flag, count, (U64)addr, area )
+            );
+            break;
     }
 }
 
@@ -867,116 +934,157 @@ BYTE    area[64];                       /* Data display area         */
 /*-------------------------------------------------------------------*/
 /* DISPLAY CHANNEL STATUS WORD                                       */
 /*-------------------------------------------------------------------*/
-static void
-display_csw (const DEVBLK *dev, const BYTE csw[])
+
+#define DISPLAY_CSW( _dev, _scsw ) \
+    _display_csw( (_dev), (_scsw), __FILE__, __LINE__, __FUNCTION__ )
+
+static void _display_csw( const DEVBLK* dev, const BYTE csw[],
+                          const char* file, int line, const char* func )
 {
-    WRMSG (HHC01316, "I", LCSS_DEVNUM,
+    // "%1d:%04X CHAN: csw %2.2X, stat %2.2X%2.2X, count %2.2X%2.2X, ccw %2.2X%2.2X%2.2X"
+    fwritemsg
+    (
+        file, line, func, WRMSG_NORMAL, stdout,
+        MSG
+        (
+            HHC01316, "I", LCSS_DEVNUM,
             csw[0],
             csw[4], csw[5], csw[6], csw[7],
-            csw[1], csw[2], csw[3]);
-
-} /* end function display_csw */
+            csw[1], csw[2], csw[3]
+        )
+    );
+}
 
 
 /*-------------------------------------------------------------------*/
 /* DISPLAY SUBCHANNEL STATUS WORD                                    */
 /*-------------------------------------------------------------------*/
-static void
-display_scsw (const DEVBLK *dev, const SCSW scsw)
+
+#define DISPLAY_SCSW( _dev, _scsw ) \
+    _display_scsw( (_dev), (_scsw), __FILE__, __LINE__, __FUNCTION__ )
+
+static void _display_scsw( const DEVBLK* dev, const SCSW scsw,
+                           const char* file, int line, const char* func )
 {
-    switch (sysblk.arch_mode)
+    if (ARCH_370_IDX == sysblk.arch_mode)
     {
-        case ARCH_370_IDX:
-        {
-            U8  csw[8];
-
-            scsw2csw(&scsw, csw);
-            display_csw (dev, csw);
-            break;
-        }
-
-        default:
-            WRMSG (HHC01317, "I", LCSS_DEVNUM,
-                   scsw.flag0, scsw.flag1, scsw.flag2, scsw.flag3,
-                   scsw.unitstat, scsw.chanstat,
-                   scsw.count[0], scsw.count[1],
-                   scsw.ccwaddr[0], scsw.ccwaddr[1],
-                   scsw.ccwaddr[2], scsw.ccwaddr[3]);
-            break;
+        U8 csw[8];
+        scsw2csw( &scsw, csw );
+//      DISPLAY_CSW( dev, csw );
+        _display_csw( dev, csw, file, line, func );
+        return;
     }
-} /* end function display_scsw */
+
+    // "%1d:%04X CHAN: scsw %2.2X%2.2X%2.2X%2.2X, stat %2.2X%2.2X, count %2.2X%2.2X, ccw %2.2X%2.2X%2.2X%2.2X"
+    fwritemsg
+    (
+        file, line, func, WRMSG_NORMAL, stdout,
+        MSG
+        (
+            HHC01317, "I", LCSS_DEVNUM,
+            scsw.flag0, scsw.flag1, scsw.flag2, scsw.flag3,
+            scsw.unitstat, scsw.chanstat,
+            scsw.count[0], scsw.count[1],
+            scsw.ccwaddr[0], scsw.ccwaddr[1],
+            scsw.ccwaddr[2], scsw.ccwaddr[3]
+        )
+    );
+}
 
 
 /*-------------------------------------------------------------------*/
 /*  Display prefetch table                                           */
 /*-------------------------------------------------------------------*/
-#if DEBUG_PREFETCH
-static void
-display_prefetch (PREFETCH *prefetch, const u_int ps,
-                  const U32 count, const U32 residual,
-                  const u_int more)
+#if !DEBUG_PREFETCH
+#define DISPLAY_PREFETCH( _prefetch, _ps, _count, _residual, _more )
+#else
+#define DISPLAY_PREFETCH( _prefetch, _ps, _count, _residual, _more ) \
+    _display_prefetch( _prefetch, _ps, _count, _residual, _more, \
+                       __FILE__, __LINE__, __FUNCTION__ )
+
+static void _display_prefetch( PREFETCH* prefetch, const u_int ps,
+                               const U32 count, const U32 residual,
+                               const u_int more,
+                               const char* file, int line, const char* func )
 {
-u_int   limit = MIN(prefetch->seq, PF_SIZE);
+u_int   limit = MIN( prefetch->seq, PF_SIZE );
 u_int   ts;
 U32     used = count - residual;
 char    msgbuf[133];
 
-    MSGBUF(msgbuf, "Prefetch ps=%d count=%llu (%8.8LLX) "
-                       "residual=%llu (%8.8LLX) more=%d "
-                       "used=%llu (%8.8LLX)",
-                   ps, count, count, residual, residual, more,
-                   used, used);
-    WRMSG(HHC90000, "I", msgbuf);
+    MSGBUF( msgbuf, "Prefetch ps=%d count=%llu (%8.8LLX) "
+                    "residual=%llu (%8.8LLX) more=%d "
+                    "used=%llu (%8.8LLX)",
+                    ps, count, count, residual, residual, more,
+                    used, used );
+    fwritemsg
+    (
+        file, line, func, WRMSG_NORMAL, stdout,
+        MSG( HHC01392, "D", msgbuf )
+    );
 
-    MSGBUF(msgbuf, "Prefetch seq=%d req=%d (%04.4X) pos=%d (%04.4X) "
-                            "prevcode=%02.2X code=%02.2X",
-                   prefetch->seq, prefetch->reqcount,
-                   prefetch->reqcount, prefetch->pos, prefetch->pos,
-                   prefetch->prevcode, prefetch->opcode);
-    WRMSG(HHC90000, "I", msgbuf);
+    MSGBUF( msgbuf, "Prefetch seq=%d req=%d (%04.4X) pos=%d (%04.4X) "
+                    "prevcode=%02.2X code=%02.2X",
+                    prefetch->seq, prefetch->reqcount,
+                    prefetch->reqcount, prefetch->pos, prefetch->pos,
+                    prefetch->prevcode, prefetch->opcode );
+    fwritemsg
+    (
+        file, line, func, WRMSG_NORMAL, stdout,
+        MSG( HHC01392, "D", msgbuf )
+    );
 
-    MSGBUF(msgbuf,
-           "Prefetch "
-           "  n "               /* ts                                */
-           "  "                 /* Select pointer                    */
-           "cs "                /* Channel Status                    */
-           "scsw-ccw "          /* CCW Address                       */
-           "data-len "          /* Data length                       */
-           "    data-address "  /* Data address                      */
-           "fl "                /* CCW Flags                         */
-           "   count "          /* CCW Count                         */
-           "idawaddr "          /* IDAW Address                      */
-           "it "                /* IDAW Type                         */
-           "if"                 /* IDAW Flag                         */
-           );
-    WRMSG(HHC90000, "I", msgbuf);
+    // (column header...)
 
-    for (ts = 0; ts < limit; ts++)
+    MSGBUF( msgbuf,
+            "Prefetch "
+            "  n "              /* ts                                */
+            "  "                /* Select pointer                    */
+            "cs "               /* Channel Status                    */
+            "scsw-ccw "         /* CCW Address                       */
+            "data-len "         /* Data length                       */
+            "    data-address " /* Data address                      */
+            "fl "               /* CCW Flags                         */
+            "   count "         /* CCW Count                         */
+            "idawaddr "         /* IDAW Address                      */
+            "it "               /* IDAW Type                         */
+            "if"                /* IDAW Flag                         */
+          );
+    fwritemsg
+    (
+        file, line, func, WRMSG_NORMAL, stdout,
+        MSG( HHC01392, "D", msgbuf )
+    );
+
+    for (ts=0; ts < limit; ts++)
     {
-        MSGBUF(msgbuf,
-               "Prefetch "
-               "%3d "           /* ts                                */
-               "%2s"            /* Select pointer (ps)               */
-               "%2.2X "         /* Channel Status                    */
-               "%8.8X "         /* CCW Address (SCSW CCW Address)    */
-               "%8.8X "         /* Data length                       */
-              "%16.16"PRIX64" " /* Data address                      */
-               "%2.2X "         /* CCW Flags                         */
-               "%8.8X "         /* CCW Count                         */
-               "%8.8X "         /* IDAW Address                      */
-               "%2d "           /* IDAW Type                         */
-               "%2.2X",         /* IDAW Flag                         */
-               ts, ((ps == ts) ? "->" : "  "),
-               prefetch->chanstat[ts], prefetch->ccwaddr[ts],
-               prefetch->datalen[ts], prefetch->dataaddr[ts],
-               prefetch->ccwflags[ts], prefetch->ccwcount[ts],
-               prefetch->idawaddr[ts], prefetch->idawtype[ts],
-               prefetch->idawflag[ts]);
-        WRMSG(HHC90000, "I", msgbuf);
+        MSGBUF( msgbuf,
+                "Prefetch "
+                "%3d "           /* ts                               */
+                "%2s"            /* Select pointer (ps)              */
+                "%2.2X "         /* Channel Status                   */
+                "%8.8X "         /* CCW Address (SCSW CCW Address)   */
+                "%8.8X "         /* Data length                      */
+                "%16.16"PRIX64" "/* Data address                     */
+                "%2.2X "         /* CCW Flags                        */
+                "%8.8X "         /* CCW Count                        */
+                "%8.8X "         /* IDAW Address                     */
+                "%2d "           /* IDAW Type                        */
+                "%2.2X",         /* IDAW Flag                        */
+
+                ts, ((ps == ts) ? "->" : "  "),
+                prefetch->chanstat[ts], prefetch->ccwaddr [ts],
+                prefetch->datalen [ts], prefetch->dataaddr[ts],
+                prefetch->ccwflags[ts], prefetch->ccwcount[ts],
+                prefetch->idawaddr[ts], prefetch->idawtype[ts],
+                prefetch->idawflag[ts] );
+        fwritemsg
+        (
+            file, line, func, WRMSG_NORMAL, stdout,
+            MSG( HHC01392, "D", msgbuf )
+        );
     }
 }
-#else
-#define display_prefetch(_prefetch, _ps, _count, _residual, _more)
 #endif /* DEBUG_PREFETCH */
 
 
@@ -1156,7 +1264,7 @@ testio (REGS *regs, DEVBLK *dev, BYTE ibyte)
     else
         cc = 0;         /* Available */
 
-    if (CCW_TRACE_OR_STEP( dev ))
+    if (dev->ccwtrace)
         WRMSG (HHC01318, "I", LCSS_DEVNUM, cc);
 
     /* Complete unlock sequence */
@@ -1179,7 +1287,7 @@ int haltio( REGS *regs, DEVBLK *dev, BYTE ibyte )
 
     UNREFERENCED( ibyte );
 
-    if (CCW_TRACE_OR_STEP( dev ))
+    if (dev->ccwtrace)
         // "%1d:%04X CHAN: halt I/O"
         WRMSG( HHC01329, "I", LCSS_DEVNUM );
 
@@ -1244,10 +1352,10 @@ int haltio( REGS *regs, DEVBLK *dev, BYTE ibyte )
         /* Store the channel status word at PSA+X'40' */
         store_scsw_as_csw( regs, &dev->scsw );
 
-        if (CCW_TRACE_OR_STEP( dev ))
+        if (dev->ccwtrace)
         {
             psa = (PSA_3XX*)(regs->mainstor + regs->PX);
-            display_csw( dev, psa->csw );
+            DISPLAY_CSW( dev, psa->csw );
         }
     }
     else if (dev->ctctype == CTC_LCS)
@@ -1258,12 +1366,12 @@ int haltio( REGS *regs, DEVBLK *dev, BYTE ibyte )
         /* Store the channel status word at PSA+X'40' */
         store_scsw_as_csw( regs, &dev->scsw );
 
-        if (CCW_TRACE_OR_STEP( dev ))
+        if (dev->ccwtrace)
         {
             psa = (PSA_3XX*)(regs->mainstor + regs->PX);
             // "%1d:%04X CHAN: HIO modification executed: cc=1"
             WRMSG( HHC01330, "I", LCSS_DEVNUM );
-            display_csw( dev, psa->csw );
+            DISPLAY_CSW( dev, psa->csw );
         }
     }
     else
@@ -1540,8 +1648,8 @@ test_subchan_locked (REGS* regs, DEVBLK* dev,
     DEQUEUE_IO_INTERRUPT_QLOCKED(*ioint);
 
     /* Display the subchannel status word */
-    if (CCW_TRACE_OR_STEP( dev ))
-        display_scsw( dev, **scsw );
+    if (dev->ccwtrace)
+        DISPLAY_SCSW( dev, **scsw );
 
     /* Copy the SCSW to the IRB */
     irb->scsw = **scsw;
@@ -1635,7 +1743,7 @@ test_subchan (REGS *regs, DEVBLK *dev, IRB *irb)
     release_lock(&sysblk.iointqlk);
 
     /* Display the condition code */
-    if (CCW_TRACE_OR_STEP( dev ))
+    if (dev->ccwtrace)
         // "%1d:%04X CHAN: test I/O: cc=%d"
         WRMSG( HHC01318, "I", LCSS_DEVNUM, cc );
 
@@ -1709,7 +1817,7 @@ perform_clear_subchan (DEVBLK *dev)
     UPDATE_IC_IOPENDING_QLOCKED();
     release_lock(&sysblk.iointqlk);
 
-    if (CCW_TRACE_OR_STEP( dev ))
+    if (dev->ccwtrace)
         // "%1d:%04X CHAN: clear completed"
         WRMSG( HHC01308, "I", LCSS_DEVNUM );
 
@@ -1736,7 +1844,7 @@ void clear_subchan( REGS* regs, DEVBLK* dev )
 {
     UNREFERENCED( regs );
 
-    if (CCW_TRACE_OR_STEP( dev ))
+    if (dev->ccwtrace)
         // "%1d:%04X CHAN: clear subchannel"
         WRMSG( HHC01331, "I", LCSS_DEVNUM );
 
@@ -1883,7 +1991,7 @@ perform_halt_and_release_lock (DEVBLK *dev)
     }
 
     /* Trace HALT */
-    if (CCW_TRACE_OR_STEP( dev ))
+    if (dev->ccwtrace)
         // "%1d:%04X CHAN: halt subchannel: cc=%d"
         WRMSG( HHC01300, "I", LCSS_DEVNUM, 0 );
 
@@ -1933,7 +2041,7 @@ int halt_subchan( REGS* regs, DEVBLK* dev)
 {
     UNREFERENCED( regs );
 
-    if (CCW_TRACE_OR_STEP( dev ))
+    if (dev->ccwtrace)
         // "%1d:%04X CHAN: halt subchannel"
         WRMSG( HHC01332, "I", LCSS_DEVNUM );
 
@@ -1966,7 +2074,7 @@ int halt_subchan( REGS* regs, DEVBLK* dev)
            )
     )
     {
-        if (CCW_TRACE_OR_STEP( dev ))
+        if (dev->ccwtrace)
             // "%1d:%04X CHAN: halt subchannel: cc=%d"
             WRMSG( HHC01300, "I", LCSS_DEVNUM, 1 );
         release_lock( &dev->lock );
@@ -1979,7 +2087,7 @@ int halt_subchan( REGS* regs, DEVBLK* dev)
     */
     if (dev->scsw.flag2 & (SCSW2_AC_HALT | SCSW2_AC_CLEAR))
     {
-        if (CCW_TRACE_OR_STEP( dev ))
+        if (dev->ccwtrace)
             // "%1d:%04X CHAN: halt subchannel: cc=%d"
             WRMSG( HHC01300, "I", LCSS_DEVNUM, 2 );
         release_lock( &dev->lock );
@@ -2756,7 +2864,7 @@ int cc;                                 /* Return code               */
     }
 
     /* If tracing, write trace message */
-    if (CCW_TRACE_OR_STEP( dev ))
+    if (dev->ccwtrace)
         WRMSG (HHC01333, "I", LCSS_DEVNUM, cc);
 
     release_lock (&dev->lock);
@@ -3411,16 +3519,16 @@ do {                                                                   \
                 } /* end if(!MIDAW_FLAG_SKIP) */
 
                 /* Display the MIDAW if CCW tracing is on */
-                if (!prefetch->seq && CCW_TRACE_OR_STEP( dev ))
-                    display_idaw( dev, PF_MIDAW, midawflg, midawdat, midawlen );
+                if (!prefetch->seq && dev->ccwtrace)
+                    DISPLAY_IDAW( dev, PF_MIDAW, midawflg, midawdat, midawlen );
 #if DEBUG_DUMP
-                if (CCW_TRACE_OR_STEP( dev ))
+                if (dev->ccwtrace)
                 {
                     if (to_memory)
-                        dump("iobuf:", iobuf, midawlen);
-                    dump_storage("Storage:", midawdat, midawlen);
+                        DUMP("iobuf:", iobuf, midawlen);
+                    DUMP_STORAGE("Storage:", midawdat, midawlen);
                     if (to_iobuf)
-                        dump("iobuf:", iobuf, midawlen);
+                        DUMP("iobuf:", iobuf, midawlen);
                 }
 #endif
                 /* Decrement remaining count */
@@ -3612,16 +3720,16 @@ do {                                                                   \
             }
 
             /* If not prefetch, display the IDAW if CCW tracing */
-            else if (CCW_TRACE_OR_STEP( dev ))
-                display_idaw( dev, idawfmt, 0, idadata, idalen );
+            else if (dev->ccwtrace)
+                DISPLAY_IDAW( dev, idawfmt, 0, idadata, idalen );
 #if DEBUG_DUMP
-            if (CCW_TRACE_OR_STEP( dev ))
+            if (dev->ccwtrace)
             {
                 if (to_memory)
-                    dump( "iobuf:", iobuf-idalen, idalen );
-                dump_storage( "Storage:", idadata, idalen );
+                    DUMP( "iobuf:", iobuf-idalen, idalen );
+                DUMP_STORAGE( "Storage:", idadata, idalen );
                 if (to_iobuf)
-                    dump( "iobuf:", iobuf-idalen, idalen );
+                    DUMP( "iobuf:", iobuf-idalen, idalen );
             }
 #endif
             /* Decrement remaining count, increment buffer pointer */
@@ -3729,14 +3837,14 @@ do {                                                                   \
             } /* end for(page) */
 
 #if DEBUG_PREFETCH
-            if (CCW_TRACE_OR_STEP( dev ))
+            if (dev->ccwtrace)
             {
                 char msgbuf[133];
 
                 MSGBUF( msgbuf,
                     "CCW %2.2X %2.2X %4.4X %8.8X to_memory=%d to_iobuf=%d readbackwards=%d",
                     (U8)code, (U8)flags, (U16)count, (U32)addr, to_memory, to_iobuf, readbackwards );
-                WRMSG( HHC90000, "I", msgbuf );
+                WRMSG( HHC01392, "D", msgbuf );
             }
 #endif
             /* Copy data between main storage and channel buffer */
@@ -3792,22 +3900,22 @@ do {                                                                   \
 #endif
 
 #if DEBUG_DUMP
-            if (CCW_TRACE_OR_STEP( dev ))
+            if (dev->ccwtrace)
             {
                 char msgbuf[133];
 
                 MSGBUF( msgbuf, "iobuf->%8.8X.%4.4X", addr, count );
-                WRMSG( HHC90000, "I", msgbuf );
+                WRMSG( HHC01390, "D", msgbuf );
 
                 MSGBUF( msgbuf, "addr=%8.8X count=%d residual=%d copy=%d",
                     addr, count, *residual, count );
-                WRMSG( HHC90000, "I", msgbuf );
+                WRMSG( HHC01390, "D", msgbuf );
 
                 if (to_memory)
-                    dump( "iobuf:", iobuf, count );
-                dump_storage( "Storage:", addr, count );
+                    DUMP( "iobuf:", iobuf, count );
+                DUMP_STORAGE( "Storage:", addr, count );
                 if (to_iobuf)
-                    dump( "iobuf:", iobuf, count );
+                    DUMP( "iobuf:", iobuf, count );
             }
 #endif
         }
@@ -3890,7 +3998,7 @@ ARCH_DEP( device_attention )( DEVBLK* dev, BYTE unitstat )
 
             schedule_ioq( NULL, dev );
 
-            if (CCW_TRACE_OR_STEP( dev ))
+            if (dev->ccwtrace)
                 // "%1d:%04X CHAN: attention signaled"
                 WRMSG( HHC01304, "I", SSID_TO_LCSS( dev->ssid ), dev->devnum);
             rc = 0;
@@ -3903,7 +4011,7 @@ ARCH_DEP( device_attention )( DEVBLK* dev, BYTE unitstat )
         return rc;
     }
 
-    if (CCW_TRACE_OR_STEP( dev ))
+    if (dev->ccwtrace)
         // "%1d:%04X CHAN: attention"
         WRMSG( HHC01305, "I", LCSS_DEVNUM );
 
@@ -4011,7 +4119,7 @@ int     rc;                             /* Return code               */
         /* SSCH resulting in cc=2 thanks to this additional log msg. */
         /*                        Peter J. Jansen, 21-Jun-2016       */
         /*************************************************************/
-        if (CCW_TRACE_OR_STEP( dev ))
+        if (dev->ccwtrace)
         {
             // "%1d:%04X CHAN: startio cc=2 (busy=%d startpending=%d)"
             WRMSG( HHC01336, "I", SSID_TO_LCSS(dev->ssid),
@@ -4411,7 +4519,7 @@ execute_clear:
 execute_halt:
             perform_halt(dev);
 
-            if (tracethis && !dev->ccwstep)
+            if (tracethis)
                 // "%1d:%04X CHAN: halt completed"
                 WRMSG( HHC01309, "I", LCSS_DEVNUM );
 
@@ -4493,8 +4601,8 @@ execute_halt:
                 goto breakchain;
 
             /* Display the CCW */
-            if (dev->ccwtrace || dev->ccwstep)
-                display_ccw (dev, ccw, addr, count, flags);
+            if (dev->ccwtrace)
+                DISPLAY_CCW (dev, ccw, addr, count, flags);
         }
 
         /* Channel program check if invalid Format-1 CCW             */
@@ -5328,7 +5436,7 @@ breakchain:
             BYTE  tracing_active  = CCW_TRACING_ACTIVE( dev, tracethis );
             BYTE  cpu_tracing     = CPU_STEPPING_OR_TRACING_ALL;
             BYTE  ostailor_quiet  = (sysblk.pgminttr == 0);
-            BYTE  ccw_tracing     = CCW_TRACE_OR_STEP( dev );
+            BYTE  ccw_tracing     = dev->ccwtrace;
             BYTE  skip_ch9uc      = SKIP_CH9UC( dev, chanstat, unitstat );
 
             /* Trace the CCW if not already done */
@@ -5342,7 +5450,7 @@ breakchain:
                 && !skip_ch9uc
             )
             {
-                display_ccw (dev, ccw, addr, count, flags);
+                DISPLAY_CCW (dev, ccw, addr, count, flags);
             }
 
             /* Activate tracing for this CCW chain only
@@ -5367,16 +5475,15 @@ breakchain:
                 if (!prefetch.seq)
                 {
                     char msgbuf[133];
-                    MSGBUF(msgbuf, "flags=%2.2X count=%d (%4.4X) "
-                                   "residual=%d (%4.4X) "
-                                   "more=%d "
-                                   "bufpos=%d",
-                                   flags,
-                                   count, count,
-                                   residual, residual,
-                                   more, bufpos);
-                    // "DBG: %s"
-                    WRMSG(HHC90000, "I", msgbuf);
+                    MSGBUF( msgbuf, "flags=%2.2X count=%d (%4.4X) "
+                                    "residual=%d (%4.4X) "
+                                    "more=%d "
+                                    "bufpos=%d",
+                                    flags,
+                                    count, count,
+                                    residual, residual,
+                                    more, bufpos );
+                    WRMSG( HHC01392, "D", msgbuf );
                 }
 #endif
 
@@ -5384,7 +5491,7 @@ breakchain:
             if (prefetch.seq)
             {
                 /* Display prefetch table */
-                display_prefetch(&prefetch, ps, count, residual, more);
+                DISPLAY_PREFETCH(&prefetch, ps, count, residual, more);
 
                 /* Loop through prefetch table for CCW/IDAW display */
                 for (ts = 0, prevccwaddr = 1;
@@ -5393,11 +5500,11 @@ breakchain:
                 {
                     if (prevccwaddr != prefetch.ccwaddr[ts])
                     {
-                        prevccwaddr = ccwaddr = prefetch.ccwaddr[ts];
+                        prevccwaddr = prefetch.ccwaddr[ts];
                         if (ts)
                         {
                             /* Display CCW */
-                            display_ccw (dev,
+                            DISPLAY_CCW (dev,
                                          dev->mainstor +
                                            (prefetch.ccwaddr[ts] - 8),
                                          prefetch.dataaddr[ts],
@@ -5407,7 +5514,7 @@ breakchain:
                         }
                     }
                     if (prefetch.idawtype[ts])
-                        display_idaw(dev,
+                        DISPLAY_IDAW(dev,
                                      prefetch.idawtype[ts],
                                      prefetch.idawflag[ts],
                                      prefetch.dataaddr[ts],
@@ -5455,7 +5562,7 @@ breakchain:
                         sense[28], sense[29], sense[30], sense[31] );
 
                 if (sense[0] != 0 || sense[1] != 0)
-                    display_sense( dev );
+                    DISPLAY_SENSE( dev );
             }
         }
 
@@ -6034,19 +6141,17 @@ retry:
             else scsw = NULL;
 
             /* Check interrupt validity */
-
             if (1
                 && scsw != NULL
                 && !(scsw->flag2 & (SCSW2_FC | SCSW2_AC))
                 && !(scsw->flag3 & SCSW3_AC)
             )
             {
-                WRMSG( HHC90000, "E", "  CHAN: Invalid SCSW presentation" );
-                display_scsw( dev, *scsw );
+                WRMSG( HHC01393, "E", "  CHAN: Invalid SCSW presentation" );
+                DISPLAY_SCSW( dev, *scsw );
             }
         }
 #endif /*DEBUG_SCSW*/
-
     }
     release_lock( &dev->lock );
 

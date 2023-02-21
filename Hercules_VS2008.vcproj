@@ -2131,10 +2131,6 @@
 						>
 					</File>
 					<File
-						RelativePath=".\readme\README.IOARCH.md"
-						>
-					</File>
-					<File
 						RelativePath=".\readme\README.ISSUES.md"
 						>
 					</File>
@@ -3423,11 +3419,43 @@
 						>
 					</File>
 					<File
+						RelativePath=".\tests\CLCLE-01-unaligned-buffers.core"
+						>
+					</File>
+					<File
+						RelativePath=".\tests\CLCLE-02-unaligned-buffers.core"
+						>
+					</File>
+					<File
+						RelativePath=".\tests\CLCLE-03-basic.core"
+						>
+					</File>
+					<File
+						RelativePath=".\tests\CLCLE-04-performance.core"
+						>
+					</File>
+					<File
 						RelativePath=".\tests\CMPSC.core"
 						>
 					</File>
 					<File
 						RelativePath=".\tests\cpu0off.core"
+						>
+					</File>
+					<File
+						RelativePath=".\tests\CUSE-01-basic.core"
+						>
+					</File>
+					<File
+						RelativePath=".\tests\CUSE-02-performance.core"
+						>
+					</File>
+					<File
+						RelativePath=".\tests\dfp-080-from-packed.core"
+						>
+					</File>
+					<File
+						RelativePath=".\tests\dfp-080-to-packed.core"
 						>
 					</File>
 					<File
@@ -3448,6 +3476,10 @@
 					</File>
 					<File
 						RelativePath=".\tests\mvcos-001.core"
+						>
+					</File>
+					<File
+						RelativePath=".\tests\PERZAD.core"
 						>
 					</File>
 					<File
@@ -3502,6 +3534,42 @@
 						RelativePath=".\tests\tape.core"
 						>
 					</File>
+					<File
+						RelativePath=".\tests\TRE-01-basic.core"
+						>
+					</File>
+					<File
+						RelativePath=".\tests\TRE-02-performance.core"
+						>
+					</File>
+					<File
+						RelativePath=".\tests\TRTE-01-basic.core"
+						>
+					</File>
+					<File
+						RelativePath=".\tests\TRTE-02-performance.core"
+						>
+					</File>
+					<File
+						RelativePath=".\tests\TRTR-01-basic.core"
+						>
+					</File>
+					<File
+						RelativePath=".\tests\TRTR-02-performance.core"
+						>
+					</File>
+					<File
+						RelativePath=".\tests\TRTRE-01-basic.core"
+						>
+					</File>
+					<File
+						RelativePath=".\tests\TRTRE-02-performance.core"
+						>
+					</File>
+					<File
+						RelativePath=".\tests\TXFPER.core"
+						>
+					</File>
 				</Filter>
 				<Filter
 					Name="scripts"
@@ -3515,6 +3583,10 @@
 						</File>
 						<File
 							RelativePath=".\tests\axtr.txt"
+							>
+						</File>
+						<File
+							RelativePath=".\tests\BEAR.txt"
 							>
 						</File>
 						<File
@@ -4366,6 +4438,14 @@
 							>
 						</File>
 						<File
+							RelativePath=".\tests\cdfp-080-from-packed.tst"
+							>
+						</File>
+						<File
+							RelativePath=".\tests\cdfp-080-to-packed.tst"
+							>
+						</File>
+						<File
 							RelativePath=".\tests\CDSG.tst"
 							>
 						</File>
@@ -4379,6 +4459,22 @@
 						</File>
 						<File
 							RelativePath=".\tests\CLCL.tst"
+							>
+						</File>
+						<File
+							RelativePath=".\tests\CLCLE-01-unaligned-buffers.tst"
+							>
+						</File>
+						<File
+							RelativePath=".\tests\CLCLE-02-unaligned-buffers.tst"
+							>
+						</File>
+						<File
+							RelativePath=".\tests\CLCLE-03-basic.tst"
+							>
+						</File>
+						<File
+							RelativePath=".\tests\CLCLE-04-performance.tst"
 							>
 						</File>
 						<File
@@ -4399,6 +4495,14 @@
 						</File>
 						<File
 							RelativePath=".\tests\csxtr.tst"
+							>
+						</File>
+						<File
+							RelativePath=".\tests\CUSE-01-basic.tst"
+							>
+						</File>
+						<File
+							RelativePath=".\tests\CUSE-02-performance.tst"
 							>
 						</File>
 						<File
@@ -4487,6 +4591,10 @@
 						</File>
 						<File
 							RelativePath=".\tests\mvcos-001.tst"
+							>
+						</File>
+						<File
+							RelativePath=".\tests\PERZAD.tst"
 							>
 						</File>
 						<File
@@ -4579,6 +4687,42 @@
 						</File>
 						<File
 							RelativePath=".\tests\timeout.tst"
+							>
+						</File>
+						<File
+							RelativePath=".\tests\TRE-01-basic.tst"
+							>
+						</File>
+						<File
+							RelativePath=".\tests\TRE-02-performance.tst"
+							>
+						</File>
+						<File
+							RelativePath=".\tests\TRTE-01-basic.tst"
+							>
+						</File>
+						<File
+							RelativePath=".\tests\TRTE-02-performance.tst"
+							>
+						</File>
+						<File
+							RelativePath=".\tests\TRTR-01-basic.tst"
+							>
+						</File>
+						<File
+							RelativePath=".\tests\TRTR-02-performance.tst"
+							>
+						</File>
+						<File
+							RelativePath=".\tests\TRTRE-01-basic.tst"
+							>
+						</File>
+						<File
+							RelativePath=".\tests\TRTRE-02-performance.tst"
+							>
+						</File>
+						<File
+							RelativePath=".\tests\TXFPER.tst"
 							>
 						</File>
 						<File
@@ -4770,11 +4914,43 @@
 							>
 						</File>
 						<File
+							RelativePath=".\tests\CLCLE-01-unaligned-buffers.asm"
+							>
+						</File>
+						<File
+							RelativePath=".\tests\CLCLE-02-unaligned-buffers.asm"
+							>
+						</File>
+						<File
+							RelativePath=".\tests\CLCLE-03-basic.asm"
+							>
+						</File>
+						<File
+							RelativePath=".\tests\CLCLE-04-performance.asm"
+							>
+						</File>
+						<File
 							RelativePath=".\tests\CMPSC.asm"
 							>
 						</File>
 						<File
+							RelativePath=".\tests\CUSE-01-basic.asm"
+							>
+						</File>
+						<File
+							RelativePath=".\tests\CUSE-02-performance.asm"
+							>
+						</File>
+						<File
 							RelativePath=".\tests\dc-float.asm"
+							>
+						</File>
+						<File
+							RelativePath=".\tests\dfp-080-from-packed.asm"
+							>
+						</File>
+						<File
+							RelativePath=".\tests\dfp-080-to-packed.asm"
 							>
 						</File>
 						<File
@@ -4795,6 +4971,10 @@
 						</File>
 						<File
 							RelativePath=".\tests\mvcos-001.asm"
+							>
+						</File>
+						<File
+							RelativePath=".\tests\PERZAD.asm"
 							>
 						</File>
 						<File
@@ -4845,6 +5025,42 @@
 							RelativePath=".\tests\tape.asm"
 							>
 						</File>
+						<File
+							RelativePath=".\tests\TRE-01-basic.asm"
+							>
+						</File>
+						<File
+							RelativePath=".\tests\TRE-02-performance.asm"
+							>
+						</File>
+						<File
+							RelativePath=".\tests\TRTE-01-basic.asm"
+							>
+						</File>
+						<File
+							RelativePath=".\tests\TRTE-02-performance.asm"
+							>
+						</File>
+						<File
+							RelativePath=".\tests\TRTR-01-basic.asm"
+							>
+						</File>
+						<File
+							RelativePath=".\tests\TRTR-02-performance.asm"
+							>
+						</File>
+						<File
+							RelativePath=".\tests\TRTRE-01-basic.asm"
+							>
+						</File>
+						<File
+							RelativePath=".\tests\TRTRE-02-performance.asm"
+							>
+						</File>
+						<File
+							RelativePath=".\tests\TXFPER.asm"
+							>
+						</File>
 						<Filter
 							Name="list"
 							>
@@ -4861,7 +5077,15 @@
 								>
 							</File>
 							<File
+								RelativePath=".\tests\bfp-001-divtoint.pdf"
+								>
+							</File>
+							<File
 								RelativePath=".\tests\bfp-002-loadr.list"
+								>
+							</File>
+							<File
+								RelativePath=".\tests\bfp-002-loadr.pdf"
 								>
 							</File>
 							<File
@@ -4869,7 +5093,15 @@
 								>
 							</File>
 							<File
+								RelativePath=".\tests\bfp-003-loadfpi.pdf"
+								>
+							</File>
+							<File
 								RelativePath=".\tests\bfp-004-cvttolog.list"
+								>
+							</File>
+							<File
+								RelativePath=".\tests\bfp-004-cvttolog.pdf"
 								>
 							</File>
 							<File
@@ -4877,7 +5109,15 @@
 								>
 							</File>
 							<File
+								RelativePath=".\tests\bfp-005-cvttolog64.pdf"
+								>
+							</File>
+							<File
 								RelativePath=".\tests\bfp-006-cvttofix.list"
+								>
+							</File>
+							<File
+								RelativePath=".\tests\bfp-006-cvttofix.pdf"
 								>
 							</File>
 							<File
@@ -4885,7 +5125,15 @@
 								>
 							</File>
 							<File
+								RelativePath=".\tests\bfp-007-cvttofix64.pdf"
+								>
+							</File>
+							<File
 								RelativePath=".\tests\bfp-008-cvtfrlog.list"
+								>
+							</File>
+							<File
+								RelativePath=".\tests\bfp-008-cvtfrlog.pdf"
 								>
 							</File>
 							<File
@@ -4893,7 +5141,15 @@
 								>
 							</File>
 							<File
+								RelativePath=".\tests\bfp-009-cvtfrlog64.pdf"
+								>
+							</File>
+							<File
 								RelativePath=".\tests\bfp-010-cvtfrfix.list"
+								>
+							</File>
+							<File
+								RelativePath=".\tests\bfp-010-cvtfrfix.pdf"
 								>
 							</File>
 							<File
@@ -4901,7 +5157,15 @@
 								>
 							</File>
 							<File
+								RelativePath=".\tests\bfp-011-cvtfrfix64.pdf"
+								>
+							</File>
+							<File
 								RelativePath=".\tests\bfp-012-loadtest.list"
+								>
+							</File>
+							<File
+								RelativePath=".\tests\bfp-012-loadtest.pdf"
 								>
 							</File>
 							<File
@@ -4909,7 +5173,15 @@
 								>
 							</File>
 							<File
+								RelativePath=".\tests\bfp-013-comps.pdf"
+								>
+							</File>
+							<File
 								RelativePath=".\tests\bfp-014-divide.list"
+								>
+							</File>
+							<File
+								RelativePath=".\tests\bfp-014-divide.pdf"
 								>
 							</File>
 							<File
@@ -4917,7 +5189,15 @@
 								>
 							</File>
 							<File
+								RelativePath=".\tests\bfp-015-sqrt.pdf"
+								>
+							</File>
+							<File
 								RelativePath=".\tests\bfp-016-add.list"
+								>
+							</File>
+							<File
+								RelativePath=".\tests\bfp-016-add.pdf"
 								>
 							</File>
 							<File
@@ -4925,7 +5205,15 @@
 								>
 							</File>
 							<File
+								RelativePath=".\tests\bfp-017-loadl.pdf"
+								>
+							</File>
+							<File
 								RelativePath=".\tests\bfp-018-subtract.list"
+								>
+							</File>
+							<File
+								RelativePath=".\tests\bfp-018-subtract.pdf"
 								>
 							</File>
 							<File
@@ -4933,7 +5221,15 @@
 								>
 							</File>
 							<File
+								RelativePath=".\tests\bfp-019-multiply.pdf"
+								>
+							</File>
+							<File
 								RelativePath=".\tests\bfp-020-multlonger.list"
+								>
+							</File>
+							<File
+								RelativePath=".\tests\bfp-020-multlonger.pdf"
 								>
 							</File>
 							<File
@@ -4941,7 +5237,15 @@
 								>
 							</File>
 							<File
+								RelativePath=".\tests\bfp-021-multadd.pdf"
+								>
+							</File>
+							<File
 								RelativePath=".\tests\bfp-022-multsub.list"
+								>
+							</File>
+							<File
+								RelativePath=".\tests\bfp-022-multsub.pdf"
 								>
 							</File>
 							<File
@@ -4950,6 +5254,10 @@
 							</File>
 							<File
 								RelativePath=".\tests\bim-001-add-sub.list"
+								>
+							</File>
+							<File
+								RelativePath=".\tests\bim-001-add-sub.pdf"
 								>
 							</File>
 							<File
@@ -4993,11 +5301,67 @@
 								>
 							</File>
 							<File
+								RelativePath=".\tests\CLCLE-01-unaligned-buffers.list"
+								>
+							</File>
+							<File
+								RelativePath=".\tests\CLCLE-01-unaligned-buffers.pdf"
+								>
+							</File>
+							<File
+								RelativePath=".\tests\CLCLE-02-unaligned-buffers.list"
+								>
+							</File>
+							<File
+								RelativePath=".\tests\CLCLE-02-unaligned-buffers.pdf"
+								>
+							</File>
+							<File
+								RelativePath=".\tests\CLCLE-03-basic.list"
+								>
+							</File>
+							<File
+								RelativePath=".\tests\CLCLE-03-basic.pdf"
+								>
+							</File>
+							<File
+								RelativePath=".\tests\CLCLE-04-performance.list"
+								>
+							</File>
+							<File
+								RelativePath=".\tests\CLCLE-04-performance.pdf"
+								>
+							</File>
+							<File
 								RelativePath=".\tests\CMPSC.list"
 								>
 							</File>
 							<File
 								RelativePath=".\tests\CMPSC.pdf"
+								>
+							</File>
+							<File
+								RelativePath=".\tests\CUSE-01-basic.list"
+								>
+							</File>
+							<File
+								RelativePath=".\tests\CUSE-01-basic.pdf"
+								>
+							</File>
+							<File
+								RelativePath=".\tests\CUSE-02-performance.list"
+								>
+							</File>
+							<File
+								RelativePath=".\tests\CUSE-02-performance.pdf"
+								>
+							</File>
+							<File
+								RelativePath=".\tests\dfp-080-from-packed.list"
+								>
+							</File>
+							<File
+								RelativePath=".\tests\dfp-080-to-packed.list"
 								>
 							</File>
 							<File
@@ -5021,6 +5385,10 @@
 								>
 							</File>
 							<File
+								RelativePath=".\tests\fix-page.pdf"
+								>
+							</File>
+							<File
 								RelativePath=".\tests\mhi.list"
 								>
 							</File>
@@ -5030,6 +5398,14 @@
 							</File>
 							<File
 								RelativePath=".\tests\mvcos-001.pdf"
+								>
+							</File>
+							<File
+								RelativePath=".\tests\PERZAD.list"
+								>
+							</File>
+							<File
+								RelativePath=".\tests\PERZAD.pdf"
 								>
 							</File>
 							<File
@@ -5073,7 +5449,15 @@
 								>
 							</File>
 							<File
+								RelativePath=".\tests\stfl.pdf"
+								>
+							</File>
+							<File
 								RelativePath=".\tests\str-001-cksm.list"
+								>
+							</File>
+							<File
+								RelativePath=".\tests\str-001-cksm.pdf"
 								>
 							</File>
 							<File
@@ -5081,11 +5465,23 @@
 								>
 							</File>
 							<File
+								RelativePath=".\tests\str-001-clst.pdf"
+								>
+							</File>
+							<File
 								RelativePath=".\tests\str-001-mvst.list"
 								>
 							</File>
 							<File
+								RelativePath=".\tests\str-001-mvst.pdf"
+								>
+							</File>
+							<File
 								RelativePath=".\tests\str-001-srst.list"
+								>
+							</File>
+							<File
+								RelativePath=".\tests\str-001-srst.pdf"
 								>
 							</File>
 							<File
@@ -5094,6 +5490,78 @@
 							</File>
 							<File
 								RelativePath=".\tests\tape.pdf"
+								>
+							</File>
+							<File
+								RelativePath=".\tests\TRE-01-basic.list"
+								>
+							</File>
+							<File
+								RelativePath=".\tests\TRE-01-basic.pdf"
+								>
+							</File>
+							<File
+								RelativePath=".\tests\TRE-02-performance.list"
+								>
+							</File>
+							<File
+								RelativePath=".\tests\TRE-02-performance.pdf"
+								>
+							</File>
+							<File
+								RelativePath=".\tests\TRTE-01-basic.list"
+								>
+							</File>
+							<File
+								RelativePath=".\tests\TRTE-01-basic.pdf"
+								>
+							</File>
+							<File
+								RelativePath=".\tests\TRTE-02-performance.list"
+								>
+							</File>
+							<File
+								RelativePath=".\tests\TRTE-02-performance.pdf"
+								>
+							</File>
+							<File
+								RelativePath=".\tests\TRTR-01-basic.list"
+								>
+							</File>
+							<File
+								RelativePath=".\tests\TRTR-01-basic.pdf"
+								>
+							</File>
+							<File
+								RelativePath=".\tests\TRTR-02-performance.list"
+								>
+							</File>
+							<File
+								RelativePath=".\tests\TRTR-02-performance.pdf"
+								>
+							</File>
+							<File
+								RelativePath=".\tests\TRTRE-01-basic.list"
+								>
+							</File>
+							<File
+								RelativePath=".\tests\TRTRE-01-basic.pdf"
+								>
+							</File>
+							<File
+								RelativePath=".\tests\TRTRE-02-performance.list"
+								>
+							</File>
+							<File
+								RelativePath=".\tests\TRTRE-02-performance.pdf"
+								>
+							</File>
+							<File
+								RelativePath=".\tests\TXFPER.list"
+								>
+							</File>
+							<File
+								RelativePath=".\tests\TXFPER.pdf"
 								>
 							</File>
 						</Filter>

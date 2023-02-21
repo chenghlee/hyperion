@@ -816,7 +816,8 @@ int     len;                            /* Length for page crossing  */
                    | (AR_BIT   (  &regs->psw ) << 2 );
 #else
         regs->perc = 0;
-#endif
+#endif /* defined( FEATURE_PER2 ) */
+
         if (!exec)
             regs->peradr = addr;
 
@@ -839,7 +840,7 @@ int     len;                            /* Length for page crossing  */
                 regs->psw.zeroilc = 1;
                 regs->program_interrupt( regs, PGM_PER_EVENT );
             }
-#endif
+#endif /* defined( FEATURE_PER3 ) */
         }
 
         /* Quick exit if AIA is still valid */
@@ -863,6 +864,14 @@ int     len;                            /* Length for page crossing  */
 
 #endif /* defined( FEATURE_073_TRANSACT_EXEC_FACILITY ) */
 
+            /* Save the address of the instruction ABOUT to be executed */
+            regs->periaddr = PSW_IA_FROM_IP( regs, 0 );
+
+            /* Suppress PER instruction fetch event if appropriate */
+            if (IS_PER_SUPRESS( regs, CR9_IF ))
+                OFF_IC_PER_IF( regs );
+
+            /* Return to caller to execute this instruction */
             return regs->ip;
         }
     }
@@ -935,6 +944,14 @@ int     len;                            /* Length for page crossing  */
 
 #endif /* defined( FEATURE_073_TRANSACT_EXEC_FACILITY ) */
 
+    /* Save the address of the instruction ABOUT to be executed */
+    regs->periaddr = PSW_IA_FROM_IP( regs, 0 );
+
+    /* Suppress PER instruction fetch event if appropriate */
+    if (IS_PER_SUPRESS( regs, CR9_IF ))
+        OFF_IC_PER_IF( regs );
+
+    /* Return to caller to execute this instruction */
     return dest;
 
 } /* end function ARCH_DEP( instfetch ) */

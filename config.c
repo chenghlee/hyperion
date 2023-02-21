@@ -1000,7 +1000,7 @@ int configure_shrdport( U16 shrdport )
 /*-------------------------------------------------------------------*/
 /* Check if we're a CPU thread or not.       (boolean function)      */
 /*-------------------------------------------------------------------*/
-DLL_EXPORT BYTE are_cpu_thread( int* cpunum )
+DLL_EXPORT bool are_cpu_thread( int* cpunum )
 {
     TID  tid  = thread_id();
     int  i;
@@ -1011,30 +1011,34 @@ DLL_EXPORT BYTE are_cpu_thread( int* cpunum )
         {
             if (cpunum)
                 *cpunum = i;
-            return TRUE;
+            return true;        // (we ARE a CPU thread)
         }
     }
-    return FALSE;
+
+    if (cpunum)
+        *cpunum = -1;
+
+    return false;               // (we are NOT a CPU thead)
 }
 
 /*-------------------------------------------------------------------*/
 /* Check if we're a CPU executing diagnose   (boolean function)      */
 /*-------------------------------------------------------------------*/
-DLL_EXPORT BYTE is_diag_instr()
+DLL_EXPORT bool is_diag_instr()
 {
     REGS* regs;
-    BYTE  arecpu;
+    bool  arecpu;
     int   ourcpu;
 
     /* Find out if we are a cpu thread */
     if (!(arecpu = are_cpu_thread( &ourcpu )))
-        return FALSE;
+        return false;
 
     /* Point to our REGS structure */
     regs = sysblk.regs[ ourcpu ];
 
     /* Return TRUE/FALSE boolean as appropriate */
-    return regs->diagnose ? TRUE : FALSE;
+    return regs->diagnose ? true : false;
 }
 
 /*-------------------------------------------------------------------*/
@@ -1048,7 +1052,7 @@ int configure_cpu( int target_cpu )
     {
         int   rc;
         char  thread_name[32];
-        BYTE  arecpu;
+        bool  arecpu;
         int   ourcpu;
 
         /* If no more CPUs are permitted, exit */
@@ -1090,7 +1094,7 @@ int configure_cpu( int target_cpu )
 
         /* Wait for CPU thread to initialize */
         while (!IS_CPU_ONLINE( target_cpu ))
-           wait_condition( &sysblk.cpucond, &sysblk.intlock );
+            wait_condition( &sysblk.cpucond, &sysblk.intlock );
 
         if (arecpu)
             sysblk.regs[ ourcpu ]->intwait = false;
@@ -1114,11 +1118,14 @@ int deconfigure_cpu( int target_cpu )
     if (IS_CPU_ONLINE( target_cpu ))
     {
         int   ourcpu;
-        BYTE  arecpu  = are_cpu_thread( &ourcpu );
+        bool  arecpu  = are_cpu_thread( &ourcpu );
 
-        /* If we're NOT trying to deconfigure ourselves */
-        if (target_cpu != ourcpu)
+        if (!arecpu || target_cpu != ourcpu)  // NORMAL CASE
         {
+            /* We're either not a CPU thread, or if we are,
+               we're not attempting to deconfigure ourself.
+            */
+
             /* Deconfigure CPU */
             sysblk.regs[ target_cpu ]->configured = 0;
             sysblk.regs[ target_cpu ]->cpustate = CPUSTATE_STOPPING;
@@ -1139,6 +1146,7 @@ int deconfigure_cpu( int target_cpu )
             if (arecpu)
                 sysblk.regs[ ourcpu ]->intwait = false;
 
+            /* Wait for cpu_thread to completely exit */
             join_thread( sysblk.cputid[ target_cpu ], NULL );
             detach_thread( sysblk.cputid[ target_cpu ]);
 
@@ -1148,9 +1156,14 @@ int deconfigure_cpu( int target_cpu )
             /*       post-processing that is done by various callers.    */
             /*-----------------------------------------------------------*/
         }
-        else
+        else // (arecpu && target_cpu == ourcpu)    HIGHLY UNUSUAL!
         {
-            /* Else we ARE trying to deconfigure ourselves */
+            /* We ARE a cpu thread *AND* we're trying to deconfigure
+               ourself! This can only happen if B220 SERVC instruction
+               is executed to deconfigure its own CPU, or else the CPU
+               issues a Hercules command via the diagnose-8 interface
+               to deconfigure its own CPU (i.e. itself).
+            */
             sysblk.regs[ target_cpu ]->configured = 0;
             sysblk.regs[ target_cpu ]->cpustate = CPUSTATE_STOPPING;
             ON_IC_INTERRUPT( sysblk.regs[ target_cpu ]);
@@ -1198,9 +1211,6 @@ static int configure_numcpu_intlock_held( int numcpu )
         if (!IS_CPU_ONLINE( cpu ))
             configure_cpu( cpu );
     }
-
-    /* Make sure we did that right */
-    ASSERT( sysblk.cpus == numcpu && numcpu <= sysblk.maxcpu );
 
     return 0;
 }
@@ -1793,9 +1803,9 @@ static int parse_lcss( const char* spec, char** rest, int verbose )
 }
 
 /*-------------------------------------------------------------------*/
-/*               parse_single_devnum__INTERNAL                       */
+/*               parse_single_devnum_INTERNAL                       */
 /*-------------------------------------------------------------------*/
-static int parse_single_devnum__INTERNAL
+static int parse_single_devnum_INTERNAL
 (
     const char*  spec,
     U16*         p_lcss,
@@ -1812,6 +1822,15 @@ static int parse_single_devnum__INTERNAL
         return -1;
 
     lcss = rc;
+
+    if (str_caseless_eq( r, "sysg" ))
+    {
+        *p_devnum = 0;
+        *p_lcss   = lcss;
+        free( r );
+        return 0;
+    }
+
     rc = strtoul( r, &strptr, 16 );
 
     if (0
@@ -1855,6 +1874,7 @@ static int parse_single_devnum__INTERNAL
     *p_devnum = rc;
     *p_lcss   = lcss;
 
+    free( r );
     return 0;
 }
 
@@ -1864,7 +1884,7 @@ static int parse_single_devnum__INTERNAL
 DLL_EXPORT int parse_single_devnum( const char* spec, U16* lcss, U16* devnum )
 {
     int verbose = TRUE;
-    return parse_single_devnum__INTERNAL( spec, lcss, devnum, verbose );
+    return parse_single_devnum_INTERNAL( spec, lcss, devnum, verbose );
 }
 
 /*-------------------------------------------------------------------*/
@@ -1873,7 +1893,7 @@ DLL_EXPORT int parse_single_devnum( const char* spec, U16* lcss, U16* devnum )
 int parse_single_devnum_silent( const char* spec, U16* lcss, U16* devnum )
 {
     int verbose = FALSE;
-    return parse_single_devnum__INTERNAL( spec, lcss, devnum, verbose );
+    return parse_single_devnum_INTERNAL( spec, lcss, devnum, verbose );
 }
 
 /*-------------------------------------------------------------------*/

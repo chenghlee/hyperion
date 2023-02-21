@@ -73,7 +73,7 @@ DEVBLK* dev;                            /* -> device block           */
 
     S( inst, regs, b2, effective_addr2 );
 
-    TRAN_INSTR_CHECK( regs );
+    TXF_INSTR_CHECK( regs );
     PRIV_CHECK( regs );
 
     PTIO( IO, "CSCH" );
@@ -130,7 +130,7 @@ DEVBLK* dev;                            /* -> device block           */
 
     S( inst, regs, b2, effective_addr2 );
 
-    TRAN_INSTR_CHECK( regs );
+    TXF_INSTR_CHECK( regs );
     PRIV_CHECK( regs );
 
     PTIO( IO, "HSCH" );
@@ -186,8 +186,9 @@ DEVBLK* dev;                            /* -> device block           */
 PMCW    pmcw;                           /* Path management ctl word  */
 
     S( inst, regs, b2, effective_addr2 );
+    PER_ZEROADDR_XCHECK( regs, b2 );
 
-    TRAN_INSTR_CHECK( regs );
+    TXF_INSTR_CHECK( regs );
     PRIV_CHECK( regs );
 
     PTIO( IO, "MSCH" );
@@ -344,7 +345,7 @@ BYTE    chpid;
 
     S(inst, regs, b2, effective_addr2);
 
-    TRAN_INSTR_CHECK( regs );
+    TXF_INSTR_CHECK( regs );
     PRIV_CHECK(regs);
     SIE_INTERCEPT(regs);
 
@@ -375,7 +376,7 @@ DEVBLK* dev;                            /* -> device block           */
 
     S( inst, regs, b2, effective_addr2 );
 
-    TRAN_INSTR_CHECK( regs );
+    TXF_INSTR_CHECK( regs );
     PRIV_CHECK( regs );
 
     PTIO( IO, "RSCH" );
@@ -432,7 +433,7 @@ VADR    effective_addr2;                /* Effective address         */
 
     S(inst, regs, b2, effective_addr2);
 
-    TRAN_INSTR_CHECK( regs );
+    TXF_INSTR_CHECK( regs );
     PRIV_CHECK(regs);
     SIE_INTERCEPT(regs);
 
@@ -455,7 +456,7 @@ VADR    effective_addr2;                /* Effective address         */
 
     S(inst, regs, b2, effective_addr2);
 
-    TRAN_INSTR_CHECK( regs );
+    TXF_INSTR_CHECK( regs );
     PRIV_CHECK(regs);
 
 #if defined(_FEATURE_IO_ASSIST)
@@ -537,8 +538,9 @@ DEVBLK* dev;                            /* -> device block           */
 ORB     orb;                            /* Operation request block   */
 
     S( inst, regs, b2, effective_addr2 );
+    PER_ZEROADDR_XCHECK( regs, b2 );
 
-    TRAN_INSTR_CHECK( regs );
+    TXF_INSTR_CHECK( regs );
     PRIV_CHECK( regs );
 
     PTIO( IO, "SSCH" );
@@ -657,8 +659,9 @@ static const BYTE msbn[256] = {         /* Most signif. bit# (0 - 7) */
 };
 
     S(inst, regs, b2, effective_addr2);
+    PER_ZEROADDR_XCHECK( regs, b2 );
 
-    TRAN_INSTR_CHECK( regs );
+    TXF_INSTR_CHECK( regs );
     PRIV_CHECK(regs);
     SIE_INTERCEPT(regs);
 
@@ -710,8 +713,9 @@ VADR    effective_addr2;                /* Effective address         */
 U32     crw;                            /* Channel Report Word       */
 
     S(inst, regs, b2, effective_addr2);
+    PER_ZEROADDR_XCHECK( regs, b2 );
 
-    TRAN_INSTR_CHECK( regs );
+    TXF_INSTR_CHECK( regs );
     PTIO(IO,"STCRW");
     PRIV_CHECK(regs);
     SIE_INTERCEPT(regs);
@@ -748,8 +752,9 @@ DEVBLK* dev;                            /* -> device block           */
 SCHIB   schib;                          /* Subchannel information blk*/
 
     S( inst, regs, b2, effective_addr2 );
+    PER_ZEROADDR_XCHECK( regs, b2 );
 
-    TRAN_INSTR_CHECK( regs );
+    TXF_INSTR_CHECK( regs );
     PRIV_CHECK( regs );
     PTIO( IO, "STSCH" );
     PTIO( IO, "STSCH (sie)" );
@@ -819,7 +824,7 @@ DEVBLK *dev;                            /* dev presenting interrupt  */
 
     S( inst, regs, b2, effective_addr2 );
 
-    TRAN_INSTR_CHECK( regs );
+    TXF_INSTR_CHECK( regs );
     PRIV_CHECK( regs );
 
 #if defined( _FEATURE_IO_ASSIST )
@@ -930,8 +935,9 @@ IRB     irb;                            /* Interruption response blk */
 int     cc;                             /* Condition Code            */
 
     S( inst, regs, b2, effective_addr2 );
+    PER_ZEROADDR_XCHECK( regs, b2 );
 
-    TRAN_INSTR_CHECK( regs );
+    TXF_INSTR_CHECK( regs );
     PRIV_CHECK( regs );
     PTIO( IO, "TSCH" );
 
@@ -1004,7 +1010,7 @@ DEVBLK* dev;                            /* -> device block           */
 
     S( inst, regs, b2, effective_addr2 );
 
-    TRAN_INSTR_CHECK( regs );
+    TXF_INSTR_CHECK( regs );
     PRIV_CHECK( regs );
 
     PTIO( IO, "XSCH" );
@@ -1073,7 +1079,7 @@ BYTE    ccwkey;                         /* Bits 0-3=key, 4=suspend   */
 
     S(inst, regs, b2, effective_addr2);
 
-    TRAN_INSTR_CHECK( regs );
+    TXF_INSTR_CHECK( regs );
 
 #if defined(FEATURE_ECPSVM)
     if((inst[1])!=0x02)
@@ -1157,7 +1163,7 @@ DEVBLK *dev;                            /* -> device block for SIO   */
 
     S(inst, regs, b2, effective_addr2);
 
-    TRAN_INSTR_CHECK( regs );
+    TXF_INSTR_CHECK( regs );
     PRIV_CHECK(regs);
     SIE_INTERCEPT(regs);
     PTIO(IO,"TIO");
@@ -1198,7 +1204,7 @@ DEVBLK *dev;                            /* -> device block for SIO   */
 
     S(inst, regs, b2, effective_addr2);
 
-    TRAN_INSTR_CHECK( regs );
+    TXF_INSTR_CHECK( regs );
     PRIV_CHECK(regs);
     SIE_INTERCEPT(regs);
     PTIO(IO,"HIO");
@@ -1234,7 +1240,7 @@ U16     tch_ctl;
 
     S(inst, regs, b2, effective_addr2);
 
-    TRAN_INSTR_CHECK( regs );
+    TXF_INSTR_CHECK( regs );
     PRIV_CHECK(regs);
     PTIO(IO,"TCH");
 
@@ -1273,7 +1279,7 @@ VADR    effective_addr2;                /* Effective address         */
 
     S(inst, regs, b2, effective_addr2);
 
-    TRAN_INSTR_CHECK( regs );
+    TXF_INSTR_CHECK( regs );
     PRIV_CHECK(regs);
     SIE_INTERCEPT(regs);
     PTIO(IO,"STIDC");
@@ -1299,7 +1305,7 @@ int     i;
 
     S(inst, regs, b2, effective_addr2);
 
-    TRAN_INSTR_CHECK( regs );
+    TXF_INSTR_CHECK( regs );
     PRIV_CHECK(regs);
     SIE_INTERCEPT(regs);
     PTIO(IO,"CONCS");
@@ -1364,7 +1370,7 @@ int     i;
 
     S(inst, regs, b2, effective_addr2);
 
-    TRAN_INSTR_CHECK( regs );
+    TXF_INSTR_CHECK( regs );
     PRIV_CHECK(regs);
     SIE_INTERCEPT(regs);
     PTIO(IO,"DISCS");

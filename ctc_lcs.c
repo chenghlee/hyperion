@@ -1,6 +1,6 @@
 /* CTC_LCS.C    (C) Copyright James A. Pierson, 2002-2012            */
 /*              (C) Copyright "Fish" (David B. Trout), 2002-2011     */
-/*              (C) and others 2013-2021                             */
+/*              (C) and others 2013-2022                             */
 /*              Hercules LAN Channel Station Support                 */
 /*                                                                   */
 /*   Released under "The Q Public License Version 1"                 */
@@ -1080,7 +1080,7 @@ int  LCS_Close( DEVBLK* pDEVBLK )
             obtain_lock( &pLCSPORT->PortEventLock );
             PTT_DEBUG(        "GOT  PortEventLock", 000, pDEVBLK->devnum, pLCSPORT->bPort );
             {
-                if (pDEVBLK->ccwtrace || pDEVBLK->ccwstep || pLCSBLK->fDebug)
+                if (pDEVBLK->ccwtrace || pLCSBLK->fDebug)
                     // "%1d:%04X CTC: lcs triggering port %2.2X event"
                     WRMSG( HHC00966, "I", SSID_TO_LCSS( pDEVBLK->ssid ), pDEVBLK->devnum, pLCSPORT->bPort );
 
@@ -1281,6 +1281,9 @@ static void  LCS_EndMWrite( DEVBLK* pDEVBLK, int nEthBytes, int nEthFrames )
 // The first four bytes are the LCSHDR, the remaining bytes are the
 // Start LAN command.
 //
+
+PUSH_GCC_WARNINGS()
+DISABLE_GCC_UNUSED_SET_WARNING; // (because only Windows-only LCS_EndMWrite uses nEthBytes)
 
 void  LCS_Write( DEVBLK* pDEVBLK,   U32   sCount,
                  BYTE*   pIOBuf,    BYTE* pUnitStat,
@@ -1575,6 +1578,8 @@ void  LCS_Write( DEVBLK* pDEVBLK,   U32   sCount,
     PTT_DEBUG( "WRIT EXIT         ", 000, pDEVBLK->devnum, -1 );
 }   // End of LCS_Write
 
+POP_GCC_WARNINGS()
+
 // ====================================================================
 //                         LCS_Startup
 // ====================================================================
@@ -1669,7 +1674,7 @@ static void  UpdatePortStarted( int bStarted, DEVBLK* pDEVBLK, PLCSPORT pLCSPORT
     PTT_DEBUG(         "REL  PortDataLock ", 000, pDEVBLK->devnum, pLCSPORT->bPort );
     release_lock( &pLCSPORT->PortDataLock );
 
-    if (pDEVBLK->ccwtrace || pDEVBLK->ccwstep || pLCSPORT->pLCSBLK->fDebug)
+    if (pDEVBLK->ccwtrace || pLCSPORT->pLCSBLK->fDebug)
         // "%1d:%04X CTC: lcs triggering port %2.2X event"
         WRMSG( HHC00966, "I", SSID_TO_LCSS( pDEVBLK->ssid ), pDEVBLK->devnum, pLCSPORT->bPort );
 
@@ -2985,7 +2990,7 @@ void  LCS_Read( DEVBLK* pDEVBLK,   U32   sCount,
 
             PTT_DEBUG(    "*HALT or CLEAR*   ", *pUnitStat, pDEVBLK->devnum, sCount );
 
-            if (pDEVBLK->ccwtrace || pDEVBLK->ccwstep || pLCSDEV->pLCSBLK->fDebug)
+            if (pDEVBLK->ccwtrace || pLCSDEV->pLCSBLK->fDebug)
                 // "%1d:%04X %s: halt or clear recognized"
                 WRMSG( HHC00904, "I", SSID_TO_LCSS(pDEVBLK->ssid), pDEVBLK->devnum, pDEVBLK->typname );
             release_lock( &pLCSDEV->DevEventLock );
@@ -3181,88 +3186,69 @@ void  GetFrameInfo( PETHFRM pEthFrame, char* pPktType, U16* pEthType, BYTE* pHas
 //                         GetIfMACAddress
 // ====================================================================
 
-void     GetIfMACAddress( PLCSPORT pLCSPORT )
+void    GetIfMACAddress( PLCSPORT pLCSPORT )
 {
-
-    BYTE*      pPortMAC;
-    BYTE*      pIFaceMAC;
-    int        fd, rc, success;
-    ifreq      ifr;
-
-
-    pPortMAC = (BYTE*) &pLCSPORT->MAC_Address;
-    pIFaceMAC = pPortMAC;
+    BYTE*  pPortMAC   = (BYTE*) &pLCSPORT->MAC_Address;
+    BYTE*  pIFaceMAC  = pPortMAC;
 
     /* Not all systems can return the hardware address of an interface. */
-#if defined(SIOCGIFHWADDR)
 
-    while (1)
+#if defined( SIOCGIFHWADDR )
+
+    ifreq  ifr;
     {
+        int    fd, rc;
+
         fd = socket( AF_INET, SOCK_STREAM, IPPROTO_IP );
 
         if (fd == -1)
         {
             // "CTC: error in function %s: %s"
             rc = HSO_errno;
-            WRMSG( HHC00940, "E", "socket()", strerror( rc ) );
-            success = FALSE;
-            break;
+            WRMSG( HHC00940, "E", "socket()", strerror( rc ));
+            return;
         }
 
-        memset( &ifr, 0, sizeof( ifr ) );
+        memset( &ifr, 0, sizeof( ifr ));
         STRLCPY( ifr.ifr_name, pLCSPORT->szNetIfName );
 
-        rc = TUNTAP_IOCtl( fd, SIOCGIFHWADDR, (char*)&ifr );
-
+        rc = TUNTAP_IOCtl( fd, SIOCGIFHWADDR, (char*) &ifr );
         close( fd );
 
         if (rc != 0)
         {
             // "CTC: ioctl %s failed for device %s: %s"
             rc = HSO_errno;
-            WRMSG( HHC00941, "E", "SIOCGIFHWADDR", pLCSPORT->szNetIfName, strerror( rc ) );
-            success = FALSE;
-            break;
+            WRMSG( HHC00941, "E", "SIOCGIFHWADDR", pLCSPORT->szNetIfName, strerror( rc ));
+            return;
         }
 
         pIFaceMAC  = (BYTE*) ifr.ifr_hwaddr.sa_data;
-        rc = 0;
-        success = TRUE;
-        break;
     }
 
-#else // !defined(SIOCGIFHWADDR)
+#endif // defined( SIOCGIFHWADDR )
 
-    rc = 0;
-    success = TRUE;
+    /* Report what MAC address we will really be using */
+    // "CTC: lcs interface '%s' using mac %2.2X:%2.2X:%2.2X:%2.2X:%2.2X:%2.2X"
+    WRMSG( HHC00942, "I", pLCSPORT->szNetIfName, *(pIFaceMAC+0), *(pIFaceMAC+1),
+                      *(pIFaceMAC+2), *(pIFaceMAC+3), *(pIFaceMAC+4), *(pIFaceMAC+5));
 
-#endif // defined(SIOCGIFHWADDR)
-
-    if (success)
+    /* Issue warning if different from specified value */
+    if (memcmp( pPortMAC, pIFaceMAC, IFHWADDRLEN ) != 0)
     {
-        /* Report what MAC address we will really be using */
-        // "CTC: lcs interface '%s' using mac %2.2X:%2.2X:%2.2X:%2.2X:%2.2X:%2.2X"
-        WRMSG( HHC00942, "I", pLCSPORT->szNetIfName, *(pIFaceMAC+0), *(pIFaceMAC+1),
-                          *(pIFaceMAC+2), *(pIFaceMAC+3), *(pIFaceMAC+4), *(pIFaceMAC+5));
-
-        /* Issue warning if different from specified value */
-        if (memcmp( pPortMAC, pIFaceMAC, IFHWADDRLEN ) != 0)
+        if (pLCSPORT->fLocalMAC)
         {
-            if (pLCSPORT->fLocalMAC)
-            {
-                // "CTC: lcs interface %s not using mac %2.2X:%2.2X:%2.2X:%2.2X:%2.2X:%2.2X"
-                WRMSG( HHC00943, "W", pLCSPORT->szNetIfName, *(pPortMAC+0), *(pPortMAC+1),
-                                 *(pPortMAC+2), *(pPortMAC+3), *(pPortMAC+4), *(pPortMAC+5));
-            }
-
-            memcpy( pPortMAC, pIFaceMAC, IFHWADDRLEN );    // Sets pLCSPORT->MAC_Address
-
-            snprintf(pLCSPORT->szMACAddress, sizeof(pLCSPORT->szMACAddress),
-                "%2.2X:%2.2X:%2.2X:%2.2X:%2.2X:%2.2X", *(pPortMAC+0), *(pPortMAC+1),
-                *(pPortMAC+2), *(pPortMAC+3), *(pPortMAC+4), *(pPortMAC+5));
+            // "CTC: lcs interface %s not using mac %2.2X:%2.2X:%2.2X:%2.2X:%2.2X:%2.2X"
+            WRMSG( HHC00943, "W", pLCSPORT->szNetIfName, *(pPortMAC+0), *(pPortMAC+1),
+                             *(pPortMAC+2), *(pPortMAC+3), *(pPortMAC+4), *(pPortMAC+5));
         }
-    }
 
+        memcpy( pPortMAC, pIFaceMAC, IFHWADDRLEN );    // Sets pLCSPORT->MAC_Address
+
+        snprintf(pLCSPORT->szMACAddress, sizeof(pLCSPORT->szMACAddress),
+            "%2.2X:%2.2X:%2.2X:%2.2X:%2.2X:%2.2X", *(pPortMAC+0), *(pPortMAC+1),
+            *(pPortMAC+2), *(pPortMAC+3), *(pPortMAC+4), *(pPortMAC+5));
+    }
 }
 
 // ====================================================================
@@ -4736,9 +4722,9 @@ void Process_0D10 (PLCSDEV pLCSDEV, PLCSHDR pLCSHDR, PLCSBAF1 pLCSBAF1, PLCSBAF2
     {
         if ( iTHetcLen > 1493 )                                           // 1493 = 0x5D5
         {
-            snprintf( llcmsg, sizeof(llcmsg), "LCS: Truncating %d bytes to 1493 bytes!!!", iTHetcLen );
+            snprintf( llcmsg, sizeof(llcmsg), "LCS: Ignoring over long data of %d bytes!!!", iTHetcLen );
             WRMSG(HHC03984, "W", llcmsg );  /* FixMe! Proper message number! */
-            iTHetcLen = 1493;
+            return;
         }
         STORE_HW( pEthFrame->hwEthernetType, (U16)(iLPDULen + iTHetcLen) );     // Set LLC and TH etc length
         memcpy( &pEthFrame->bData[iLPDULen], &pLCSBAF2->bByte05, iTHetcLen );   // Copy TH etc
@@ -5003,7 +4989,8 @@ static const BYTE Inbound_CC0A[INBOUND_CC0A_SIZE] =
                    0xff, 0xff, 0xff, 0xff, 0x00, 0x00, 0x00, 0x00,
                    0x00, 0x00, 0x70, 0x00, 0x00, 0x00, 0x00, 0x00,
                    0xff, 0xff, 0xff, 0xff,
-                   0x01, 0xff, 0xff, 0x00                            /* LCSBAF2 */
+                   0x01, 0xff, 0xff,                                 /* LCSBAF2 */
+                   0x00                                              /* Filler  */
                  };
 
     DEVBLK*     pDEVBLK;
@@ -5463,7 +5450,8 @@ static const BYTE Inbound_CC0B[INBOUND_CC0B_SIZE] =
                    0x00, 0x18, 0xCC, 0x0B, 0x00, 0x03, 0x60, 0x01,   /* LCSBAF1 */
                    0xff, 0xff, 0xff, 0xff, 0x00, 0x00, 0x00, 0x00,
                    0x00, 0x00, 0x70, 0x00, 0x00, 0x00, 0x00, 0x00,
-                   0x01, 0xff, 0xff, 0x00                            /* LCSBAF2 */
+                   0x01, 0xff, 0xff,                                 /* LCSBAF2 */
+                   0x00                                              /* Filler  */
                  };
 
     PLCSCONN    pLCSCONN;
@@ -5546,7 +5534,8 @@ static const BYTE Inbound_CC99[INBOUND_CC99_SIZE] =
                    0x00, 0x00, 0x20, 0x1E, 0x00, 0x00, 0x00, 0x00,
                    0x01, 0xff, 0xff, 0x00, 0x00, 0x03, 0x00, 0x00,   /* LCSBAF2 */
                    0x06, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x00,
-                   0x00, 0x05, 0xD5, 0x00, 0x00, 0x00                               /* 0x5D5 = 1493 */
+                   0x00, 0x05, 0xD5, 0x00, 0x00,                                   /* 0x5D5 = 1493 */
+                   0x00                                              /* Filler  */
                  };
 
     PLCSBLK     pLCSBLK;
@@ -5614,7 +5603,8 @@ static const BYTE Inbound_CC0D[INBOUND_CC0D_SIZE] =
                    0x40, 0x00, 0x00, 0xDC, 0x00, 0x00, 0x00, 0x00,
                    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
                    0x00, 0x00, 0x00, 0x00,
-                   0x01, 0xff, 0xff, 0x00, 0x00, 0x00, 0x00, 0xff    /* LCSBAF2 */
+                   0x01, 0xff, 0xff, 0x00, 0x00, 0x00, 0x00,         /* LCSBAF2 */
+                   0x00                                              /* Filler  */
                  };
 
     PLCSIBH     pLCSIBH;
@@ -5667,7 +5657,8 @@ static const BYTE Inbound_CC0E[INBOUND_CC0E_SIZE] =
                    0x00, 0x18, 0xCC, 0x0E, 0x00, 0x03, 0x60, 0x03,   /* LCSBAF1 */
                    0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00,
                    0x00, 0x00, 0x70, 0x00, 0x00, 0x00, 0x00, 0x00,
-                   0x01, 0xff, 0xff, 0x9C,                           /* LCSBAF2 */
+                   0x01, 0xff, 0xff,                                 /* LCSBAF2 */
+                   0x00,                                             /* Filler  */
                  };
 
     PLCSIBH     pLCSIBH;
@@ -5720,7 +5711,8 @@ static const BYTE Inbound_CC98[INBOUND_CC98_SIZE] =
                    0x00, 0x18, 0xCC, 0x98, 0x00, 0x03, 0xC0, 0x00,   /* LCSBAF1 */
                    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
                    0x00, 0x00, 0x70, 0x00, 0x00, 0x00, 0x00, 0x00,
-                   0x01, 0xff, 0xff, 0x04,                           /* LCSBAF2 */
+                   0x01, 0xff, 0xff,                                 /* LCSBAF2 */
+                   0x00                                              /* Filler  */
                  };
 
     PLCSIBH     pLCSIBH;
@@ -6030,7 +6022,8 @@ static const BYTE Inbound_4C25[INBOUND_4C25_SIZE] =
                     0x01, 0xff, 0xff, 0xC0, 0x00, 0x00, 0x00, 0x00,  /* LCSBAF2 */
                     0x00, 0x00, 0x00, 0x00, 0xff, 0xff, 0xff, 0xff,
                     0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-                    0xff, 0xff, 0xff, 0x04, 0x00
+                    0xff, 0xff, 0xff, 0x04,
+                    0x00                                             /* Filler  */
                  };
 //  002E0400  000D4C25 001C6003 00000001 00  01 0001 C0000000 00000000 00 400074700001 000CCE4B4740 0401F3 04 00
 //            0 1 2 3  4 5 6 7  8 9 A B  C   0  1 2  3 4 5 6  7 8 9 A  B  C D E F 0 1  2 3 4 5 6 7  8 9 A  B  C
@@ -6065,9 +6058,10 @@ static const BYTE Inbound_4C0B[INBOUND_4C0B_SIZE] =
                     0x00, 0x18, 0x4C, 0x0B, 0x00, 0x03, 0x60, 0x01,  /* LCSBAF1 */
                     0xff, 0xff, 0xff, 0xff, 0x00, 0x00, 0x00, 0x00,
                     0x00, 0x00, 0x76, 0x56, 0x00, 0x00, 0x00, 0x00,
-                    0x01, 0x40, 0x00, 0x00                           /* LCSBAF2 */
+                    0x01, 0x40, 0x00,                                /* LCSBAF2 */
+                    0x00                                             /* Filler  */
                  };
-//  00200400  00184C0B 00036001 00000101 00000000 00007656 00000000  01 4000 00
+//  00200400  00184C0B 00036001 00000101 00000000 00007656 00000000  014000  00
 //            0 1 2 3  4 5 6 7  8 9 A B  C D E F  0 1 2 3  4 5 6 7   0  1 2  3
 
 #define INBOUND_CD00_SIZE  32

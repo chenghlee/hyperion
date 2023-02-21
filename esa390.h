@@ -337,8 +337,11 @@ typedef struct DAT  DAT;
 #define CR0_CRYPTO              0x00000004      /* Crypto control       ESAME */
 #define CR0_IUCV                0x00000002      /* IUCV interrupt mask        */
 
-#define SERVSIG_PEND    0x00000001      /* Event buffer pending      */
+/*-------------------------------------------------------------------*/
+/* Service signal parameter masks */
+
 #define SERVSIG_ADDR    0xFFFFFFF8      /* Parameter address         */
+#define SERVSIG_PEND    0x00000001      /* Event buffer pending      */
 
 /*-------------------------------------------------------------------*/
 /* Bit definitions for control register 1 */
@@ -403,15 +406,30 @@ typedef struct DAT  DAT;
 /*-------------------------------------------------------------------*/
 /* Bit definitions for PER */
 
-#define CR9_SB          0x80000000      /* Successful Branching      */
-#define CR9_IF          0x40000000      /* Instruction Fetch         */
-#define CR9_SA          0x20000000      /* Storage Alteration        */
-#define CR9_GRA         0x10000000      /* General Register Alt.     */
-#define CR9_STURA       0x08000000      /* Store using real addr     */
-#define CR9_IFNUL       0x01000000      /* IF nullification          */
-#define CR9_GRMASK      0x0000FFFF      /* GR mask bits              */
-#define CR9_BAC         0x00800000      /* Br addr control PER2 only */
-#define CR9_SAC         0x00200000      /* Stor. alter. c. PER2 only */
+#define CR9_SB          0x80000000      /* 32 Successful Branching  1*/
+#define CR9_IF          0x40000000      /* 33 Instruction Fetch     1*/
+#define CR9_SA          0x20000000      /* 34 Storage Alteration    1*/
+#define CR9_GRA         0x10000000      /* 35 General Register      1*/
+#define CR9_STOREKEY    0x10000000      /* 35 Storage-Key           3*/
+#define CR9_STURA       0x08000000      /* 36 Store using real addr 2*/
+#define CR9_ZEROADDR    0x04000000      /* 37 Zero-address-detect.  3*/
+#define CR9_TEND        0x02000000      /* 38 TEND instruction      3*/
+#define CR9_IFNUL       0x01000000      /* 39 I-Fetch nullification 3*/
+#define CR9_BAC         0x00800000      /* 40 Branch address        2*/
+#define CR9_SUPPRESS    0x00400000      /* 41 Event suppression     3*/
+#define CR9_SAC         0x00200000      /* 42 Storage Alteration    2*/
+//efine CR9_xxxxxxxx    0x001F0000      /* 43-47 (unassigned)        */
+#define CR9_GRMASK      0x0000FFFF      /* 48-63 GR mask bits       1*/
+
+#define CR9_SUPPRESSABLE    \
+     (0                     \
+      | CR9_SB              \
+      | CR9_IF              \
+      | CR9_SA              \
+      | CR9_STURA           \
+      | CR9_ZEROADDR        \
+      | CR9_IFNUL           \
+     )
 
 /*-------------------------------------------------------------------*/
 /* Bit definitions for control register 12 */
@@ -972,7 +990,7 @@ struct PSA_900
 /*0100*/ DBLWRD cao;                    /* Enh Mon Counter Array Orig*/
 /*0108*/ FWORD  cal;                    /* Enh Mon Counter Array Len */
 /*010C*/ FWORD  ec;                     /* Enh Mon Exception Count   */
-/*0110*/ DBLWRD bea;                    /* Breaking event address    */
+/*0110*/ DBLWRD bea;                    /* Breaking-Event Address    */
 /*0118*/ DBLWRD resv0118;               /* Reserved                  */
 /*0120*/ QWORD  rstold;                 /* Restart old PSW           */
 /*0130*/ QWORD  extold;                 /* External old PSW          */
@@ -988,6 +1006,7 @@ struct PSA_900
 /*01E0*/ QWORD  mcknew;                 /* Machine check new PSW     */
 /*01F0*/ QWORD  iopnew;                 /* I/O new PSW               */
 /*0200*/ BYTE   resv0200[4096];         /* Reserved                  */
+/*-------------------------------------------------------------------*/
 /*1200*/ FWORD  storefpr[32];           /* FP register save area     */
 /*1280*/ DBLWRD storegpr[16];           /* General register save area*/
 /*1300*/ QWORD  storepsw;               /* Store status PSW save area*/
@@ -998,7 +1017,7 @@ struct PSA_900
 /*1324*/ FWORD  storetpr;               /* TOD prog reg save area    */
 /*1328*/ DBLWRD storeptmr;              /* CPU timer save area       */
 /*1330*/ DBLWRD storeclkc;              /* Clock comparator save area*/
-/*1338*/ DBLWRD resv1338;               /* Reserved                  */
+/*1338*/ DBLWRD bear;                   /* Breaking-Event Address    */
 /*1340*/ FWORD  storear[16];            /* Access register save area */
 /*1380*/ DBLWRD storecr[16];            /* Control register save area*/
 };

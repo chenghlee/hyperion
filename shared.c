@@ -731,13 +731,11 @@ int      cache;                         /* Lookup index              */
 int      lru;                           /* Available index           */
 int      len;                           /* Response length           */
 int      id;                            /* Response id               */
+int      status;                        /* Response status           */
 BYTE    *buf;                           /* Cache buffer              */
 BYTE     code;                          /* Response code             */
 U16      devnum;                        /* Response device number    */
 BYTE     hdr[SHRD_HDR_SIZE + 4];        /* Read request header       */
-
-    /* Initialize the unit status */
-    *unitstat = 0;
 
     /* Return if reading the same track image */
     if (trk == dev->bufcur && dev->cache >= 0)
@@ -823,7 +821,7 @@ read_retry:
 
     /* Read the track from the remote host */
     rc = clientRecv (dev, hdr, buf, dev->ckdtrksz);
-    SHRD_GET_HDR (hdr, code, *unitstat, devnum, id, len);
+    SHRD_GET_HDR( hdr, code, status, devnum, id, len );
     if (rc < 0 || code & SHRD_ERROR)
     {
         if (rc < 0 && retries--) goto read_retry;
@@ -2663,7 +2661,7 @@ static void shrdhdrtrc( DEVBLK* dev, const char* msg, const BYTE* hdr,
  *-------------------------------------------------------------------*/
 static void shrdtrc( DEVBLK* dev, const char* fmt, ... )
 {
-    bool            tracing_or_stepping;
+    bool            tracing;
     struct timeval  tv;
     SHRD_TRACE      tracemsg;
     va_list         vl;
@@ -2676,17 +2674,17 @@ static void shrdtrc( DEVBLK* dev, const char* fmt, ... )
        is true (not tracing or stepping AND no trace table) then
        there's nothing for us to do so we return immediately.
     */
-    tracing_or_stepping = (dev && (dev->ccwtrace || dev->ccwstep));
+    tracing = (dev && dev->ccwtrace);
 
     OBTAIN_SHRDTRACE_LOCK();
 
-    if (!tracing_or_stepping && !sysblk.shrdtrace)
+    if (!tracing && !sysblk.shrdtrace)
     {
         RELEASE_SHRDTRACE_LOCK();
         return;  // (nothing for us to do!)
     }
 
-    ASSERT( tracing_or_stepping || sysblk.shrdtrace );
+    ASSERT( tracing || sysblk.shrdtrace );
 
     /* Build the timestamp portion of the trace message */
     gettimeofday( &tv, NULL );
@@ -2704,7 +2702,7 @@ static void shrdtrc( DEVBLK* dev, const char* fmt, ... )
 
     /* Log the trace message directly to the panel (WITHOUT the
        timestamp prefix) if the device is being traced/stepped. */
-    if (tracing_or_stepping)
+    if (tracing)
         // "Shared:  %s"
         WRMSG( HHC00743, "I", tracemsg + 16 ); // (skip "HH:MM:SS.uuuuuu ")
 
@@ -3034,7 +3032,7 @@ DLL_EXPORT int shrd_cmd( int argc, char* argv[], char* cmdline )
     {
         OBTAIN_SHRDTRACE_LOCK();
         {
-            MSGBUF( buf, "TRACE=%d", sysblk.shrdtracen );
+            MSGBUF( buf, "TRACE=%d DTAX=%d", sysblk.shrdtracen, sysblk.shrddtax );
         }
         RELEASE_SHRDTRACE_LOCK();
         // "%-14s: %s"
@@ -3135,7 +3133,10 @@ DLL_EXPORT int shrd_cmd( int argc, char* argv[], char* cmdline )
             WRMSG( HHC00740, "E", kw );
             return -1;
         }
-        if (sscanf( op, "%d%c", &dtax, &c ) != 1)
+        if (0
+            || sscanf( op, "%d%c", &dtax, &c ) != 1
+            || (dtax != 0 && dtax != 1)
+        )
         {
             // "Shared: invalid or missing value %s"
             WRMSG( HHC00740, "E", op );
@@ -3147,6 +3148,10 @@ DLL_EXPORT int shrd_cmd( int argc, char* argv[], char* cmdline )
             sysblk.shrddtax = dtax ? true : false;
         }
         RELEASE_SHRDTRACE_LOCK();
+
+        // "%-14s set to %s"
+        MSGBUF( buf, "DTAX=%d", sysblk.shrddtax );
+        WRMSG( HHC02204, "I", argv[0], buf );
 
         return 0;
     }

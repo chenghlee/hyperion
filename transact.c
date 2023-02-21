@@ -95,7 +95,7 @@ U32     abort_count;                    /* Transaction Abort count   */
 
     UNREFERENCED( r2 );
 
-    TRAN_INSTR_CHECK( regs );
+    TXF_INSTR_CHECK( regs );
 
     /* Retrieve abort count */
     abort_count = regs->GR_L( r1 );
@@ -166,7 +166,7 @@ int     r1, r2;                         /* Operand register numbers  */
         UNREACHABLE_CODE( return );
     }
 
-    CONTRAN_INSTR_CHECK( regs );
+    TXFC_INSTR_CHECK( regs );
 
     regs->GR_L(r1) = (U32) regs->txf_tnd;
 
@@ -222,12 +222,13 @@ BYTE       *saveaddr;
 BYTE       *mainaddr;
 TPAGEMAP   *pmap;
 int         txf_tnd, txf_tac, slot;
+bool        per_tend = false;           /* true = check for PER TEND */
 
     S( inst, regs, b2, effective_addr2 );
 
     TXF_SIE_INTERCEPT( regs, TEND );
 
-    TRAN_EXECUTE_INSTR_CHECK( regs );
+    TXF_EXECUTE_INSTR_CHECK( regs );
 
     if (!(regs->CR(0) & CR0_TXC))
     {
@@ -525,8 +526,25 @@ int         txf_tnd, txf_tac, slot;
         ARCH_DEP( reset_txf_aie )( regs );
 
         PERFORM_SERIALIZATION( regs );
+
+        /* Check if a transaction-end PER event is wanted */
+        if (EN_IC_PER_TEND( regs ))
+        {
+            regs->peradr = regs->periaddr;
+            ON_IC_PER_TEND( regs );
+            per_tend = true;
+        }
     }
     RELEASE_INTLOCK( regs );
+
+    /* If a PER TEND event was generated, check to
+       see if we can take the interrupt right away.
+    */
+    if (per_tend)
+    {
+        if (OPEN_IC_PER_TEND( regs ))
+            RETURN_INTCHECK( regs );
+    }
 
 } /* end DEF_INST( transaction_end ) */
 
@@ -543,8 +561,8 @@ VADR    effective_addr2;                /* Effective address         */
 
     TXF_SIE_INTERCEPT( regs, TABORT );
 
-    CONTRAN_INSTR_CHECK( regs );
-    TRAN_EXECUTE_INSTR_CHECK( regs );
+    TXFC_INSTR_CHECK( regs );
+    TXF_EXECUTE_INSTR_CHECK( regs );
 
     if (effective_addr2 <= 255)
     {
@@ -560,7 +578,7 @@ VADR    effective_addr2;                /* Effective address         */
         UNREACHABLE_CODE( return );
     }
 
-    CONTRAN_INSTR_CHECK( regs );
+    TXFC_INSTR_CHECK( regs );
 
     /* CC in transaction abort PSW = 2 or 3 based on operand2 bit 63 */
     regs->txf_tapsw.cc = (effective_addr2 & 0x1) == 0 ? 2 : 3;
@@ -582,11 +600,13 @@ DEF_INST( nontransactional_store )
 {
 int     r1;                             /* Value of r1 field         */
 int     b2;                             /* Base of effective address */
+int     x2;                             /* Index register            */
 VADR    effective_addr2;                /* Effective address         */
 
-    RXY( inst, regs, r1, b2, effective_addr2 );
+    RXY( inst, regs, r1, x2, b2, effective_addr2 );
+    PER_ZEROADDR_XCHECK2( regs, x2, b2 );
 
-    CONTRAN_INSTR_CHECK( regs );
+    TXFC_INSTR_CHECK( regs );
     DW_CHECK( effective_addr2, regs );
 
     PTT_TXF( "TXF NTSTG", regs->GR_G( r1 ), effective_addr2, 0 );
@@ -616,6 +636,7 @@ int     b1;                             /* Base of effective addr    */
 VADR    effective_addr1;                /* Effective address         */
 
     SIL( inst, regs, i2, b1, effective_addr1 );
+    PER_ZEROADDR_XCHECK( regs, b1 );
 
     TXF_SIE_INTERCEPT( regs, TBEGIN );
 
@@ -626,7 +647,7 @@ VADR    effective_addr1;                /* Effective address         */
         UNREACHABLE_CODE( return );
     }
 
-    TRAN_EXECUTE_INSTR_CHECK( regs );
+    TXF_EXECUTE_INSTR_CHECK( regs );
 
     /* Unconstrained: PIFC of 3 is invalid */
     if ((i2 & TXF_CTL_PIFC) == 3)
@@ -686,7 +707,7 @@ VADR    effective_addr1;                /* Effective address         */
         UNREACHABLE_CODE( return );
     }
 
-    TRAN_EXECUTE_INSTR_CHECK( regs );
+    TXF_EXECUTE_INSTR_CHECK( regs );
 
     /* CONSTRAINED: Specification Exception if b1 is non-zero */
     if (b1)
@@ -741,7 +762,7 @@ TPAGEMAP   *pmap;
     /* Count transaction */
     atomic_update32( &sysblk.txf_counter, +1 );
 
-    CONTRAN_INSTR_CHECK( regs );    /* Unallowed in CONSTRAINED mode */
+    TXFC_INSTR_CHECK( regs );    /* Unallowed in CONSTRAINED mode */
 
     /*---------------------------------------------*/
     /*  Increase nesting depth                     */
@@ -2209,7 +2230,7 @@ const char* tac2short( U64 tac ) { return tac2name( tac, false ); }
 /*-------------------------------------------------------------------*/
 /*            DEBUG:  Constraint Violation Names                     */
 /*-------------------------------------------------------------------*/
-const char* txf_why_str( char* buffer, int buffsize, int why )
+DLL_EXPORT const char* txf_why_str( char* buffer, int buffsize, int why )
 {
     #define TXF_WHY_FORMAT( _why ) ((why & _why) ? " " #_why : "")
 
@@ -2413,7 +2434,7 @@ void dump_tdb( REGS* regs, TDB* tdb )
                                      n += idx_snprintf( n, buf, sizeof( buf ), " %s", (ilc < 4) ? "        "
                                                                                     : (ilc < 6) ? "    "
                                                                                     :             "" );
-                        n += PRINT_INST( inst, buf + n );
+                        n += PRINT_INST( regs, inst, buf + n );
 
                         // "AAAAAAAAAAAAAAAA INST=112233445566 XXXXX op1,op2                name"
                         WRMSG( HHC17721, "D", TXF_CPUAD( regs ), TXF_QSIE( regs ), buf );
@@ -2487,6 +2508,7 @@ static const TXFMODELS txf_models[] =
     TXF_MODEL( 3907, z14ZR1 ),
     TXF_MODEL( 8561, z15    ),
     TXF_MODEL( 8562, z15T02 ),
+    TXF_MODEL( 3931, z16    ),
 };
 
 /*-------------------------------------------------------------------*/

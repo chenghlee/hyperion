@@ -928,6 +928,7 @@ int trace_cmd( int argc, char* argv[], char* cmdline )
     bool  off     =  false;             /* Whether - was specified   */
     bool  query   =  false;             /* Whether ? was specified   */
     bool  update  =  false;             /* Whether parms were given  */
+    bool  unlock  =  false;             /* Should do RELEASE_INTLOCK */
 
     cmdline[0] = tolower( cmdline[0] );
 
@@ -1061,7 +1062,7 @@ int trace_cmd( int argc, char* argv[], char* cmdline )
         c[0] = '-';
 
     /* Process their request */
-    OBTAIN_INTLOCK( NULL );
+    unlock = (TRY_OBTAIN_INTLOCK( NULL ) == 0);
     {
         /* Update and/or enable/disable tracing/stepping */
         if (on || off || update)
@@ -1126,7 +1127,7 @@ int trace_cmd( int argc, char* argv[], char* cmdline )
             on        = sysblk.instbreak;
         }
     }
-    RELEASE_INTLOCK( NULL );
+    if (unlock) RELEASE_INTLOCK( NULL );
 
     /* Build range and asid message fragments, if appropriate */
     if (addr[0] || addr[1])
@@ -1585,7 +1586,7 @@ int auto_trace_cmd( int argc, char* argv[], char* cmdline )
     }
     else // (auto_trace_beg && auto_trace_amt)
     {
-        // "Automatic tracing enabled: BEG=%"PRIu64", AMT=%"PRIu64
+        // "Automatic tracing enabled: BEG=%"PRIu64" AMT=%"PRIu64
         WRMSG( HHC02374, "I", auto_trace_beg, auto_trace_amt );
     }
 
@@ -1918,6 +1919,68 @@ int ipending_cmd(int argc, char *argv[], char *cmdline)
 #if defined( SUPPRESS_128BIT_PRINTF_FORMAT_WARNING )
 POP_GCC_WARNINGS()
 #endif
+
+
+/*-------------------------------------------------------------------*/
+/* bear command - display or alter BEAR register                     */
+/*-------------------------------------------------------------------*/
+int bear_cmd( int argc, char* argv[], char* cmdline )
+{
+    UNREFERENCED( cmdline );
+
+    UPPER_ARGV_0( argv );
+
+    /* Correct number of arguments? */
+
+    if (argc < 1 || argc > 2)
+    {
+        // "Invalid command usage. Type 'help %s' for assistance."
+        WRMSG( HHC02299, "E", argv[0] );
+        return -1;
+    }
+
+    obtain_lock( &sysblk.cpulock[ sysblk.pcpu ]);
+    {
+        REGS* regs = sysblk.regs[ sysblk.pcpu ];
+        char cbear[17] = {0};
+
+        if (!IS_CPU_ONLINE( sysblk.pcpu ))
+        {
+            release_lock( &sysblk.cpulock[ sysblk.pcpu ]);
+            // "Processor %s%02X: processor is not %s"
+            WRMSG( HHC00816, "E", PTYPSTR( sysblk.pcpu ), sysblk.pcpu, "online");
+            return -1;
+        }
+
+        if (argc > 1)       // (set new value)
+        {
+            U64 bear;
+            BYTE c;
+
+            if (sscanf( argv[1], "%"SCNx64"%c", &bear, &c) != 1)
+            {
+                release_lock( &sysblk.cpulock[ sysblk.pcpu ]);
+                // "Invalid argument %s%s"
+                WRMSG( HHC02205, "E", argv[1], ": invalid address" );
+                return -1;
+            }
+
+            regs->bear = bear;
+
+            // "%-14s set to %s"
+            MSGBUF( cbear, "%"PRIx64, regs->bear );
+            WRMSG( HHC02204, "I", argv[0], cbear );
+        }
+        else // (display current value)
+        {
+            // "%-14s: %s"
+            MSGBUF( cbear, "%"PRIx64, regs->bear );
+            WRMSG( HHC02203, "I", argv[0], cbear );
+        }
+    }
+    release_lock( &sysblk.cpulock[ sysblk.pcpu ]);
+    return 0;
+}
 
 
 /*-------------------------------------------------------------------*/
@@ -2321,7 +2384,7 @@ int icount_cmd( int argc, char* argv[], char* cmdline )
 
         ICOUNT_COLLECT_CASE( 0x01, imap01, 256 )
         ICOUNT_COLLECT_CASE( 0xA4, imapa4, 256 )
-        ICOUNT_COLLECT_CASE( 0xA5, imapa5, 256 )
+        ICOUNT_COLLECT_CASE( 0xA5, imapa5,  16 )
         ICOUNT_COLLECT_CASE( 0xA6, imapa6, 256 )
         ICOUNT_COLLECT_CASE( 0xA7, imapa7,  16 )
         ICOUNT_COLLECT_CASE( 0xB2, imapb2, 256 )

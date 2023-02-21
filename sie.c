@@ -341,8 +341,9 @@ int     i;                              /* (work)                    */
     //-----------------------------------------------------------
 
     S( inst, regs, b2, effective_addr2 );
+    PER_ZEROADDR_XCHECK( regs, b2 );
 
-    TRAN_INSTR_CHECK( regs );
+    TXF_INSTR_CHECK( regs );
     PRIV_CHECK( regs );
 
     SIE_INTERCEPT( regs );
@@ -412,7 +413,7 @@ int     i;                              /* (work)                    */
             return;
         }
         cpu_init( regs->cpuad, GUESTREGS, regs );
-        ALLOC_TXFMAP( GUESTREGS );
+        TXF_ALLOCMAP( GUESTREGS );
     }
 
     /* Direct pointer to state descriptor block */
@@ -1772,7 +1773,7 @@ int     zone;                           /* Zone number               */
 
     S(inst, regs, b2, effective_addr2);
 
-    TRAN_INSTR_CHECK( regs );
+    TXF_INSTR_CHECK( regs );
     PRIV_CHECK(regs);
 
     SIE_INTERCEPT(regs);
@@ -1817,7 +1818,7 @@ RADR    mso,                            /* Main Storage Origin       */
 
     S(inst, regs, b2, effective_addr2);
 
-    TRAN_INSTR_CHECK( regs );
+    TXF_INSTR_CHECK( regs );
     PRIV_CHECK(regs);
 
     SIE_INTERCEPT(regs);
@@ -1876,7 +1877,7 @@ int     zone;                           /* Zone number               */
 
     S(inst, regs, b2, effective_addr2);
 
-    TRAN_INSTR_CHECK( regs );
+    TXF_INSTR_CHECK( regs );
     PRIV_CHECK(regs);
 
     SIE_INTERCEPT(regs);
@@ -2001,7 +2002,7 @@ U32    newgr1;
 /* only be used (executed) by guests running under z/VM via z/VM     */
 /* instruction interception and simulation. An operation execption   */
 /* program interrupt will always occur if this instruction is not    */
-/* intercepted by z/VM.                                              */ 
+/* intercepted by z/VM.                                              */
 /* Ref: page 895 of SC24-6272-03 "zVM 7.1 CP Programming Services"   */
 /*-------------------------------------------------------------------*/
 DEF_INST( store_hypervisor_information )
@@ -2025,7 +2026,7 @@ DEF_INST( store_hypervisor_information )
 /* only be used (executed) by guests running under z/VM via z/VM     */
 /* instruction interception and simulation. An operation execption   */
 /* program interrupt will always occur if this instruction is not    */
-/* intercepted by z/VM.                                              */ 
+/* intercepted by z/VM.                                              */
 /* Ref: page 870 of SC24-6272-03 "zVM 7.1 CP Programming Services"   */
 /*-------------------------------------------------------------------*/
 DEF_INST( extract_and_set_storage_attributes )

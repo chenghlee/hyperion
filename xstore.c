@@ -37,8 +37,9 @@ U32     xaddr;                          /* Expanded storage block#   */
 size_t  xoffs;                          /* Byte offset into xpndstor */
 
     RRE(inst, regs, r1, r2);
+    PER_ZEROADDR_CHECK( regs, r1 );
 
-    TRAN_INSTR_CHECK( regs );
+    TXF_INSTR_CHECK( regs );
     PRIV_CHECK(regs);
 
     if(SIE_STATE_BIT_ON(regs, IC3, PGX))
@@ -103,8 +104,9 @@ U32     xaddr;                          /* Expanded storage block#   */
 size_t  xoffs;                          /* Byte offset into xpndstor */
 
     RRE(inst, regs, r1, r2);
+    PER_ZEROADDR_CHECK( regs, r1 );
 
-    TRAN_INSTR_CHECK( regs );
+    TXF_INSTR_CHECK( regs );
     PRIV_CHECK(regs);
 
     if(SIE_STATE_BIT_ON(regs, IC3, PGX))
@@ -166,7 +168,7 @@ int     r1, r2;                         /* Operand register numbers  */
 
     RRE( inst, regs, r1, r2 );
 
-    TRAN_INSTR_CHECK( regs );
+    TXF_INSTR_CHECK( regs );
     PRIV_CHECK( regs );
 
 #if defined( _FEATURE_SIE )
@@ -219,7 +221,8 @@ BYTE    xpkey1 = 0, xpkey2 = 0;         /* Expanded storage keys     */
 #endif /*defined(FEATURE_EXPANDED_STORAGE)*/
 
     RRE(inst, regs, r1, r2);
-    TRAN_INSTR_CHECK( regs );
+    PER_ZEROADDR_CHECK2( regs, r1, r2 );
+    TXF_INSTR_CHECK( regs );
 
 #if defined(_FEATURE_SIE)
     if(SIE_STATE_BIT_OFF(regs, EC0, MVPG))
@@ -288,7 +291,6 @@ BYTE    xpkey1 = 0, xpkey2 = 0;         /* Expanded storage keys     */
 #if defined(_FEATURE_SIE)
         if(SIE_MODE(regs)  && !regs->sie_pref)
         {
-
 #if defined(FEATURE_MULTIPLE_CONTROLLED_DATA_SPACE)
             if (SIE_TRANSLATE_ADDR (regs->sie_mso + raddr2,
                 (SIE_STATE_BIT_ON(regs, MX, XC) && AR_BIT(&regs->psw) && r2 > 0)
@@ -345,7 +347,6 @@ BYTE    xpkey1 = 0, xpkey2 = 0;         /* Expanded storage keys     */
 
 /*DEBUG logmsg("MVPG pte2 = " F_CREG ", xkey2 = %2.2X, xpblk2 = %5.5X, akey2 = %2.2X\n",
                   pte2,xpkey2,xpblk2,akey2);  */
-
             }
             else
             {

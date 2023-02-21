@@ -126,6 +126,18 @@
     #define _STORKEY_ARRAY_SHIFTAMT     STORKEY_KEY_4K_SHIFTAMT
   #endif
 
+  /* Macro used by "display_inst_adj" function to determine whether
+     to call "display_virt" (which calls "virt_to_real") using the
+     "USE_REAL_ADDR" translation option or not
+  */
+  #define IS_REAL_ADDR_OP( _opcode1, _opcode2 )             \
+  (0                                                        \
+   || (_opcode1 == 0xB2 && _opcode2 == 0x4B)  /*LURA*/      \
+   || (_opcode1 == 0xB2 && _opcode2 == 0x46)  /*STURA*/     \
+   || (_opcode1 == 0xB9 && _opcode2 == 0x05)  /*LURAG*/     \
+   || (_opcode1 == 0xB9 && _opcode2 == 0x25)  /*STURG*/     \
+  )
+
 #endif /* !defined( DID_FEATCHK_PASS_1 ) */
 
 /*-------------------------------------------------------------------*/
@@ -989,27 +1001,41 @@ do { \
 /*
  * PER Successful Branch
  */
-#if defined(FEATURE_PER)
- #if defined(FEATURE_PER2)
-  #define PER_SB(_regs, _addr) \
-   do { \
-    if (unlikely(EN_IC_PER_SB((_regs))) \
-     && (!((_regs)->CR(9) & CR9_BAC) \
-      || PER_RANGE_CHECK((_addr) & ADDRESS_MAXWRAP((_regs)), \
-                          (_regs)->CR(10), (_regs)->CR(11)) \
-        ) \
-       ) \
-     ON_IC_PER_SB((_regs)); \
-   } while (0)
- #else /*!defined(FEATURE_PER2)*/
-  #define PER_SB(_regs, _addr) \
-   do { \
-    if (unlikely(EN_IC_PER_SB((_regs)))) \
-     ON_IC_PER_SB((_regs)); \
-   } while (0)
- #endif /*!defined(FEATURE_PER2)*/
-#else /*!defined(FEATURE_PER)*/
- #define PER_SB(_regs,_addr)
-#endif /*!defined(FEATURE_PER)*/
+#if defined( FEATURE_PER )
+
+  #if defined( FEATURE_PER2 )
+
+    #define PER_SB( _regs, _addr )                                    \
+                                                                      \
+      do                                                              \
+      {                                                               \
+        if (1                                                         \
+            && unlikely( EN_IC_PER_SB( _regs ))                       \
+            && !IS_PER_SUPRESS( (_regs), CR9_SB )                     \
+            && (0                                                     \
+                || !((_regs)->CR(9) & CR9_BAC)                        \
+                || PER_RANGE_CHECK( (_addr) & ADDRESS_MAXWRAP( _regs ), (_regs)->CR(10), (_regs)->CR(11))  \
+               )                                                      \
+        )                                                             \
+          ON_IC_PER_SB( _regs );                                      \
+      }                                                               \
+      while (0)
+
+  #else /* !defined( FEATURE_PER2 ) */
+
+    #define PER_SB( _regs, _addr )                                    \
+                                                                      \
+      do                                                              \
+      {                                                               \
+        if (unlikely( EN_IC_PER_SB( _regs )))                         \
+          ON_IC_PER_SB( _regs );                                      \
+      }                                                               \
+      while (0)
+
+  #endif /* defined( FEATURE_PER2 ) */
+
+#else
+  #define PER_SB( _regs, _addr )
+#endif
 
 /* end of FEATURES.H */

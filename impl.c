@@ -29,6 +29,7 @@
 #if defined( OPTION_W32_CTCI )      // (need tt32_get_default_iface)
 #include "w32ctca.h"
 #endif
+#include "cckddasd.h"               // (need cckd_gc_rpt_states)
 
 static char shortopts[] =
 
@@ -356,6 +357,55 @@ static LRESULT CALLBACK MainWndProc( HWND hWnd, UINT msg, WPARAM wParam, LPARAM 
             do_emergency_shutdown();
             return 0; // (message handled)
 
+        case WM_POWERBROADCAST:
+
+            // Notifies applications that a power-management event
+            // has occurred.
+
+            switch (wParam)
+            {
+                case PBT_APMSUSPEND:
+
+                    // Notifies applications that the computer
+                    // is about to enter a suspended state.
+
+                    sysblk.sys_suspended = true;
+                    sysblk.sys_resumed   = false;
+                    break;
+
+                case PBT_APMRESUMESUSPEND:
+
+                    // Notifies applications that the system has resumed
+                    // operation after being suspended.
+
+                    /*
+                       The below special "FALLTHRU" comment lets GCC know that we are
+                       purposely falling through to the next switch case and is needed
+                       in order to suppress the warning that GCC would otherwise issue.
+                    */
+                    /* FALLTHRU */
+
+                case PBT_APMRESUMEAUTOMATIC:
+
+                    // Notifies applications that the computer has woken up
+                    // automatically to handle an event.
+
+                    sysblk.sys_suspended = false;
+                    sysblk.sys_resumed   = true;
+                    break;
+
+                default:
+
+                    break;  /* (do nothing) */
+            }
+
+            /*
+               The below special "FALLTHRU" comment lets GCC know that we are
+               purposely falling through to the next switch case and is needed
+               in order to suppress the warning that GCC would otherwise issue.
+            */
+            /* FALLTHRU */
+
         default:
 
             return DefWindowProc( hWnd, msg, wParam, lParam );
@@ -440,7 +490,34 @@ static void* watchdog_thread( void* arg )
            (GH Issue #458 "Hercules crash after resume from suspend")
         */
         for (slept_secs=0; slept_secs < sleep_seconds; ++slept_secs)
+        {
             SLEEP( 1 );     /* (sleep one second at a time) */
+
+#if defined( _MSVC_ )
+            /* Start over again upon resume from suspend. This should
+               hopefully resolve GitHub Issue #489 "Hercules 4.4.1
+               crashes after OSA failure" by preventing malfunctioning
+               CPU false positives.
+            */
+            if (sysblk.sys_suspended || sysblk.sys_resumed)
+            {
+                /* We're either being suspended or resumed */
+                sleep_seconds  = WATCHDOG_SECS;
+                sleep_secs2nd  = 3;
+                slept_secs     = 0;
+                hung_cpus_mask = 0;
+
+                /* If being resumed, reset our flags to normal */
+                if (!sysblk.sys_suspended && sysblk.sys_resumed)
+                {
+                    sysblk.sys_suspended = false;
+                    sysblk.sys_resumed   = false;
+                }
+
+                continue;   /* (start over) */
+            }
+#endif
+        } /* (end for (slept_secs ...) */
 
 #if defined( _MSVC_ )
         // Disable all watchdog logic while debugger is attached
@@ -697,6 +774,24 @@ static void* process_rc_file( void* dummy )
 }
 
 /*-------------------------------------------------------------------*/
+/* Display cmdline arguments help                                    */
+/*-------------------------------------------------------------------*/
+static void arghelp()
+{
+    char   pgm[ MAX_PATH ];
+    char*  strtok_str = NULL;
+
+    STRLCPY( pgm, sysblk.hercules_pgmname );
+
+    // "Usage: %s [--help[=SHORT|LONG|VERSION|BUILD]] -f config-filename|\"none\" [-o logfile-name] [-r rcfile-name] [-d] [-b logo-filename] [-s sym=val] [-t [factor]] [-p dyn-load-dir] [[-l dynmod-to-load]...] [> logfile]"
+    WRMSG( HHC01407, "S", strtok_r( pgm, ".", &strtok_str ) );
+
+    fflush( stderr );
+    fflush( stdout );
+    usleep( 100000 );
+}
+
+/*-------------------------------------------------------------------*/
 /* IMPL main entry point                                             */
 /*-------------------------------------------------------------------*/
 DLL_EXPORT int impl( int argc, char* argv[] )
@@ -797,7 +892,7 @@ int     rc;
 
     sysblk.sysgroup = DEFAULT_SYSGROUP;
 
-    /* set default console port address */
+    /* set default console port addresses */
     sysblk.cnslport = strdup("3270");
 
     /* Initialize automatic creation of missing tape file to default */
@@ -1376,6 +1471,9 @@ int     rc;
     sysblk.config_processed = true;
     sysblk.cfg_timerint = sysblk.timerint;
 
+    /* Report CCKD dasd image garbage states at startup */
+    cckd_gc_rpt_states();
+
 #if defined( _FEATURE_073_TRANSACT_EXEC_FACILITY )
 
     if (FACILITY_ENABLED_ARCH( 073_TRANSACT_EXEC, ARCH_900_IDX ))
@@ -1728,52 +1826,57 @@ error:
     /* Terminate if invalid arguments were detected */
     if (arg_error)
     {
-        char   pgm[ MAX_PATH ];
-        char*  strtok_str = NULL;
-
-        const char symsub[] = " [-s sym=val]";
-        const char dlsub [] = " [-p dyn-load-dir] [[-l dynmod-to-load]...]";
-
         /* Show them all of our command-line arguments... */
-        STRLCPY( pgm, sysblk.hercules_pgmname );
-
-        // "Usage: %s [--help[=SHORT|LONG]] [-f config-filename] [-r rcfile-name] [-d] [-b logo-filename]%s [-t [factor]]%s [> logfile]"
-        WRMSG( HHC01407, "S", strtok_r( pgm, ".", &strtok_str ), symsub, dlsub );
+        arghelp();
     }
     else /* Check for config and rc file, but don't open */
     {
         struct stat st;
         int i, rv;
+        bool using_default;
 
         for (i=0; cfgorrccount > i; i++)
         {
-            /* If no value explicitly specified, try env. default */
-            if (!cfgorrc[i].filename)
-                cfgorrc[i].filename = get_symbol( cfgorrc[i].envname );
+            using_default = false;
 
-            /* If no env. default, try hard coded default */
+            /* If no value explicitly specified, try environment */
             if (0
                 || !cfgorrc[i].filename
                 || !cfgorrc[i].filename[0]
             )
             {
-                /* Use default from current directory if it exists */
-                if ((rv = stat( cfgorrc[i].defaultfile, &st )) == 0)
+                const char* envname = get_symbol( cfgorrc[i].envname );
+
+                if (envname && envname[0])
+                    cfgorrc[i].filename = envname;
+                else
+                {
+                    /* If no environment, use our hard coded default */
+                    using_default = true;
                     cfgorrc[i].filename = cfgorrc[i].defaultfile;
-                continue;
+                }
             }
 
             /* Explicit request for no file use at all? */
-            if (strcasecmp( cfgorrc[i].filename, "None" ) == 0)
+            if (strcasecmp( cfgorrc[i].filename, "none" ) == 0)
             {
                cfgorrc[i].filename = NULL;  /* Suppress file */
                continue;
             }
 
-            /* File specified explicitly or by env; check existence */
+            /* File specified either explicitly, by environment,
+               or by hard coded default: verify its existence.
+            */
             if ((rv = stat( cfgorrc[i].filename, &st )) != 0)
             {
-                // "%s file %s not found: %s"
+                /* If this is the .rc file, default to none */
+                if (want_rc == i && using_default)
+                {
+                   cfgorrc[i].filename = NULL;  /* Suppress file */
+                   continue;
+                }
+
+                // "%s file '%s' not found: %s"
                 WRMSG( HHC02342, "S", cfgorrc[i].whatfile,
                     cfgorrc[i].filename, strerror( errno ));
                 arg_error++;

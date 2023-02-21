@@ -26,8 +26,8 @@ AC_CONFIG_AUX_DIR(autoconf)   # (directory containing auxillary build tools)
 # -----------------------------------------------------------------------------
 
 VERS_MAJ=4                    # first  digit of version
-VERS_INT=4                    # second digit of version
-VERS_MIN=1                    # third  digit of version
+VERS_INT=5                    # second digit of version
+VERS_MIN=0                    # third  digit of version
 VERS_DEV=0                    # flag: 1 = between releases development version
                               #       0 = official formal release version
 
@@ -145,6 +145,18 @@ case "$target_cpu" in
     arm*)
         hc_cv_cpu_arch=arm
         hc_cv_pkg_lib_subdir="/arm"
+
+        case "$target_os" in
+          *darwin*)
+            hc_cv_cpu_arch=aarch64
+            hc_cv_pkg_lib_subdir="/aarch64"
+            ;;
+        esac
+        ;;
+
+    e2k*)
+        hc_cv_cpu_arch=e2k
+        hc_cv_pkg_lib_subdir="/e2k"
         ;;
 
     mips*)
@@ -155,6 +167,11 @@ case "$target_cpu" in
     ppc*|powerpc*)
         hc_cv_cpu_arch=ppc
         hc_cv_pkg_lib_subdir="/ppc"
+        ;;
+
+    riscv64*)
+        hc_cv_cpu_arch=riscv64
+        hc_cv_pkg_lib_subdir="/riscv64"
         ;;
 
     sparc*)
@@ -191,8 +208,28 @@ case "$target_cpu" in
     *64|*64le)
         hc_cv_cpu_bits=64
         ;;
+    s390x)
+        hc_cv_cpu_bits=64
+        ;;
     *)
         hc_cv_cpu_bits=32
+        ;;
+esac
+
+case "$target_os" in
+
+    *linux*)
+        if test $target_cpu = e2k; then
+            # e2k-mcst-linux-gnu
+            hc_cv_cpu_bits=64
+        fi
+        ;;
+    *darwin*)
+        if test $target_cpu = arm; then
+            # arm-apple-darwin20.6.0
+            target_cpu=aarch64
+            hc_cv_cpu_bits=64
+        fi
         ;;
 esac
 
@@ -3323,7 +3360,8 @@ AC_CACHE_SAVE()
 AC_OUTPUT([  Makefile  util/Makefile  html/Makefile  man/Makefile  m4/Makefile  ])
 
 dnl Kludge to fix Debian/Ubuntu libtool
-perl -pi -e 's/link_all_deplibs=no/link_all_deplibs=yes/' libtool
+sed -e 's/^link_all_deplibs=no$/link_all_deplibs=yes/' <libtool >libtool.tmp
+mv libtool.tmp libtool
 
 ###############################################################################
 #   (end-of-file)

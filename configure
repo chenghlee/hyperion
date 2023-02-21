@@ -800,6 +800,9 @@ AM_BACKSLASH
 AM_DEFAULT_VERBOSITY
 AM_DEFAULT_V
 AM_V
+CSCOPE
+ETAGS
+CTAGS
 am__untar
 am__tar
 AMTAR
@@ -2782,9 +2785,9 @@ ac_configure="$SHELL $ac_aux_dir/configure"  # Please don't use this var.
 # -----------------------------------------------------------------------------
 
 VERS_MAJ=4                    # first  digit of version
-VERS_INT=4                    # second digit of version
-VERS_MIN=1                    # third  digit of version
-VERS_DEV=0                    # flag: 1 = between releases development version
+VERS_INT=5                    # second digit of version
+VERS_MIN=0                    # third  digit of version
+VERS_DEV=1                    # flag: 1 = between releases development version
                               #       0 = official formal release version
 
 am__api_version='1.16'
@@ -2963,12 +2966,7 @@ program_transform_name=`$as_echo "$program_transform_name" | sed "$ac_script"`
 am_aux_dir=`cd "$ac_aux_dir" && pwd`
 
 if test x"${MISSING+set}" != xset; then
-  case $am_aux_dir in
-  *\ * | *\	*)
-    MISSING="\${SHELL} \"$am_aux_dir/missing\"" ;;
-  *)
-    MISSING="\${SHELL} $am_aux_dir/missing" ;;
-  esac
+  MISSING="\${SHELL} '$am_aux_dir/missing'"
 fi
 # Use eval to expand $SHELL
 if eval "$MISSING --is-lightweight"; then
@@ -3322,6 +3320,20 @@ am__tar='$${TAR-tar} chof - "$$tardir"' am__untar='$${TAR-tar} xf -'
 
 
 
+
+
+# Variables for tags utilities; see am/tags.am
+if test -z "$CTAGS"; then
+  CTAGS=ctags
+fi
+
+if test -z "$ETAGS"; then
+  ETAGS=etags
+fi
+
+if test -z "$CSCOPE"; then
+  CSCOPE=cscope
+fi
 
 
 
@@ -4696,6 +4708,18 @@ case "$target_cpu" in
     arm*)
         hc_cv_cpu_arch=arm
         hc_cv_pkg_lib_subdir="/arm"
+
+        case "$target_os" in
+          *darwin*)
+            hc_cv_cpu_arch=aarch64
+            hc_cv_pkg_lib_subdir="/aarch64"
+            ;;
+        esac
+        ;;
+
+    e2k*)
+        hc_cv_cpu_arch=e2k
+        hc_cv_pkg_lib_subdir="/e2k"
         ;;
 
     mips*)
@@ -4706,6 +4730,11 @@ case "$target_cpu" in
     ppc*|powerpc*)
         hc_cv_cpu_arch=ppc
         hc_cv_pkg_lib_subdir="/ppc"
+        ;;
+
+    riscv64*)
+        hc_cv_cpu_arch=riscv64
+        hc_cv_pkg_lib_subdir="/riscv64"
         ;;
 
     sparc*)
@@ -4744,8 +4773,28 @@ case "$target_cpu" in
     *64|*64le)
         hc_cv_cpu_bits=64
         ;;
+    s390x)
+        hc_cv_cpu_bits=64
+        ;;
     *)
         hc_cv_cpu_bits=32
+        ;;
+esac
+
+case "$target_os" in
+
+    *linux*)
+        if test $target_cpu = e2k; then
+            # e2k-mcst-linux-gnu
+            hc_cv_cpu_bits=64
+        fi
+        ;;
+    *darwin*)
+        if test $target_cpu = arm; then
+            # arm-apple-darwin20.6.0
+            target_cpu=aarch64
+            hc_cv_cpu_bits=64
+        fi
         ;;
 esac
 
@@ -24344,7 +24393,9 @@ $as_echo X/"$am_mf" |
     { { $as_echo "$as_me:${as_lineno-$LINENO}: error: in \`$ac_pwd':" >&5
 $as_echo "$as_me: error: in \`$ac_pwd':" >&2;}
 as_fn_error $? "Something went wrong bootstrapping makefile fragments
-    for automatic dependency tracking.  Try re-running configure with the
+    for automatic dependency tracking.  If GNU make was not used, consider
+    re-running the configure script with MAKE=\"gmake\" (or whatever is
+    necessary).  You can also try re-running configure with the
     '--disable-dependency-tracking' option to at least be able to build
     the package (albeit without support for automatic dependency tracking).
 See \`config.log' for more details" "$LINENO" 5; }
@@ -25086,7 +25137,8 @@ $as_echo "$as_me: WARNING: unrecognized options: $ac_unrecognized_opts" >&2;}
 fi
 
 
-perl -pi -e 's/link_all_deplibs=no/link_all_deplibs=yes/' libtool
+sed -e 's/^link_all_deplibs=no$/link_all_deplibs=yes/' <libtool >libtool.tmp
+mv libtool.tmp libtool
 
 ###############################################################################
 #   (end-of-file)

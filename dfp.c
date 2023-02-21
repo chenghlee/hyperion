@@ -49,7 +49,7 @@ int     i1, i2;                         /* FP register subscripts    */
 
     RRE(inst, regs, r1, r2);
 
-    CONTRAN_INSTR_CHECK( regs );
+    TXFC_INSTR_CHECK( regs );
     HFPREG2_CHECK(r1, r2, regs);
 
     i1 = FPR2I(r1);
@@ -72,7 +72,7 @@ int     i1, i2;                         /* FP register subscripts    */
 
     RRE(inst, regs, r1, r2);
 
-    CONTRAN_INSTR_CHECK( regs );
+    TXFC_INSTR_CHECK( regs );
     HFPREG2_CHECK(r1, r2, regs);
 
     i1 = FPR2I(r1);
@@ -96,7 +96,7 @@ U32     sign;                           /* Work area for sign bit    */
 
     RRF_M(inst, regs, r1, r2, r3);
 
-    CONTRAN_INSTR_CHECK( regs );
+    TXFC_INSTR_CHECK( regs );
     HFPREG2_CHECK(r1, r2, regs);
     HFPREG_CHECK(r3, regs);
 
@@ -128,7 +128,7 @@ int     i1, i2;                         /* FP register subscripts    */
 
     RRE(inst, regs, r1, r2);
 
-    CONTRAN_INSTR_CHECK( regs );
+    TXFC_INSTR_CHECK( regs );
     HFPREG2_CHECK(r1, r2, regs);
 
     i1 = FPR2I(r1);
@@ -153,7 +153,7 @@ int     i1;                             /* FP register subscript     */
 
     RRE(inst, regs, r1, r2);
 
-    CONTRAN_INSTR_CHECK( regs );
+    TXFC_INSTR_CHECK( regs );
     HFPREG_CHECK(r1, regs);
 
     i1 = FPR2I(r1);
@@ -175,7 +175,7 @@ int     i2;                             /* FP register subscript     */
 
     RRE(inst, regs, r1, r2);
 
-    CONTRAN_INSTR_CHECK( regs );
+    TXFC_INSTR_CHECK( regs );
     HFPREG_CHECK(r2, regs);
 
     i2 = FPR2I(r2);
@@ -199,7 +199,7 @@ VADR            effective_addr2;        /* Effective address         */
 
     S(inst, regs, b2, effective_addr2);
 
-    CONTRAN_INSTR_CHECK( regs );
+    TXFC_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
 
     /* Set DFP rounding mode in FPC register from address bits 61-63 */
@@ -290,8 +290,9 @@ U32             src_fpc, new_fpc;       /* New value for FPC         */
 BYTE            dxc;                    /* Data exception code       */
 
     S(inst, regs, b2, effective_addr2);
+    PER_ZEROADDR_XCHECK( regs, b2 );
 
-    CONTRAN_INSTR_CHECK( regs );
+    TXFC_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
 
     /* Load new FPC register contents from operand location */
@@ -330,7 +331,7 @@ BYTE            dxc;                    /* Data exception code       */
 
     RRE(inst, regs, r1, r2);
 
-    CONTRAN_INSTR_CHECK( regs );
+    TXFC_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
 
     /* Load new FPC register contents from R1 register bits 32-63 */
@@ -1424,6 +1425,212 @@ int             zwind;                  /* Index into zwork string   */
 #endif /*!defined(_DFP_ZONED_ARCH_INDEPENDENT_)*/
 #endif /*defined(FEATURE_048_DFP_ZONE_CONV_FACILITY)*/
 
+#if defined(FEATURE_080_DFP_PACK_CONV_FACILITY)
+#if !defined(_DFP_PACKED_ARCH_INDEPENDENT_)
+#define CDPT_MAXLEN 9                   /* CDPT maximum operand len  */
+#define CXPT_MAXLEN 18                  /* CXPT maximum operand len  */
+/*-------------------------------------------------------------------*/
+/* Convert packed decimal to decimal number                           */
+/*                                                                   */
+/* This subroutine is called by the CDPT and CXPT instructions.      */
+/* It converts a packed decimal value into a decimal number          */
+/* structure. The length of the packed decimal value should not      */
+/* exceed the maximum number of digits specified in the context.     */
+/*                                                                   */
+/* Input:                                                            */
+/*      dn      Pointer to decimal number structure                  */
+/*      packed  packed decimal input area                            */
+/*      len     length-1 of packed decimal input                     */
+/*      mask    mask field: 0x8=     signed                          */
+/*                          0x1=     Ignore sign                     */
+/*      pset    Pointer to decimal number context structure          */
+/* Output:                                                           */
+/*      The decimal number structure is updated.                     */
+/*      Return value: 0=success, 1=data exception                    */
+/*-------------------------------------------------------------------*/
+
+/* mask (m3) bits */
+#define m_S     (mask & 0x8)    /* m - Sign Control            - m3 bit 0 */
+#define m_P     (mask & 0x2)    /* m - Plus-Sign-Code Control  - m3 bit 2 */
+#define m_F     (mask & 0x1)    /* m - Force-Plus-Zero Control - m3 bit 3 */
+#define m_I     (mask & 0x1)    /* m - Ignore sign             - m3 bit 3 */
+
+static int
+dfp_number_from_packed(decNumber* dn, char* packed, int len,
+    int mask, decContext* pset)
+{
+    int             i;                      /* Array subscript           */
+    int             signflag;               /* 1=signed decimal operand  */
+    int             ignoreflag;             /* 1=ignore sign             */
+    char            pwork[1 + (CXPT_MAXLEN*2) + 1]; /* Sign + digits + null      */
+    char*           ppw = pwork;            /* Addr next byte in pwork   */
+    char            c;                      /* Character work area       */
+
+    /* Set the signed & ignore flags as indicated by the mask */
+    signflag   = m_S ? 1 : 0;
+    ignoreflag = m_I ? 1 : 0;
+
+    /* Set the sign according to the operand sign code */
+    if (signflag) {
+        if (!ignoreflag) {
+            switch ((packed[len] & 0x0F)) {
+            case 0xB: case 0xD:
+                *ppw++ = '-'; break;
+            case 0xA: case 0xC: case 0xE: case 0xF:
+                break;
+            default:
+                /* Data exception if invalid sign code */
+                return 1;
+            }
+        }
+    }
+
+    /* Convert packed number to a decimal string */
+    for (i = 0; i <= len; i++)
+    {
+        /* 1st digit of byte */
+        c = (packed[i] & 0xF0) >> 4;
+        /* Data exception if invalid digit */
+        if (c > 0x09) return 1;
+        *ppw++ = c + '0';
+
+        if (i == len && signflag) break;   /* is last nibble a sign, already done */
+
+        /* 2nd digit of byte */
+        c = packed[i] & 0x0F;
+        /* Data exception if invalid digit */
+        if (c > 0x09) return 1;
+        *ppw++ = c + '0';
+    }
+    *ppw = '\0';
+
+    /* Convert decimal string to decimal number structure */
+    decNumberFromString(dn, pwork, pset);
+
+    return 0;
+
+} /* end function dfp_number_from_packed */
+
+#define CPDT_MAXLEN 9                   /* CPDT maximum operand len  */
+#define CPXT_MAXLEN 18                  /* CPXT maximum operand len  */
+/*-------------------------------------------------------------------*/
+/* Convert decimal number to packed decimal                          */
+/*                                                                   */
+/* This subroutine is called by the CPDT and CPXT instructions.      */
+/* It converts a decimal number to a packed decimal string.          */
+/*                                                                   */
+/* Input:                                                            */
+/*      dn      Pointer to decimal number structure                  */
+/*              representing original DFP value                      */
+/*      dc      Pointer to decimal number structure                  */
+/*              containing only coeffecient of DFP value             */
+/*      packed  packed decimal output area                           */
+/*      len     length-1 of packed decimal output area               */
+/*      mask    mask field: 0x8=signed, 0x4=reserved,                */
+/*              0x2=plus sign is F, 0x1=zero is always positive      */
+/*      pset    Pointer to decimal number context structure          */
+/* Output:                                                           */
+/*      The packed decimal area is updated.                          */
+/*      Return value is the condition code:                          */
+/*      0=zero; 1=negative; 2=positive; 3=Inf, NaN, or overflow      */
+/*-------------------------------------------------------------------*/
+
+static int
+dfp_number_to_packed(decNumber* dn, decNumber* dc, char* packed, int len,
+    int mask, decContext* pset)
+{
+    int             i;                      /* Array subscript           */
+    int             pad;                    /* Number of padding bytes   */
+    int             cc;                     /* Condition code            */
+    char            pwork[MAXDECSTRLEN + 64]; /* Decimal string work area  */
+    int             pwlen;                  /* Length of pwork string    */
+    int             pwind;                  /* Index into pwork string   */
+    int             pSigned;                /* packed field is signed    */
+    unsigned char   pSign = 0x0C;           /* packed sign               */
+    int             pDigits;                /* number of packed digits   */
+
+    UNREFERENCED(pset);
+
+    /* determine whether packed value is signed and the sign field */
+    pSigned = (m_S) ? 1 : 0;
+    if (pSigned) {
+        if (decNumberIsNegative(dn)) {
+            pSign = 0x0D;
+            /* -0 : force positive sign based on plus-sign-control */
+            if ( m_F && decNumberIsZero(dn))
+                pSign =  (m_P) ? 0x0F : 0x0C;      /* 0b1111 : 0b1100 */
+        }
+        else {
+            /* select plus sign */
+            pSign = (m_P) ? 0x0F : 0x0C;            /* 0b1111 : 0b1100 */
+        }
+    }
+
+    /* the number of packed digits */
+    pDigits = 2 * (len + 1) - pSigned;
+
+    /* Convert decimal number to string */
+    /* only sigificant digits, ignore exponent and sign */
+    if (decNumberIsNaN(dn) || (decNumberIsInfinite(dn)))
+    {
+        /* For NaN or Inf set cc=3 and use coefficient only */
+        cc = 3;
+        dc->exponent = 0;
+        dc->bits &= ~(DECNEG);
+        decNumberToString(dc, pwork);
+    }
+    else {
+        /* For finite numbers set cc=0, 1, or 2 and convert digits */
+        cc = (decNumberIsZero(dn)) ? 0 :
+            (decNumberIsNegative(dn)) ? 1 : 2;
+        dn->exponent = 0;
+        dn->bits &= ~(DECNEG);
+        decNumberToString(dn, pwork);
+    }
+
+    /* Calculate the number of padding digits needed, and set
+       condition code 3 if significant digits will be lost */
+    pwlen = (int)(strlen(pwork));
+    if (pwlen <= pDigits)
+    {
+        pwind = 0;
+        pad =  pDigits - pwlen;
+    }
+    else {
+        pwind = pwlen - pDigits ;
+        pad = 0;
+        cc = 3;
+    }
+
+    /* Copy digits to packed decimal result area */
+    for (i = 0; i <= len; i++)
+    {
+        /* Pad with zero or copy digit from work string */
+        packed[i]  = (((pad-- > 0) ? 0x00 : pwork[pwind++] - '0') & 0x0F ) << 4 ;
+        packed[i] |=  ((pad-- > 0) ? 0x00 : pwork[pwind++] - '0') & 0x0F;
+    }
+
+    /* if signed, insert sign in final nibble */
+    if (pSigned)
+    {
+        packed[len] &= 0xF0;
+        packed[len] |= pSign;
+    }
+
+    /* Return the condition code */
+    return cc;
+
+} /* end function dfp_number_to_packed */
+
+#undef m_S     /* m - Sign Control            - m3 bit 0 */
+#undef m_P     /* m - Plus-Sign-Code  Control - m3 bit 2 */
+#undef m_F     /* m - Force-Plus-Zero Control - m3 bit 3 */
+#undef m_I     /* m - Ignore sign             - m3 bit 3 */
+
+#define _DFP_PACKED_ARCH_INDEPENDENT_
+#endif /*!defined(_DFP_PACKED_ARCH_INDEPENDENT_)*/
+#endif /*defined(FEATURE_080_DFP_PACK_CONV_FACILITY)*/
+
 /*-------------------------------------------------------------------*/
 /* Set rounding mode in decimal context structure                    */
 /*                                                                   */
@@ -1771,7 +1978,7 @@ BYTE            dxc;                    /* Data exception code       */
 
     RRR(inst, regs, r1, r2, r3);
 
-    TRAN_FLOAT_INSTR_CHECK( regs );
+    TXF_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
     DFPREGPAIR3_CHECK(r1, r2, r3, regs);
 
@@ -1821,7 +2028,7 @@ BYTE            dxc;                    /* Data exception code       */
 
     RRR(inst, regs, r1, r2, r3);
 
-    TRAN_FLOAT_INSTR_CHECK( regs );
+    TXF_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
 
     /* Initialise the context for long DFP */
@@ -1870,7 +2077,7 @@ BYTE            dxc;                    /* Data exception code       */
 
     RRE(inst, regs, r1, r2);
 
-    TRAN_FLOAT_INSTR_CHECK( regs );
+    TXF_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
     DFPREGPAIR2_CHECK(r1, r2, regs);
 
@@ -1915,7 +2122,7 @@ BYTE            dxc;                    /* Data exception code       */
 
     RRE(inst, regs, r1, r2);
 
-    TRAN_FLOAT_INSTR_CHECK( regs );
+    TXF_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
 
     /* Initialise the context for long DFP */
@@ -1959,7 +2166,7 @@ BYTE            dxc;                    /* Data exception code       */
 
     RRE(inst, regs, r1, r2);
 
-    TRAN_FLOAT_INSTR_CHECK( regs );
+    TXF_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
     DFPREGPAIR2_CHECK(r1, r2, regs);
 
@@ -2008,7 +2215,7 @@ BYTE            dxc;                    /* Data exception code       */
 
     RRE(inst, regs, r1, r2);
 
-    TRAN_FLOAT_INSTR_CHECK( regs );
+    TXF_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
 
     /* Initialise the context for long DFP */
@@ -2055,7 +2262,7 @@ decContext      set;                    /* Working context           */
 
     RRE(inst, regs, r1, r2);
 
-    TRAN_FLOAT_INSTR_CHECK( regs );
+    TXF_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
     DFPREGPAIR2_CHECK(r1, r2, regs);
 
@@ -2086,7 +2293,7 @@ decContext      set;                    /* Working context           */
 
     RRE(inst, regs, r1, r2);
 
-    TRAN_FLOAT_INSTR_CHECK( regs );
+    TXF_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
 
     /* Initialise the context for long DFP */
@@ -2119,7 +2326,7 @@ decContext      set;                    /* Working context           */
 
     RRF_MM(inst, regs, r1, r2, m3, m4);
 
-    TRAN_FLOAT_INSTR_CHECK( regs );
+    TXF_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
     DFPREGPAIR_CHECK(r1, regs);
 
@@ -2155,7 +2362,7 @@ BYTE            dxc;                    /* Data exception code       */
 
     RRF_MM(inst, regs, r1, r2, m3, m4);
 
-    TRAN_FLOAT_INSTR_CHECK( regs );
+    TXF_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
 
     /* Initialise the context for long DFP */
@@ -2192,7 +2399,7 @@ decContext      set;                    /* Working context           */
 
     RRF_MM(inst, regs, r1, r2, m3, m4);
 
-    TRAN_FLOAT_INSTR_CHECK( regs );
+    TXF_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
     DFPREGPAIR_CHECK(r1, regs);
 
@@ -2228,7 +2435,7 @@ BYTE            dxc;                    /* Data exception code       */
 
     RRF_MM(inst, regs, r1, r2, m3, m4);
 
-    TRAN_FLOAT_INSTR_CHECK( regs );
+    TXF_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
 
     /* Initialise the context for long DFP */
@@ -2265,7 +2472,7 @@ decContext      set;                    /* Working context           */
 
     RRE(inst, regs, r1, r2);
 
-    TRAN_FLOAT_INSTR_CHECK( regs );
+    TXF_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
     DFPREGPAIR_CHECK(r1, regs);
 
@@ -2300,7 +2507,7 @@ BYTE            dxc;                    /* Data exception code       */
 
     RRE(inst, regs, r1, r2);
 
-    TRAN_FLOAT_INSTR_CHECK( regs );
+    TXF_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
 
     /* Initialise the context for long DFP */
@@ -2345,7 +2552,7 @@ decContext      set;                    /* Working context           */
 
     RRF_MM(inst, regs, r1, r2, m3, m4);
 
-    TRAN_FLOAT_INSTR_CHECK( regs );
+    TXF_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
     DFPREGPAIR_CHECK(r1, regs);
 
@@ -2381,7 +2588,7 @@ BYTE            dxc;                    /* Data exception code       */
 
     RRF_MM(inst, regs, r1, r2, m3, m4);
 
-    TRAN_FLOAT_INSTR_CHECK( regs );
+    TXF_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
 
     /* Initialise the context for long DFP */
@@ -2419,7 +2626,7 @@ int32_t         scale = 0;              /* Scaling factor            */
 
     RRE(inst, regs, r1, r2);
 
-    TRAN_FLOAT_INSTR_CHECK( regs );
+    TXF_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
     DFPREGPAIR_CHECK(r1, regs);
     ODD_CHECK(r2, regs);
@@ -2464,7 +2671,7 @@ int32_t         scale = 0;              /* Scaling factor            */
 
     RRE(inst, regs, r1, r2);
 
-    TRAN_FLOAT_INSTR_CHECK( regs );
+    TXF_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
 
     /* Initialise the context for long DFP */
@@ -2507,7 +2714,7 @@ int32_t         scale = 0;              /* Scaling factor            */
 
     RRE(inst, regs, r1, r2);
 
-    TRAN_FLOAT_INSTR_CHECK( regs );
+    TXF_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
     DFPREGPAIR_CHECK(r1, regs);
     ODD_CHECK(r2, regs);
@@ -2559,7 +2766,7 @@ int32_t         scale = 0;              /* Scaling factor            */
 
     RRE(inst, regs, r1, r2);
 
-    TRAN_FLOAT_INSTR_CHECK( regs );
+    TXF_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
 
     /* Initialise the context for long DFP */
@@ -2610,8 +2817,9 @@ decContext      set;                    /* Working context           */
 char            zoned[CXZT_MAXLEN];     /* Zoned decimal operand     */
 
     RSL_RM(inst, regs, r1, l2, b2, effective_addr2, m3);
+    PER_ZEROADDR_XCHECK( regs, b2 );
 
-    TRAN_FLOAT_INSTR_CHECK( regs );
+    TXF_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
     DFPREGPAIR_CHECK(r1, regs);
 
@@ -2662,8 +2870,9 @@ decContext      set;                    /* Working context           */
 char            zoned[CDZT_MAXLEN];     /* Zoned decimal operand     */
 
     RSL_RM(inst, regs, r1, l2, b2, effective_addr2, m3);
+    PER_ZEROADDR_XCHECK( regs, b2 );
 
-    TRAN_FLOAT_INSTR_CHECK( regs );
+    TXF_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
 
     /* Program check if operand length exceeds maximum */
@@ -2698,6 +2907,139 @@ char            zoned[CDZT_MAXLEN];     /* Zoned decimal operand     */
 #endif /*defined(FEATURE_048_DFP_ZONE_CONV_FACILITY)*/
 
 
+#if defined(FEATURE_080_DFP_PACK_CONV_FACILITY)
+/*-------------------------------------------------------------------*/
+/* EDAF CXPT - Convert from packed to DFP Extended           [RSL-b] */
+/*-------------------------------------------------------------------*/
+DEF_INST(convert_packed_to_dfp_ext)
+{
+    int             rc;                     /* Return code               */
+    int             r1, m3;                 /* Values of R and M fields  */
+    int             l2;                     /* Operand length minus 1    */
+    int             b2;                     /* Base of effective addr    */
+    VADR            effective_addr2;        /* Effective address         */
+    decimal128      x1;                     /* Extended DFP value        */
+    decNumber       d;                      /* Working decimal number    */
+    decContext      set;                    /* Working context           */
+    char            packed[CXPT_MAXLEN];    /* Packed decimal operand    */
+
+    RSL_RM(inst, regs, r1, l2, b2, effective_addr2, m3);
+    PER_ZEROADDR_XCHECK(regs, b2);
+
+    TXF_FLOAT_INSTR_CHECK(regs);
+    DFPINST_CHECK(regs);
+    DFPREGPAIR_CHECK(r1, regs);
+
+    /* Program check if operand length exceeds maximum */
+    if (l2 > CXPT_MAXLEN - 1)
+    {
+        ARCH_DEP(program_interrupt) (regs, PGM_SPECIFICATION_EXCEPTION);
+    }
+
+    /* Initialise the context for extended DFP */
+    decContextDefault(&set, DEC_INIT_DECIMAL128);
+
+    /* Fetch the packed decimal operand into the work area */
+    ARCH_DEP(vfetchc) (packed, l2, effective_addr2, b2, regs);
+
+    /* when l2 = 17; check that unused digits are 0 */
+    rc = 0;
+    if (l2 == 17) {
+        if (m3 & 0x8) {
+            /* signed - first nibble must be 0 */
+            if (packed[0] & 0xF0)  rc = 1;
+        }
+        else {
+            /* unsigned - first byte must be 0 */
+            if (packed[0]) rc = 1;
+        }
+    }
+
+    /* Convert packed decimal to decimal number structure */
+    if (rc == 0)  rc = dfp_number_from_packed(&d, packed, l2, m3, &set);
+
+    /* Program check if data exception is indicated */
+    if (rc != 0)
+    {
+        regs->dxc = DXC_DECIMAL;
+        ARCH_DEP(program_interrupt) (regs, PGM_DATA_EXCEPTION);
+    }
+
+    /* Convert decimal number to extended DFP format */
+    decimal128FromNumber(&x1, &d, &set);
+
+    /* Load result into FP register r1 */
+    ARCH_DEP(dfp_reg_from_decimal128)(r1, &x1, regs);
+
+} /* end DEF_INST(convert_packed_to_dfp_ext) */
+
+
+/*-------------------------------------------------------------------*/
+/* EDAE CDPT  - Convert from packed to DFP Long              [RSL-b] */
+/*-------------------------------------------------------------------*/
+DEF_INST(convert_packed_to_dfp_long)
+{
+    int             rc;                     /* Return code               */
+    int             r1, m3;                 /* Values of R and M fields  */
+    int             l2;                     /* Operand length minus 1    */
+    int             b2;                     /* Base of effective addr    */
+    VADR            effective_addr2;        /* Effective address         */
+    decimal64       x1;                     /* Long DFP value            */
+    decNumber       d;                      /* Working decimal number    */
+    decContext      set;                    /* Working context           */
+    char            packed[CDPT_MAXLEN];    /* Packed decimal operand    */
+
+    RSL_RM(inst, regs, r1, l2, b2, effective_addr2, m3);
+    PER_ZEROADDR_XCHECK(regs, b2);
+
+    TXF_FLOAT_INSTR_CHECK(regs);
+    DFPINST_CHECK(regs);
+
+    /* Program check if operand length exceeds maximum */
+    if (l2 > CDPT_MAXLEN - 1)
+    {
+        ARCH_DEP(program_interrupt) (regs, PGM_SPECIFICATION_EXCEPTION);
+    }
+
+    /* Initialise the context for long DFP */
+    decContextDefault(&set, DEC_INIT_DECIMAL64);
+
+    /* Fetch the packed decimal operand into the work area */
+    ARCH_DEP(vfetchc) (packed, l2, effective_addr2, b2, regs);
+
+    /* when l2 = 8; check that unused digits are 0 */
+    rc = 0;
+    if (l2 == 8) {
+        if (m3 & 0x8) {
+            /* signed - first nibble must be 0 */
+            if ( (packed[0] & 0xF0) != 0)  rc = 1;
+        }
+        else {
+            /* unsigned - first byte must be 0 */
+            if (packed[0] != 0)  rc = 1;
+        }
+    }
+
+    /* Convert packed decimal to decimal number structure */
+    if (rc == 0) rc = dfp_number_from_packed(&d, packed, l2, m3, &set);
+
+    /* Program check if data exception is indicated */
+    if (rc != 0)
+    {
+        regs->dxc = DXC_DECIMAL;
+        ARCH_DEP(program_interrupt) (regs, PGM_DATA_EXCEPTION);
+    }
+
+    /* Convert decimal number to long DFP format */
+    decimal64FromNumber(&x1, &d, &set);
+
+    /* Load result into FP register r1 */
+    ARCH_DEP(dfp_reg_from_decimal64)(r1, &x1, regs);
+
+} /* end DEF_INST(convert_packed_to_dfp_long) */
+#endif /*defined(FEATURE_080_DFP_PACK_CONV_FACILITY)*/
+
+
 #if defined( FEATURE_037_FP_EXTENSION_FACILITY )
 /*-------------------------------------------------------------------*/
 /* B949 CFXTR - Convert from DFP Extended Reg. to fixed 32   [RRF-e] */
@@ -2714,7 +3056,7 @@ BYTE            dxc;                    /* Data exception code       */
 
     RRF_MM(inst, regs, r1, r2, m3, m4);
 
-    TRAN_FLOAT_INSTR_CHECK( regs );
+    TXF_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
     DFPREGPAIR_CHECK(r2, regs);
 
@@ -2765,7 +3107,7 @@ BYTE            dxc;                    /* Data exception code       */
 
     RRF_MM(inst, regs, r1, r2, m3, m4);
 
-    TRAN_FLOAT_INSTR_CHECK( regs );
+    TXF_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
 
     /* Initialise the context for long DFP */
@@ -2815,7 +3157,7 @@ BYTE            dxc;                    /* Data exception code       */
 
     RRF_MM(inst, regs, r1, r2, m3, m4);
 
-    TRAN_FLOAT_INSTR_CHECK( regs );
+    TXF_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
     DFPREGPAIR_CHECK(r2, regs);
 
@@ -2866,7 +3208,7 @@ BYTE            dxc;                    /* Data exception code       */
 
     RRF_MM(inst, regs, r1, r2, m3, m4);
 
-    TRAN_FLOAT_INSTR_CHECK( regs );
+    TXF_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
 
     /* Initialise the context for long DFP */
@@ -2917,7 +3259,7 @@ BYTE            dxc;                    /* Data exception code       */
 
     RRF_M(inst, regs, r1, r2, m3);
 
-    TRAN_FLOAT_INSTR_CHECK( regs );
+    TXF_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
     DFPREGPAIR_CHECK(r2, regs);
 
@@ -2968,7 +3310,7 @@ BYTE            dxc;                    /* Data exception code       */
 
     RRF_M(inst, regs, r1, r2, m3);
 
-    TRAN_FLOAT_INSTR_CHECK( regs );
+    TXF_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
 
     /* Initialise the context for long DFP */
@@ -3019,7 +3361,7 @@ BYTE            dxc;                    /* Data exception code       */
 
     RRF_MM(inst, regs, r1, r2, m3, m4);
 
-    TRAN_FLOAT_INSTR_CHECK( regs );
+    TXF_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
     DFPREGPAIR_CHECK(r2, regs);
 
@@ -3070,7 +3412,7 @@ BYTE            dxc;                    /* Data exception code       */
 
     RRF_MM(inst, regs, r1, r2, m3, m4);
 
-    TRAN_FLOAT_INSTR_CHECK( regs );
+    TXF_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
 
     /* Initialise the context for long DFP */
@@ -3121,7 +3463,7 @@ BYTE            pwork[18];              /* 33-digit packed work area */
 
     RRF_M4(inst, regs, r1, r2, m4);
 
-    TRAN_FLOAT_INSTR_CHECK( regs );
+    TXF_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
     DFPREGPAIR_CHECK(r2, regs);
     ODD_CHECK(r1, regs);
@@ -3170,7 +3512,7 @@ BYTE            pwork[9];               /* 17-digit packed work area */
 
     RRF_M4(inst, regs, r1, r2, m4);
 
-    TRAN_FLOAT_INSTR_CHECK( regs );
+    TXF_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
 
     /* Initialise the context for long DFP */
@@ -3216,7 +3558,7 @@ BYTE            pwork[17];              /* 33-digit packed work area */
 
     RRE(inst, regs, r1, r2);
 
-    TRAN_FLOAT_INSTR_CHECK( regs );
+    TXF_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
     DFPREGPAIR_CHECK(r2, regs);
     ODD_CHECK(r1, regs);
@@ -3265,7 +3607,7 @@ BYTE            pwork[9];               /* 17-digit packed work area */
 
     RRE(inst, regs, r1, r2);
 
-    TRAN_FLOAT_INSTR_CHECK( regs );
+    TXF_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
 
     /* Initialise the context for long DFP */
@@ -3313,8 +3655,9 @@ int             cc;                     /* Condition code            */
 char            zoned[CZXT_MAXLEN];     /* Zoned decimal result      */
 
     RSL_RM(inst, regs, r1, l2, b2, effective_addr2, m3);
+    PER_ZEROADDR_XCHECK( regs, b2 );
 
-    TRAN_FLOAT_INSTR_CHECK( regs );
+    TXF_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
     DFPREGPAIR_CHECK(r1, regs);
 
@@ -3366,8 +3709,9 @@ int             cc;                     /* Condition code            */
 char            zoned[CZDT_MAXLEN];     /* Zoned decimal result      */
 
     RSL_RM(inst, regs, r1, l2, b2, effective_addr2, m3);
+    PER_ZEROADDR_XCHECK( regs, b2 );
 
-    TRAN_FLOAT_INSTR_CHECK( regs );
+    TXF_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
 
     /* Program check if operand length exceeds 16 */
@@ -3403,6 +3747,115 @@ char            zoned[CZDT_MAXLEN];     /* Zoned decimal result      */
 #endif /*defined(FEATURE_048_DFP_ZONE_CONV_FACILITY)*/
 
 
+#if defined(FEATURE_080_DFP_PACK_CONV_FACILITY)
+/*-------------------------------------------------------------------*/
+/* EDAD CPXT  - Convert to packed from DFP Extended          [RSL-b] */
+/*-------------------------------------------------------------------*/
+DEF_INST(convert_dfp_ext_to_packed)
+{
+    int             r1, m3;                 /* Values of R and M fields  */
+    int             l2;                     /* Operand length minus 1    */
+    int             b2;                     /* Base of effective addr    */
+    VADR            effective_addr2;        /* Effective address         */
+    decimal128      x1;                     /* Extended DFP value        */
+    decNumber       dwork, dcoeff;          /* Working decimal numbers   */
+    decContext      set;                    /* Working context           */
+    int             cc;                     /* Condition code            */
+    char            packed[CPXT_MAXLEN];    /* Packed decimal result     */
+
+    RSL_RM(inst, regs, r1, l2, b2, effective_addr2, m3);
+    PER_ZEROADDR_XCHECK(regs, b2);
+
+    TXF_FLOAT_INSTR_CHECK(regs);
+    DFPINST_CHECK(regs);
+    DFPREGPAIR_CHECK(r1, regs);
+
+    /* Program check if operand length exceeds 18 */
+    if (l2 > CPXT_MAXLEN - 1)
+    {
+        ARCH_DEP(program_interrupt) (regs, PGM_SPECIFICATION_EXCEPTION);
+    }
+
+    /* Initialise the context for extended DFP */
+    decContextDefault(&set, DEC_INIT_DECIMAL128);
+
+    /* Load DFP extended number from FP register r1 */
+    ARCH_DEP(dfp_reg_to_decimal128)(r1, &x1, regs);
+    decimal128ToNumber(&x1, &dwork);
+
+    /* Extract coefficient only for Inf and NaN */
+    if (decNumberIsNaN(&dwork) || (decNumberIsInfinite(&dwork)))
+    {
+        dfp128_clear_cf_and_bxcf(&x1);
+        decimal128ToNumber(&x1, &dcoeff);
+    }
+
+    /* Convert number to packed decimal and set condition code */
+    cc = dfp_number_to_packed(&dwork, &dcoeff, packed, l2, m3, &set);
+
+    /* Store the zoned decimal result at the operand location */
+    ARCH_DEP(vstorec) (packed, l2, effective_addr2, b2, regs);
+
+    /* Set the condition code in the PSW */
+    regs->psw.cc = cc;
+
+} /* end DEF_INST(convert_dfp_ext_to_zoned) */
+
+
+/*-------------------------------------------------------------------*/
+/* EDAC CPDT  - Convert to packed from DFP Long               [RSL-b] */
+/*-------------------------------------------------------------------*/
+DEF_INST(convert_dfp_long_to_packed)
+{
+    int             r1, m3;                 /* Values of R and M fields  */
+    int             l2;                     /* Operand length minus 1    */
+    int             b2;                     /* Base of effective addr    */
+    VADR            effective_addr2;        /* Effective address         */
+    decimal64       x1;                     /* Long DFP value            */
+    decNumber       dwork, dcoeff;          /* Working decimal numbers   */
+    decContext      set;                    /* Working context           */
+    int             cc;                     /* Condition code            */
+    char            packed[CPDT_MAXLEN];    /* Packed decimal result     */
+
+    RSL_RM(inst, regs, r1, l2, b2, effective_addr2, m3);
+    PER_ZEROADDR_XCHECK(regs, b2);
+
+    TXF_FLOAT_INSTR_CHECK(regs);
+    DFPINST_CHECK(regs);
+
+    /* Program check if operand length exceeds 8 */
+    if (l2 > CPDT_MAXLEN - 1)
+    {
+        ARCH_DEP(program_interrupt) (regs, PGM_SPECIFICATION_EXCEPTION);
+    }
+
+    /* Initialise the context for long DFP */
+    decContextDefault(&set, DEC_INIT_DECIMAL64);
+
+    /* Load DFP long number from FP register r1 */
+    ARCH_DEP(dfp_reg_to_decimal64)(r1, &x1, regs);
+    decimal64ToNumber(&x1, &dwork);
+
+    /* Extract coefficient only for Inf and NaN */
+    if (decNumberIsNaN(&dwork) || (decNumberIsInfinite(&dwork)))
+    {
+        dfp64_clear_cf_and_bxcf(&x1);
+        decimal64ToNumber(&x1, &dcoeff);
+    }
+
+    /* Convert number to zoned decimal and set condition code */
+    cc = dfp_number_to_packed(&dwork, &dcoeff, packed, l2, m3, &set);
+
+    /* Store the zoned decimal result at the operand location */
+    ARCH_DEP(vstorec) (packed, l2, effective_addr2, b2, regs);
+
+    /* Set the condition code in the PSW */
+    regs->psw.cc = cc;
+
+} /* end DEF_INST(convert_dfp_long_to_zoned) */
+#endif /*defined(FEATURE_080_DFP_PACK_CONV_FACILITY)*/
+
+
 /*-------------------------------------------------------------------*/
 /* B3D9 DXTR  - Divide DFP Extended Register                 [RRF-a] */
 /*-------------------------------------------------------------------*/
@@ -3416,7 +3869,7 @@ BYTE            dxc;                    /* Data exception code       */
 
     RRR(inst, regs, r1, r2, r3);
 
-    TRAN_FLOAT_INSTR_CHECK( regs );
+    TXF_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
     DFPREGPAIR3_CHECK(r1, r2, r3, regs);
 
@@ -3461,7 +3914,7 @@ BYTE            dxc;                    /* Data exception code       */
 
     RRR(inst, regs, r1, r2, r3);
 
-    TRAN_FLOAT_INSTR_CHECK( regs );
+    TXF_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
 
     /* Initialise the context for long DFP */
@@ -3505,7 +3958,7 @@ S64             exponent;               /* Biased exponent           */
 
     RRE(inst, regs, r1, r2);
 
-    TRAN_FLOAT_INSTR_CHECK( regs );
+    TXF_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
     DFPREGPAIR_CHECK(r2, regs);
 
@@ -3547,7 +4000,7 @@ S64             exponent;               /* Biased exponent           */
 
     RRE(inst, regs, r1, r2);
 
-    TRAN_FLOAT_INSTR_CHECK( regs );
+    TXF_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
 
     /* Initialise the context for long DFP */
@@ -3588,7 +4041,7 @@ S64             digits;                 /* Number of decimal digits  */
 
     RRE(inst, regs, r1, r2);
 
-    TRAN_FLOAT_INSTR_CHECK( regs );
+    TXF_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
     DFPREGPAIR_CHECK(r2, regs);
 
@@ -3632,7 +4085,7 @@ S64             digits;                 /* Number of decimal digits  */
 
     RRE(inst, regs, r1, r2);
 
-    TRAN_FLOAT_INSTR_CHECK( regs );
+    TXF_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
 
     /* Initialise the context for long DFP */
@@ -3675,7 +4128,7 @@ S64             bexp;                   /* Biased exponent           */
 
     RRF_M(inst, regs, r1, r2, r3);
 
-    TRAN_FLOAT_INSTR_CHECK( regs );
+    TXF_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
     DFPREGPAIR2_CHECK(r1, r3, regs);
 
@@ -3746,7 +4199,7 @@ S64             bexp;                   /* Biased exponent           */
 
     RRF_M(inst, regs, r1, r2, r3);
 
-    TRAN_FLOAT_INSTR_CHECK( regs );
+    TXF_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
 
     /* Initialise the context for long DFP */
@@ -3816,7 +4269,7 @@ BYTE            dxc;                    /* Data exception code       */
 
     RRE(inst, regs, r1, r2);
 
-    TRAN_FLOAT_INSTR_CHECK( regs );
+    TXF_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
     DFPREGPAIR2_CHECK(r1, r2, regs);
 
@@ -3870,7 +4323,7 @@ BYTE            dxc;                    /* Data exception code       */
 
     RRE(inst, regs, r1, r2);
 
-    TRAN_FLOAT_INSTR_CHECK( regs );
+    TXF_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
 
     /* Initialise the context for long DFP */
@@ -3923,7 +4376,7 @@ BYTE            dxc;                    /* Data exception code       */
 
     RRF_MM(inst, regs, r1, r2, m3, m4);
 
-    TRAN_FLOAT_INSTR_CHECK( regs );
+    TXF_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
     DFPREGPAIR2_CHECK(r1, r2, regs);
 
@@ -3999,7 +4452,7 @@ BYTE            dxc;                    /* Data exception code       */
 
     RRF_MM(inst, regs, r1, r2, m3, m4);
 
-    TRAN_FLOAT_INSTR_CHECK( regs );
+    TXF_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
 
     /* Initialise the context for long DFP */
@@ -4075,7 +4528,7 @@ BYTE            dxc;                    /* Data exception code       */
 
     RRF_M4(inst, regs, r1, r2, m4);
 
-    TRAN_FLOAT_INSTR_CHECK( regs );
+    TXF_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
     DFPREGPAIR_CHECK(r1, regs);
 
@@ -4144,7 +4597,7 @@ BYTE            dxc;                    /* Data exception code       */
 
     RRF_M4(inst, regs, r1, r2, m4);
 
-    TRAN_FLOAT_INSTR_CHECK( regs );
+    TXF_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
 
     /* Initialise the context for long DFP */
@@ -4214,7 +4667,7 @@ BYTE            dxc;                    /* Data exception code       */
 
     RRF_MM(inst, regs, r1, r2, m3, m4);
 
-    TRAN_FLOAT_INSTR_CHECK( regs );
+    TXF_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
     DFPREGPAIR_CHECK(r2, regs);
 
@@ -4301,7 +4754,7 @@ BYTE            dxc;                    /* Data exception code       */
 
     RRF_MM(inst, regs, r1, r2, m3, m4);
 
-    TRAN_FLOAT_INSTR_CHECK( regs );
+    TXF_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
 
     /* Initialise the context for long DFP */
@@ -4384,7 +4837,7 @@ BYTE            dxc;                    /* Data exception code       */
 
     RRR(inst, regs, r1, r2, r3);
 
-    TRAN_FLOAT_INSTR_CHECK( regs );
+    TXF_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
     DFPREGPAIR3_CHECK(r1, r2, r3, regs);
 
@@ -4429,7 +4882,7 @@ BYTE            dxc;                    /* Data exception code       */
 
     RRR(inst, regs, r1, r2, r3);
 
-    TRAN_FLOAT_INSTR_CHECK( regs );
+    TXF_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
 
     /* Initialise the context for long DFP */
@@ -4473,7 +4926,7 @@ BYTE            dxc;                    /* Data exception code       */
 
     RRF_RM(inst, regs, r1, r2, r3, m4);
 
-    TRAN_FLOAT_INSTR_CHECK( regs );
+    TXF_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
     DFPREGPAIR3_CHECK(r1, r2, r3, regs);
 
@@ -4518,7 +4971,7 @@ BYTE            dxc;                    /* Data exception code       */
 
     RRF_RM(inst, regs, r1, r2, r3, m4);
 
-    TRAN_FLOAT_INSTR_CHECK( regs );
+    TXF_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
 
     /* Initialise the context for long DFP */
@@ -4563,7 +5016,7 @@ BYTE            dxc;                    /* Data exception code       */
 
     RRF_RM(inst, regs, r1, r2, r3, m4);
 
-    TRAN_FLOAT_INSTR_CHECK( regs );
+    TXF_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
     DFPREGPAIR2_CHECK(r1, r3, regs);
 
@@ -4620,7 +5073,7 @@ BYTE            dxc;                    /* Data exception code       */
 
     RRF_RM(inst, regs, r1, r2, r3, m4);
 
-    TRAN_FLOAT_INSTR_CHECK( regs );
+    TXF_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
 
     /* Initialise the context for long DFP */
@@ -4668,6 +5121,7 @@ BYTE            dxc;                    /* Data exception code       */
 DEF_INST(shift_coefficient_left_dfp_ext)
 {
 int             r1, r3;                 /* Values of R fields        */
+int             x2;                     /* Index register            */
 int             b2;                     /* Base of effective addr    */
 VADR            effective_addr2;        /* Effective address         */
 decimal128      x1, x3;                 /* Extended DFP values       */
@@ -4675,9 +5129,9 @@ decNumber       d1, d3;                 /* Working decimal numbers   */
 decContext      set;                    /* Working context           */
 int             n;                      /* Number of bits to shift   */
 
-    RXF(inst, regs, r1, r3, b2, effective_addr2);
+    RXF(inst, regs, r1, r3, x2, b2, effective_addr2);
 
-    TRAN_FLOAT_INSTR_CHECK( regs );
+    TXF_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
     DFPREGPAIR2_CHECK(r1, r3, regs);
 
@@ -4730,6 +5184,7 @@ int             n;                      /* Number of bits to shift   */
 DEF_INST(shift_coefficient_left_dfp_long)
 {
 int             r1, r3;                 /* Values of R fields        */
+int             x2;                     /* Index register            */
 int             b2;                     /* Base of effective addr    */
 VADR            effective_addr2;        /* Effective address         */
 decimal64       x1, x3;                 /* Long DFP values           */
@@ -4737,9 +5192,9 @@ decNumber       d1, d3;                 /* Working decimal numbers   */
 decContext      set;                    /* Working context           */
 int             n;                      /* Number of bits to shift   */
 
-    RXF(inst, regs, r1, r3, b2, effective_addr2);
+    RXF(inst, regs, r1, r3, x2, b2, effective_addr2);
 
-    TRAN_FLOAT_INSTR_CHECK( regs );
+    TXF_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
 
     /* Isolate rightmost 6 bits of second operand address */
@@ -4791,6 +5246,7 @@ int             n;                      /* Number of bits to shift   */
 DEF_INST(shift_coefficient_right_dfp_ext)
 {
 int             r1, r3;                 /* Values of R fields        */
+int             x2;                     /* Index register            */
 int             b2;                     /* Base of effective addr    */
 VADR            effective_addr2;        /* Effective address         */
 decimal128      x1, x3;                 /* Extended DFP values       */
@@ -4798,9 +5254,9 @@ decNumber       d1, d3;                 /* Working decimal numbers   */
 decContext      set;                    /* Working context           */
 int             n;                      /* Number of bits to shift   */
 
-    RXF(inst, regs, r1, r3, b2, effective_addr2);
+    RXF(inst, regs, r1, r3, x2, b2, effective_addr2);
 
-    TRAN_FLOAT_INSTR_CHECK( regs );
+    TXF_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
     DFPREGPAIR2_CHECK(r1, r3, regs);
 
@@ -4853,6 +5309,7 @@ int             n;                      /* Number of bits to shift   */
 DEF_INST(shift_coefficient_right_dfp_long)
 {
 int             r1, r3;                 /* Values of R fields        */
+int             x2;                     /* Index register            */
 int             b2;                     /* Base of effective addr    */
 VADR            effective_addr2;        /* Effective address         */
 decimal64       x1, x3;                 /* Long DFP values           */
@@ -4860,9 +5317,9 @@ decNumber       d1, d3;                 /* Working decimal numbers   */
 decContext      set;                    /* Working context           */
 int             n;                      /* Number of bits to shift   */
 
-    RXF(inst, regs, r1, r3, b2, effective_addr2);
+    RXF(inst, regs, r1, r3, x2, b2, effective_addr2);
 
-    TRAN_FLOAT_INSTR_CHECK( regs );
+    TXF_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
 
     /* Isolate rightmost 6 bits of second operand address */
@@ -4921,7 +5378,7 @@ BYTE            dxc;                    /* Data exception code       */
 
     RRR(inst, regs, r1, r2, r3);
 
-    TRAN_FLOAT_INSTR_CHECK( regs );
+    TXF_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
     DFPREGPAIR3_CHECK(r1, r2, r3, regs);
 
@@ -4971,7 +5428,7 @@ BYTE            dxc;                    /* Data exception code       */
 
     RRR(inst, regs, r1, r2, r3);
 
-    TRAN_FLOAT_INSTR_CHECK( regs );
+    TXF_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
 
     /* Initialise the context for long DFP */
@@ -5013,6 +5470,7 @@ BYTE            dxc;                    /* Data exception code       */
 DEF_INST(test_data_class_dfp_ext)
 {
 int             r1;                     /* Value of R field          */
+int             x2;                     /* Index register            */
 int             b2;                     /* Base of effective addr    */
 VADR            effective_addr2;        /* Effective address         */
 decimal128      x1;                     /* Extended DFP value        */
@@ -5020,9 +5478,9 @@ decNumber       d1;                     /* Working decimal number    */
 decContext      set;                    /* Working context           */
 U32             bits;                   /* Low 12 bits of address    */
 
-    RXE(inst, regs, r1, b2, effective_addr2);
+    RXE(inst, regs, r1, x2, b2, effective_addr2);
 
-    TRAN_FLOAT_INSTR_CHECK( regs );
+    TXF_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
     DFPREGPAIR_CHECK(r1, regs);
 
@@ -5048,6 +5506,7 @@ U32             bits;                   /* Low 12 bits of address    */
 DEF_INST(test_data_class_dfp_long)
 {
 int             r1;                     /* Value of R field          */
+int             x2;                     /* Index register            */
 int             b2;                     /* Base of effective addr    */
 VADR            effective_addr2;        /* Effective address         */
 decimal64       x1;                     /* Long DFP value            */
@@ -5055,9 +5514,9 @@ decNumber       d1;                     /* Working decimal number    */
 decContext      set;                    /* Working context           */
 U32             bits;                   /* Low 12 bits of address    */
 
-    RXE(inst, regs, r1, b2, effective_addr2);
+    RXE(inst, regs, r1, x2, b2, effective_addr2);
 
-    TRAN_FLOAT_INSTR_CHECK( regs );
+    TXF_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
 
     /* Initialise the context for long DFP */
@@ -5082,6 +5541,7 @@ U32             bits;                   /* Low 12 bits of address    */
 DEF_INST(test_data_class_dfp_short)
 {
 int             r1;                     /* Value of R field          */
+int             x2;                     /* Index register            */
 int             b2;                     /* Base of effective addr    */
 VADR            effective_addr2;        /* Effective address         */
 decimal32       x1;                     /* Short DFP value           */
@@ -5089,9 +5549,9 @@ decNumber       d1;                     /* Working decimal number    */
 decContext      set;                    /* Working context           */
 U32             bits;                   /* Low 12 bits of address    */
 
-    RXE(inst, regs, r1, b2, effective_addr2);
+    RXE(inst, regs, r1, x2, b2, effective_addr2);
 
-    TRAN_FLOAT_INSTR_CHECK( regs );
+    TXF_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
 
     /* Initialise the context for short DFP */
@@ -5116,6 +5576,7 @@ U32             bits;                   /* Low 12 bits of address    */
 DEF_INST(test_data_group_dfp_ext)
 {
 int             r1;                     /* Value of R field          */
+int             x2;                     /* Index register            */
 int             b2;                     /* Base of effective addr    */
 VADR            effective_addr2;        /* Effective address         */
 decimal128      x1;                     /* Extended DFP value        */
@@ -5124,9 +5585,9 @@ decContext      set;                    /* Working context           */
 U32             bits;                   /* Low 12 bits of address    */
 int             lmd;                    /* Leftmost digit            */
 
-    RXE(inst, regs, r1, b2, effective_addr2);
+    RXE(inst, regs, r1, x2, b2, effective_addr2);
 
-    TRAN_FLOAT_INSTR_CHECK( regs );
+    TXF_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
     DFPREGPAIR_CHECK(r1, regs);
 
@@ -5157,6 +5618,7 @@ int             lmd;                    /* Leftmost digit            */
 DEF_INST(test_data_group_dfp_long)
 {
 int             r1;                     /* Value of R field          */
+int             x2;                     /* Index register            */
 int             b2;                     /* Base of effective addr    */
 VADR            effective_addr2;        /* Effective address         */
 decimal64       x1;                     /* Long DFP value            */
@@ -5165,9 +5627,9 @@ decContext      set;                    /* Working context           */
 U32             bits;                   /* Low 12 bits of address    */
 int             lmd;                    /* Leftmost digit            */
 
-    RXE(inst, regs, r1, b2, effective_addr2);
+    RXE(inst, regs, r1, x2, b2, effective_addr2);
 
-    TRAN_FLOAT_INSTR_CHECK( regs );
+    TXF_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
 
     /* Initialise the context for long DFP */
@@ -5197,6 +5659,7 @@ int             lmd;                    /* Leftmost digit            */
 DEF_INST(test_data_group_dfp_short)
 {
 int             r1;                     /* Value of R field          */
+int             x2;                     /* Index register            */
 int             b2;                     /* Base of effective addr    */
 VADR            effective_addr2;        /* Effective address         */
 decimal32       x1;                     /* Short DFP value           */
@@ -5205,9 +5668,9 @@ decContext      set;                    /* Working context           */
 U32             bits;                   /* Low 12 bits of address    */
 int             lmd;                    /* Leftmost digit            */
 
-    RXE(inst, regs, r1, b2, effective_addr2);
+    RXE(inst, regs, r1, x2, b2, effective_addr2);
 
-    TRAN_FLOAT_INSTR_CHECK( regs );
+    TXF_FLOAT_INSTR_CHECK( regs );
     DFPINST_CHECK(regs);
 
     /* Initialise the context for short DFP */

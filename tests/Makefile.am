@@ -13,6 +13,7 @@ EXTRA_DIST =                    \
      awsbsf.aws                 \
      awsbsf.tst                 \
      axtr.txt                   \
+     BEAR.txt                   \
      bfp-001-divtoint.asm       \
      bfp-001-divtoint.core      \
      bfp-001-divtoint.list      \
@@ -105,10 +106,33 @@ EXTRA_DIST =                    \
      bfp-023-threads.core       \
      bfp-023-threads.list       \
      bfp-023-threads.sptst      \
+     bfp-001-divtoint.pdf       \
+     bfp-002-loadr.pdf          \
+     bfp-003-loadfpi.pdf        \
+     bfp-004-cvttolog.pdf       \
+     bfp-005-cvttolog64.pdf     \
+     bfp-006-cvttofix.pdf       \
+     bfp-007-cvttofix64.pdf     \
+     bfp-008-cvtfrlog.pdf       \
+     bfp-009-cvtfrlog64.pdf     \
+     bfp-010-cvtfrfix.pdf       \
+     bfp-011-cvtfrfix64.pdf     \
+     bfp-012-loadtest.pdf       \
+     bfp-013-comps.pdf          \
+     bfp-014-divide.pdf         \
+     bfp-015-sqrt.pdf           \
+     bfp-016-add.pdf            \
+     bfp-017-loadl.pdf          \
+     bfp-018-subtract.pdf       \
+     bfp-019-multiply.pdf       \
+     bfp-020-multlonger.pdf     \
+     bfp-021-multadd.pdf        \
+     bfp-022-multsub.pdf        \
      bim-001-add-sub.asm        \
      bim-001-add-sub.core       \
      bim-001-add-sub.list       \
      bim-001-add-sub.tst        \
+     bim-001-add-sub.pdf        \
      brc.txt                    \
      CBUC.asm                   \
      CBUC.core                  \
@@ -150,6 +174,26 @@ EXTRA_DIST =                    \
      CLCL.list                  \
      CLCL.pdf                   \
      CLCL.tst                   \
+     CLCLE-01-unaligned-buffers.asm   \
+     CLCLE-01-unaligned-buffers.core  \
+     CLCLE-01-unaligned-buffers.list  \
+     CLCLE-01-unaligned-buffers.pdf   \
+     CLCLE-01-unaligned-buffers.tst   \
+     CLCLE-02-unaligned-buffers.asm   \
+     CLCLE-02-unaligned-buffers.core  \
+     CLCLE-02-unaligned-buffers.list  \
+     CLCLE-02-unaligned-buffers.pdf   \
+     CLCLE-02-unaligned-buffers.tst   \
+     CLCLE-03-basic.asm               \
+     CLCLE-03-basic.core              \
+     CLCLE-03-basic.list              \
+     CLCLE-03-basic.pdf               \
+     CLCLE-03-basic.tst               \
+     CLCLE-04-performance.asm         \
+     CLCLE-04-performance.core        \
+     CLCLE-04-performance.list        \
+     CLCLE-04-performance.pdf         \
+     CLCLE-04-performance.tst         \
      cmd-abs-2K.subxxx          \
      cmd-abs-4K.subxxx          \
      cmd-abs.xxx                \
@@ -170,9 +214,27 @@ EXTRA_DIST =                    \
      csxtr.assemble             \
      csxtr.listing              \
      csxtr.tst                  \
+     CUSE-01-basic.asm          \
+     CUSE-01-basic.core         \
+     CUSE-01-basic.list         \
+     CUSE-01-basic.pdf          \
+     CUSE-01-basic.tst          \
+     CUSE-02-performance.asm    \
+     CUSE-02-performance.core   \
+     CUSE-02-performance.list   \
+     CUSE-02-performance.pdf    \
+     CUSE-02-performance.tst    \
      cxgbr.txt                  \
      cxgtr.txt                  \
      dc-float.asm               \
+     dfp-080-from-packed.asm    \
+     dfp-080-from-packed.core   \
+     dfp-080-from-packed.list   \
+     dfp-080-from-packed.tst    \
+     dfp-080-to-packed.asm      \
+     dfp-080-to-packed.core     \
+     dfp-080-to-packed.list     \
+     dfp-080-to-packed.tst      \
      diag24.txt                 \
      diag8.txt                  \
      digest.assemble            \
@@ -198,6 +260,7 @@ EXTRA_DIST =                    \
      fix-page.core              \
      fix-page.list              \
      fix-page.tst               \
+     fix-page.pdf               \
      fixtr.txt                  \
      hetbsf-bzip2.het           \
      hetbsf.het                 \
@@ -344,6 +407,11 @@ EXTRA_DIST =                    \
      mvcos-001.tst              \
      mvcos.txt                  \
      mxtr.txt                   \
+     PERZAD.asm                 \
+     PERZAD.core                \
+     PERZAD.list                \
+     PERZAD.pdf                 \
+     PERZAD.tst                 \
      pfpo.asm                   \
      pfpo.core                  \
      pfpo.list                  \
@@ -392,6 +460,7 @@ EXTRA_DIST =                    \
      skey390z.pdf               \
      skey390z.tst               \
      srdt.txt                   \
+     SRSTU.tst                  \
      ssk370.xxx                 \
      sske.assemble              \
      sske.listing               \
@@ -401,6 +470,7 @@ EXTRA_DIST =                    \
      stfl.asm                   \
      stfl.core                  \
      stfl.list                  \
+     stfl.pdf                   \
      stfl.tst                   \
      stfle.txt                  \
      stidp-esa390.subtst        \
@@ -425,6 +495,50 @@ EXTRA_DIST =                    \
      str-001-srst.core          \
      str-001-srst.list          \
      str-001-srst.tst           \
+     str-001-cksm.pdf           \
+     str-001-clst.pdf           \
+     str-001-mvst.pdf           \
+     str-001-srst.pdf           \
+     TRE-01-basic.asm           \
+     TRE-01-basic.core          \
+     TRE-01-basic.list          \
+     TRE-01-basic.pdf           \
+     TRE-01-basic.tst           \
+     TRE-02-performance.asm     \
+     TRE-02-performance.core    \
+     TRE-02-performance.list    \
+     TRE-02-performance.pdf     \
+     TRE-02-performance.tst     \
+     TRTE-01-basic.asm          \
+     TRTE-01-basic.core         \
+     TRTE-01-basic.list         \
+     TRTE-01-basic.pdf          \
+     TRTE-01-basic.tst          \
+     TRTE-02-performance.asm    \
+     TRTE-02-performance.core   \
+     TRTE-02-performance.list   \
+     TRTE-02-performance.pdf    \
+     TRTE-02-performance.tst    \
+     TRTR-01-basic.asm          \
+     TRTR-01-basic.core         \
+     TRTR-01-basic.list         \
+     TRTR-01-basic.pdf          \
+     TRTR-01-basic.tst          \
+     TRTR-02-performance.asm    \
+     TRTR-02-performance.core   \
+     TRTR-02-performance.list   \
+     TRTR-02-performance.pdf    \
+     TRTR-02-performance.tst    \
+     TRTRE-01-basic.asm         \
+     TRTRE-01-basic.core        \
+     TRTRE-01-basic.list        \
+     TRTRE-01-basic.pdf         \
+     TRTRE-01-basic.tst         \
+     TRTRE-02-performance.asm   \
+     TRTRE-02-performance.core  \
+     TRTRE-02-performance.list  \
+     TRTRE-02-performance.pdf   \
+     TRTRE-02-performance.tst   \
      stsi.txt                   \
      sus40002.txt               \
      tape.240k-2.txt            \
@@ -437,6 +551,11 @@ EXTRA_DIST =                    \
      tape.list                  \
      tape.pdf                   \
      tape.tst                   \
+     TXFPER.asm                 \
+     TXFPER.core                \
+     TXFPER.list                \
+     TXFPER.pdf                 \
+     TXFPER.tst                 \
      tapebsf.subtst             \
      tapepos.txt                \
      tbedr.txt                  \

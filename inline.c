@@ -1,6 +1,6 @@
 /* INLINE.C     (C) Copyright Jan Jaeger, 1999-2012                  */
 /*              (C) Copyright Roger Bowler, 1999-2012                */
-/*              (C) and others 2013-2021                             */
+/*              (C) and others 2013-2022                             */
 /*              Inline function definitions                          */
 /*                                                                   */
 /*   Released under "The Q Public License Version 1"                 */
@@ -14,6 +14,7 @@
 /* ESAME low-address protection          v208d Roger Bowler 20/01/01 */
 /* ESAME subspace replacement            v208e Roger Bowler 27/01/01 */
 /* Multiply/Divide Logical instructions         Vic Cross 13/02/2001 */
+/* PER 1 GRA                                           Fish Jan 2022 */
 
 #include "hstdinc.h"
 
@@ -62,6 +63,18 @@ extern inline void ARCH_DEP( store_fullword_absolute )  ( U32 value, RADR addr, 
 #else
   extern inline BYTE* ARCH_DEP( fetch_main_absolute )( RADR addr, REGS* regs );
 #endif
+
+extern inline void ARCH_DEP( per1_gra )( REGS* regs );
+extern inline bool ARCH_DEP( is_per3_event_suppressed )( REGS* regs, U32 cr9_per_event );
+extern inline void ARCH_DEP( per3_zero )( REGS* regs );
+extern inline void ARCH_DEP( per3_zero_check )( REGS* regs, int r1 );
+extern inline void ARCH_DEP( per3_zero_check2 )( REGS* regs, int r1, int r2 );
+extern inline void ARCH_DEP( per3_zero_lcheck )( REGS* regs, int r1, int l1 );
+extern inline void ARCH_DEP( per3_zero_lcheck2 )( REGS* regs, int r1, int l1, int r2, int l2 );
+extern inline void ARCH_DEP( per3_zero_l24check )( REGS* regs, int r1, int l1 );
+extern inline void ARCH_DEP( per3_zero_l24check2 )( REGS* regs, int r1, int l1, int r2, int l2 );
+extern inline void ARCH_DEP( per3_zero_xcheck )( REGS* regs, int b1 );
+extern inline void ARCH_DEP( per3_zero_xcheck2 )( REGS* regs, int x2, int b2 );
 
 /*-------------------------------------------------------------------*/
 /*          (delineates ARCH_DEP from non-arch_dep)                  */

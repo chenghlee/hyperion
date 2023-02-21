@@ -1,6 +1,6 @@
 /* CCKDDASD64.C (C) Copyright Roger Bowler, 1999-2012                */
 /*              (C) Copyright Greg Smith, 2002-2012                  */
-/*              (C) and others 2013-2021                             */
+/*              (C) and others 2013-2022                             */
 /*                                                                   */
 /*              CCKD (Compressed CKD) Device Handler                 */
 /*                                                                   */
@@ -63,41 +63,43 @@ char         buf[32];                   /* Work buffer                      */
     initialize_condition( &cckd->cckdiocond );
 
     /* Initialize some variables */
-    obtain_lock (&cckd->filelock);
-    cckd->L1idx = cckd->sfx = cckd->L2_active = -1;
-    dev->cache = cckd->free_idx1st = -1;
-    cckd->fd[0] = dev->fd;
-    fdflags = get_file_accmode_flags( dev->fd );
-    cckd->open[0] = (fdflags & O_RDWR) ? CCKD_OPEN_RW : CCKD_OPEN_RO;
-    for (i = 1; i <= CCKD_MAX_SF; i++)
+    obtain_lock( &cckd->filelock );
     {
-        cckd->fd[i] = -1;
-        cckd->open[i] = CCKD_OPEN_NONE;
+        cckd->L1idx = cckd->sfx = cckd->L2_active = -1;
+        dev->cache = cckd->free_idx1st = -1;
+        cckd->fd[0] = dev->fd;
+        fdflags = get_file_accmode_flags( dev->fd );
+        cckd->open[0] = (fdflags & O_RDWR) ? CCKD_OPEN_RW : CCKD_OPEN_RO;
+        for (i = 1; i <= CCKD_MAX_SF; i++)
+        {
+            cckd->fd[i] = -1;
+            cckd->open[i] = CCKD_OPEN_NONE;
+        }
+        cckd->cckd_maxsize = CCKD64_MAXSIZE;
+
+        /* call the chkdsk function */
+        if (cckd64_chkdsk (dev, 0) < 0)
+            return -1;
+
+        /* Perform initial read */
+        if (cckd64_read_init (dev) < 0)
+            return -1;
+        if (cckd->fbadasd) dev->ckdtrksz = CFBA_BLKGRP_SIZE;
+
+        /* open the shadow files */
+        if (cckd64_sf_init (dev) < 0)
+        {
+            WRMSG (HHC00300, "E", LCSS_DEVNUM);
+            return -1;
+        }
+
+        /* Update the device handler routines */
+        if (cckd->ckddasd)
+            dev->hnd = &cckd_dasd_device_hndinfo;
+        else
+            dev->hnd = &cfba_dasd_device_hndinfo;
     }
-    cckd->cckd_maxsize = CCKD64_MAXSIZE;
-
-    /* call the chkdsk function */
-    if (cckd64_chkdsk (dev, 0) < 0)
-        return -1;
-
-    /* Perform initial read */
-    if (cckd64_read_init (dev) < 0)
-        return -1;
-    if (cckd->fbadasd) dev->ckdtrksz = CFBA_BLKGRP_SIZE;
-
-    /* open the shadow files */
-    if (cckd64_sf_init (dev) < 0)
-    {
-        WRMSG (HHC00300, "E", LCSS_DEVNUM);
-        return -1;
-    }
-
-    /* Update the device handler routines */
-    if (cckd->ckddasd)
-        dev->hnd = &cckd_dasd_device_hndinfo;
-    else
-        dev->hnd = &cfba_dasd_device_hndinfo;
-    release_lock (&cckd->filelock);
+    release_lock( &cckd->filelock );
 
     /* Insert the device into the cckd device queue */
     cckd_lock_devchain(1);
@@ -198,30 +200,32 @@ int             rc, i;                  /* Return code, Loop index   */
     cckd_unlock_devchain();
 
     /* harden the file */
-    obtain_lock (&cckd->filelock);
-    cckd64_harden (dev);
-
-    /* close the shadow files */
-    for (i = 1; i <= cckd->sfn; i++)
+    obtain_lock( &cckd->filelock );
     {
-        cckd64_close (dev, i);
-        cckd->open[i] = 0;
+        cckd64_harden (dev);
+
+        /* close the shadow files */
+        for (i = 1; i <= cckd->sfn; i++)
+        {
+            cckd64_close (dev, i);
+            cckd->open[i] = 0;
+        }
+
+        /* free the level 1 tables */
+        for (i = 0; i <= cckd->sfn; i++)
+            cckd->L1tab[i] = cckd_free (dev, "l1", cckd->L1tab[i]);
+
+        /* reset the device handler */
+        if (cckd->ckddasd)
+            dev->hnd = &ckd_dasd_device_hndinfo;
+        else
+            dev->hnd = &fba_dasd_device_hndinfo;
+
+        /* write some statistics */
+        if (!dev->batch && !cckdblk.nosfd)
+            cckd64_sf_stats (dev);
     }
-
-    /* free the level 1 tables */
-    for (i = 0; i <= cckd->sfn; i++)
-        cckd->L1tab[i] = cckd_free (dev, "l1", cckd->L1tab[i]);
-
-    /* reset the device handler */
-    if (cckd->ckddasd)
-        dev->hnd = &ckd_dasd_device_hndinfo;
-    else
-        dev->hnd = &fba_dasd_device_hndinfo;
-
-    /* write some statistics */
-    if (!dev->batch && !cckdblk.nosfd)
-        cckd64_sf_stats (dev);
-    release_lock (&cckd->filelock);
+    release_lock( &cckd->filelock );
 
     /* Destroy the cckd extension's locks and conditions */
     destroy_lock( &cckd->cckdiolock );
@@ -411,7 +415,7 @@ char            pathname[MAX_PATH];     /* file path in host format  */
 
     return cckd->fd[sfx];
 
-} /* end function cckd_open */
+} /* end function cckd64_open */
 
 /*-------------------------------------------------------------------*/
 /* Close a cckd file                                                 */
@@ -441,7 +445,7 @@ int             rc = 0;                 /* Return code               */
 
     return rc;
 
-} /* end function cckd_close */
+} /* end function cckd64_close */
 
 /*-------------------------------------------------------------------*/
 /* Read from a cckd file                                             */
@@ -488,7 +492,7 @@ int             rc;                     /* Return code               */
 
     return rc;
 
-} /* end function cckd_read */
+} /* end function cckd64_read */
 
 /*-------------------------------------------------------------------*/
 /* Write to a cckd file                                              */
@@ -560,7 +564,7 @@ CCKD64_EXT     *cckd;                   /* -> cckd extension         */
 
     return 0;
 
-} /* end function cckd_ftruncate */
+} /* end function cckd64_ftruncate */
 
 /*-------------------------------------------------------------------*/
 /* Compressed ckd read track image                                   */
@@ -728,24 +732,26 @@ CCKD64_L2ENT    l2;                     /* Copied level 2 entry      */
         return cckd_used( dev );
 
     cckd = dev->cckd_ext;
-    obtain_lock (&cckd->filelock);
 
-    /* Find the last used level 1 table entry */
-    for (L1idx = cckd->cdevhdr[0].num_L1tab - 1; L1idx > 0; L1idx--)
+    obtain_lock( &cckd->filelock );
     {
-        sfx = cckd->sfn;
-        while (cckd->L1tab[sfx][L1idx] == CCKD64_MAXSIZE && sfx > 0) sfx--;
-        if (cckd->L1tab[sfx][L1idx]) break;
-    }
+        /* Find the last used level 1 table entry */
+        for (L1idx = cckd->cdevhdr[0].num_L1tab - 1; L1idx > 0; L1idx--)
+        {
+            sfx = cckd->sfn;
+            while (cckd->L1tab[sfx][L1idx] == CCKD64_MAXSIZE && sfx > 0) sfx--;
+            if (cckd->L1tab[sfx][L1idx]) break;
+        }
 
-    /* Find the last used level 2 table entry */
-    for (l2x = 255; l2x >= 0; l2x--)
-    {
-        rc = cckd64_read_l2ent (dev, &l2, L1idx * 256 + l2x);
-        if (rc < 0 || l2.L2_trkoff != 0) break;
+        /* Find the last used level 2 table entry */
+        for (l2x = 255; l2x >= 0; l2x--)
+        {
+            rc = cckd64_read_l2ent (dev, &l2, L1idx * 256 + l2x);
+            if (rc < 0 || l2.L2_trkoff != 0) break;
+        }
     }
+    release_lock( &cckd->filelock );
 
-    release_lock (&cckd->filelock);
     return (L1idx * 256 + l2x + dev->ckdheads) / dev->ckdheads;
 }
 
@@ -897,24 +903,26 @@ CCKD64_L2ENT    l2;                     /* Copied level 2 entry      */
         return cfba_used( dev );
 
     cckd = dev->cckd_ext;
-    obtain_lock (&cckd->filelock);
 
-    /* Find the last used level 1 table entry */
-    for (L1idx = cckd->cdevhdr[0].num_L1tab - 1; L1idx > 0; L1idx--)
+    obtain_lock( &cckd->filelock );
     {
-        sfx = cckd->sfn;
-        while (cckd->L1tab[sfx][L1idx] == CCKD64_MAXSIZE && sfx > 0) sfx--;
-        if (cckd->L1tab[sfx][L1idx]) break;
-    }
+        /* Find the last used level 1 table entry */
+        for (L1idx = cckd->cdevhdr[0].num_L1tab - 1; L1idx > 0; L1idx--)
+        {
+            sfx = cckd->sfn;
+            while (cckd->L1tab[sfx][L1idx] == CCKD64_MAXSIZE && sfx > 0) sfx--;
+            if (cckd->L1tab[sfx][L1idx]) break;
+        }
 
-    /* Find the last used level 2 table entry */
-    for (l2x = 255; l2x >= 0; l2x--)
-    {
-        rc = cckd64_read_l2ent (dev, &l2, L1idx * 256 + l2x);
-        if (rc < 0 || l2.L2_trkoff != 0) break;
+        /* Find the last used level 2 table entry */
+        for (l2x = 255; l2x >= 0; l2x--)
+        {
+            rc = cckd64_read_l2ent (dev, &l2, L1idx * 256 + l2x);
+            if (rc < 0 || l2.L2_trkoff != 0) break;
+        }
     }
+    release_lock( &cckd->filelock );
 
-    release_lock (&cckd->filelock);
     return (L1idx * 256 + l2x + CFBA_BLKS_PER_GRP) / CFBA_BLKS_PER_GRP;
 }
 
@@ -1088,9 +1096,12 @@ cckd_read_trk_retry:
     if (dev->batch) memset(buf, 0, maxlen);
 
     /* Read the track image */
-    obtain_lock (&cckd->filelock);
-    len = cckd64_read_trkimg (dev, buf, trk, unitstat);
-    release_lock (&cckd->filelock);
+    obtain_lock( &cckd->filelock );
+    {
+        len = cckd64_read_trkimg (dev, buf, trk, unitstat);
+    }
+    release_lock( &cckd->filelock );
+
     cache_setval (CACHE_DEVBUF, lru, len);
 
     obtain_lock (&cckd->cckdiolock);
@@ -1121,7 +1132,7 @@ cckd_read_trk_retry:
 
     return lru;
 
-} /* end function cckd_read_trk */
+} /* end function cckd64_read_trk */
 
 /*-------------------------------------------------------------------*/
 /* Flush updated cache entries for a device                          */
@@ -1492,7 +1503,7 @@ U64             fpos;
         }
         cckd_print_itrace();
     }
-} /* end function cckd_chk_space */
+} /* end function cckd64_chk_space */
 #endif // defined( DEBUG_FREESPACE )
 
 /*-------------------------------------------------------------------*/
@@ -1638,7 +1649,7 @@ cckd_get_space_atend:
 
     return fpos;
 
-} /* end function cckd_get_space */
+} /* end function cckd64_get_space */
 
 /*-------------------------------------------------------------------*/
 /* Release file space                                                */
@@ -1748,7 +1759,7 @@ U64             fsize = size;           /* Free space size           */
 
     CCKD_CHK_SPACE(dev);
 
-} /* end function cckd_rel_space */
+} /* end function cckd64_rel_space */
 
 /*-------------------------------------------------------------------*/
 /* Flush pending free space                                          */
@@ -1870,7 +1881,7 @@ U64             ppos, pos;              /* Free space offsets        */
 
     CCKD_CHK_SPACE(dev);
 
-} /* end function cckd_flush_space */
+} /* end function cckd64_flush_space */
 
 /*-------------------------------------------------------------------*/
 /* Read compressed dasd header                                       */
@@ -1923,7 +1934,7 @@ int             sfx;                    /* File index                */
 
     return 0;
 
-} /* end function cckd_read_chdr */
+} /* end function cckd64_read_chdr */
 
 /*-------------------------------------------------------------------*/
 /* Write compressed dasd header                                      */
@@ -1951,7 +1962,7 @@ int             sfx;                    /* File index                */
 
     return 0;
 
-} /* end function cckd_write_chdr */
+} /* end function cckd64_write_chdr */
 
 /*-------------------------------------------------------------------*/
 /* Read the level 1 table                                            */
@@ -1988,7 +1999,7 @@ int             i;                      /* Work integer              */
     if (cckd64_read (dev, sfx, CCKD64_L1TAB_POS, cckd->L1tab[sfx], len) < 0)
         return -1;
 
-    /* Fix endianess */
+    /* Fix endianness */
     if (cckd->swapend[sfx])
         cckd64_swapend_l1 (cckd->L1tab[sfx], cckd->cdevhdr[sfx].num_L1tab);
 
@@ -2007,7 +2018,7 @@ int             i;                      /* Work integer              */
 
     return 0;
 
-} /* end function cckd_read_l1 */
+} /* end function cckd64_read_l1 */
 
 /*-------------------------------------------------------------------*/
 /* Write the level 1 table                                           */
@@ -2033,7 +2044,7 @@ int             len;                    /* Length of level 1 table   */
 
     return 0;
 
-} /* end function cckd_write_l1 */
+} /* end function cckd64_write_l1 */
 
 /*-------------------------------------------------------------------*/
 /* Update a level 1 table entry                                      */
@@ -2059,7 +2070,7 @@ U64             off;                    /* Offset to l1 entry        */
 
     return 0;
 
-} /* end function cckd_write_l1ent */
+} /* end function cckd64_write_l1ent */
 
 /*-------------------------------------------------------------------*/
 /* Initial read                                                      */
@@ -2108,7 +2119,7 @@ int cckd64_read_init (DEVBLK *dev)
         return -1;
 
     return 0;
-} /* end function cckd_read_init */
+} /* end function cckd64_read_init */
 
 /*-------------------------------------------------------------------*/
 /* Read free space                                                   */
@@ -2219,7 +2230,7 @@ CCKD64_FREEBLK  freeblk;                /* First freeblk read        */
     cckd->free_minsize = CCKD_MIN_FREESIZE( cckd->free_count );
     return 0;
 
-} /* end function cckd_read_fsp */
+} /* end function cckd64_read_fsp */
 
 /*-------------------------------------------------------------------*/
 /* Write the free space                                              */
@@ -2316,7 +2327,7 @@ CCKD64_FREEBLK *fsp = NULL;             /* -> new format free space  */
 
     return 0;
 
-} /* end function cckd_write_fsp */
+} /* end function cckd64_write_fsp */
 
 /*-------------------------------------------------------------------*/
 /* Read a new level 2 table                                          */
@@ -2427,7 +2438,7 @@ BYTE            nullfmt;                /* Null track format         */
 
     return 0;
 
-} /* end function cckd_read_l2 */
+} /* end function cckd64_read_l2 */
 
 /*-------------------------------------------------------------------*/
 /* Purge all l2tab cache entries for a given device                  */
@@ -2548,7 +2559,7 @@ int             fix;                    /* Null format type          */
 
     return 0;
 
-} /* end function cckd_write_l2 */
+} /* end function cckd64_write_l2 */
 
 /*-------------------------------------------------------------------*/
 /* Return a level 2 entry                                            */
@@ -2600,7 +2611,7 @@ int             sfx,L1idx,l2x;          /* Lookup table indices      */
 
     return sfx;
 
-} /* end function cckd_read_l2ent */
+} /* end function cckd64_read_l2ent */
 
 /*-------------------------------------------------------------------*/
 /* Update a level 2 entry                                            */
@@ -2640,7 +2651,7 @@ U64             off;                    /* L2 entry offset           */
         return -1;
 
     return 0;
-} /* end function cckd_write_l2ent */
+} /* end function cckd64_write_l2ent */
 
 /*-------------------------------------------------------------------*/
 /* Read a track image                                                */
@@ -2692,7 +2703,7 @@ cckd_read_trkimg_error:
 
     return cckd64_null_trk (dev, buf, trk, 0);
 
-} /* end function cckd_read_trkimg */
+} /* end function cckd64_read_trkimg */
 
 /*-------------------------------------------------------------------*/
 /* Write a track image                                               */
@@ -2780,7 +2791,7 @@ int             size;                   /* Size of new track         */
     /* `after' is 1 if the new offset is after the old offset */
     return after;
 
-} /* end function cckd_write_trkimg */
+} /* end function cckd64_write_trkimg */
 
 /*-------------------------------------------------------------------*/
 /* Harden the file                                                   */
@@ -2822,7 +2833,7 @@ int             rc=0;                   /* Return code               */
         fdatasync (cckd->fd[cckd->sfn]);
 
     return rc;
-} /* cckd_harden */
+} /* cckd64_harden */
 
 /*-------------------------------------------------------------------*/
 /* Build a null track                                                */
@@ -2931,7 +2942,7 @@ int             len;                    /* Length of null track      */
 
     return len;
 
-} /* end function cckd_null_trk */
+} /* end function cckd64_null_trk */
 
 /*-------------------------------------------------------------------*/
 /* Return a number 0 .. CKD_NULLTRK_FMTMAX if track is null          */
@@ -2967,9 +2978,9 @@ BYTE            buf2[65536];            /* Null track buffer         */
 /*-------------------------------------------------------------------*/
 /* Verify a track/block header and return track/block number         */
 /*-------------------------------------------------------------------*/
-int cckd64_cchh (DEVBLK *dev, BYTE *buf, int trk)
+int cckd64_cchh( DEVBLK* dev, BYTE* buf, int trk )
 {
-CCKD64_EXT     *cckd;                   /* -> cckd extension         */
+CCKD64_EXT*     cckd;                   /* -> cckd extension         */
 U16             cyl;                    /* Cylinder                  */
 U16             head;                   /* Head                      */
 int             t;                      /* Calculated track          */
@@ -2980,20 +2991,24 @@ BYTE            badcomp=0;              /* 1=Unsupported compression */
     /* CKD dasd header verification */
     if (cckd->ckddasd)
     {
-        cyl = fetch_hw (buf + 1);
-        head = fetch_hw (buf + 3);
-        t = cyl * dev->ckdheads + head;
+        cyl  = fetch_hw( buf + 1 );
+        head = fetch_hw( buf + 3 );
+        t    = cyl * dev->ckdheads + head;
 
-        if (cyl < dev->ckdcyls && head < dev->ckdheads
-         && (trk == -1 || t == trk))
+        if (1
+            && cyl  < dev->ckdcyls
+            && head < dev->ckdheads
+            && (trk == -1 || t == trk)
+        )
         {
             if (buf[0] & ~cckdblk.comps)
             {
                 if (buf[0] & ~CCKD_COMPRESS_MASK)
                 {
                     if (cckdblk.bytemsgs++ < 10)
-                        WRMSG (HHC00307, "E", LCSS_DEVNUM, cckd->sfn,
-                            cckd_sf_name (dev, cckd->sfn), t, buf[0],buf[1],buf[2],buf[3],buf[4]);
+                        // "%1d:%04X CCKD file[%d] %s: invalid byte 0 trk %d, buf %2.2x%2.2x%2.2x%2.2x%2.2x"
+                        WRMSG( HHC00307, "E", LCSS_DEVNUM, cckd->sfn,
+                            cckd_sf_name( dev, cckd->sfn ), t, buf[0],buf[1],buf[2],buf[3],buf[4]);
                     buf[0] &= CCKD_COMPRESS_MASK;
                 }
             }
@@ -3013,8 +3028,9 @@ BYTE            badcomp=0;              /* 1=Unsupported compression */
             {
                 if (buf[0] & ~CCKD_COMPRESS_MASK)
                 {
-                    WRMSG (HHC00308, "E", LCSS_DEVNUM, cckd->sfn,
-                            cckd_sf_name (dev, cckd->sfn), t, buf[0],buf[1],buf[2],buf[3],buf[4]);
+                    // "%1d:%04X CCKD file[%d] %s: invalid byte 0 blkgrp %d, buf %2.2x%2.2x%2.2x%2.2x%2.2x"
+                    WRMSG( HHC00308, "E", LCSS_DEVNUM, cckd->sfn,
+                            cckd_sf_name( dev, cckd->sfn ), t, buf[0],buf[1],buf[2],buf[3],buf[4]);
                     buf[0] &= CCKD_COMPRESS_MASK;
                 }
             }
@@ -3027,21 +3043,23 @@ BYTE            badcomp=0;              /* 1=Unsupported compression */
 
     if (badcomp)
     {
-        WRMSG (HHC00309, "E", LCSS_DEVNUM, cckd->sfn, cckd_sf_name (dev, cckd->sfn),
+        // "%1d:%04X CCKD file[%d] %s: invalid %s hdr %s %d: %s compression unsupported"
+        WRMSG( HHC00309, "E", LCSS_DEVNUM, cckd->sfn, cckd_sf_name( dev, cckd->sfn ),
                 cckd->ckddasd ? "trk" : "blk",
                 cckd->ckddasd ? "trk" : "blk", t, compname[buf[0]]);
     }
     else
     {
-        WRMSG (HHC00310, "E", LCSS_DEVNUM, cckd->sfn, cckd_sf_name (dev, cckd->sfn),
+        // "%1d:%04X CCKD file[%d] %s: invalid %s hdr %s %d buf %p:%2.2x%2.2x%2.2x%2.2x%2.2x"
+        WRMSG( HHC00310, "E", LCSS_DEVNUM, cckd->sfn, cckd_sf_name( dev, cckd->sfn ),
                 cckd->ckddasd ? "trk" : "blk",
                 cckd->ckddasd ? "trk" : "blk", trk,
                 buf, buf[0], buf[1], buf[2], buf[3], buf[4]);
-        cckd_print_itrace ();
+        cckd_print_itrace();
     }
 
     return -1;
-} /* end function cckd_cchh */
+} /* end function cckd64_cchh */
 
 /*-------------------------------------------------------------------*/
 /* Validate a track image                                            */
@@ -3127,7 +3145,7 @@ CKD_RECHDR      rn;                     /* Record-n (r0, r1 ... rn)  */
 
     return sz;
 
-} /* end function cckd_validate */
+} /* end function cckd64_validate */
 
 /*-------------------------------------------------------------------*/
 /* Initialize shadow files                                           */
@@ -3236,7 +3254,7 @@ char            pathname[MAX_PATH];     /* file path in host format  */
 
     return 0;
 
-} /* end function cckd_sf_init */
+} /* end function cckd64_sf_init */
 
 /*-------------------------------------------------------------------*/
 /* Create a new shadow file                                          */
@@ -3331,7 +3349,7 @@ sf_new_error:
 
     return -1;
 
-} /* end function cckd_sf_new */
+} /* end function cckd64_sf_new */
 
 /*-------------------------------------------------------------------*/
 /* Add a shadow file  (sf+)                                          */
@@ -3384,30 +3402,30 @@ CCKD64_EXT     *cckd;                   /* -> cckd extension         */
     release_lock (&cckd->cckdiolock);
 
     /* Obtain control of the file */
-    obtain_lock (&cckd->filelock);
+    obtain_lock( &cckd->filelock );
+    {
+        /* Harden the current file */
+        cckd64_harden (dev);
 
-    /* Harden the current file */
-    cckd64_harden (dev);
+        /* Create a new shadow file */
+        if (cckd64_sf_new (dev) < 0) {
+            WRMSG (HHC00319, "E", LCSS_DEVNUM, cckd->sfn+1,
+                     cckd_sf_name(dev, cckd->sfn+1)?cckd_sf_name(dev, cckd->sfn+1):"(null)");
+            goto cckd_sf_add_exit;
+        }
 
-    /* Create a new shadow file */
-    if (cckd64_sf_new (dev) < 0) {
-        WRMSG (HHC00319, "E", LCSS_DEVNUM, cckd->sfn+1,
-                 cckd_sf_name(dev, cckd->sfn+1)?cckd_sf_name(dev, cckd->sfn+1):"(null)");
-        goto cckd_sf_add_exit;
-    }
+        /* Re-open the previous file if opened read-write */
+        if (cckd->open[cckd->sfn-1] == CCKD_OPEN_RW)
+            cckd64_open (dev, cckd->sfn-1, O_RDONLY|O_BINARY, 0);
 
-    /* Re-open the previous file if opened read-write */
-    if (cckd->open[cckd->sfn-1] == CCKD_OPEN_RW)
-        cckd64_open (dev, cckd->sfn-1, O_RDONLY|O_BINARY, 0);
-
-    WRMSG (HHC00320, "I", LCSS_DEVNUM, cckd->sfn, cckd_sf_name (dev, cckd->sfn));
+        WRMSG (HHC00320, "I", LCSS_DEVNUM, cckd->sfn, cckd_sf_name (dev, cckd->sfn));
 
 cckd_sf_add_exit:
 
-    /* Re-read the l1 to set L2_bounds, L2ok */
-    cckd64_read_l1 (dev);
-
-    release_lock (&cckd->filelock);
+        /* Re-read the l1 to set L2_bounds, L2ok */
+        cckd64_read_l1 (dev);
+    }
+    release_lock( &cckd->filelock );
 
     obtain_lock (&cckd->cckdiolock);
     cckd->merging = 0;
@@ -4158,20 +4176,103 @@ void cckd64_gcstart()
 }
 
 /*-------------------------------------------------------------------*/
+/* Report Garbage Collection state for a given CCKD device           */
+/*-------------------------------------------------------------------*/
+void cckd64_gc_rpt_state( DEVBLK* dev )
+{
+    CCKD64_EXT*  cckd;
+    int          gc;
+
+    if (!dev->cckd64)
+    {
+        cckd_gc_rpt_state( dev );
+        return;
+    }
+
+    cckd = dev->cckd_ext;
+
+    /* Retrieve and report garbage collector state, but ONLY if
+       the image is over 100MB in size. This prevents "scaring"
+       the user about SEVERELY fragmented files when the file
+       is too small to be much of a concern, as is usually the
+       case with e.g. shadow files.
+    */
+    if (cckd->cdevhdr->cdh_size < (100 * _1M))
+        return;
+
+    gc = cckd_gc_state( dev );
+
+    switch (gc)
+    {
+        case 0:     // critical!
+        case 1:     // severe
+
+            // "%1d:%04X CCKD%s image %s is SEVERELY fragmented!"
+            WRMSG( HHC00387, "W", LCSS_DEVNUM, "64",
+                TRIMLOC( cckd_sf_name( dev, cckd->sfn )));
+            break;
+
+        case 2:     // moderate
+
+            // "%1d:%04X CCKD%s image %s is moderately fragmented"
+            WRMSG( HHC00388, "W", LCSS_DEVNUM, "64",
+                TRIMLOC( cckd_sf_name( dev, cckd->sfn )));
+            break;
+
+        case 3:     // light
+
+            // "%1d:%04X CCKD%s image %s is slightly fragmented"
+            WRMSG( HHC00389, "I", LCSS_DEVNUM, "64",
+                TRIMLOC( cckd_sf_name( dev, cckd->sfn )));
+            break;
+
+        default:    // less than light
+
+            break;  // (don't bother reporting it)
+    }
+}
+
+/*-------------------------------------------------------------------*/
+/* Return Garbage Collection State for a given CCKD device           */
+/*-------------------------------------------------------------------*/
+int cckd64_gc_state( DEVBLK* dev )
+{
+    CCKD64_EXT*  cckd;                  /* -> cckd extension         */
+    S64          size, fsiz;            /* File size, free size      */
+    int          gc;                    /* Garbage collection state  */
+
+    if (!dev->cckd64)
+        return cckd_gc_state( dev );
+
+    cckd = dev->cckd_ext;
+
+    /* Determine garbage state */
+    size = (S64) cckd->cdevhdr[ cckd->sfn ].cdh_size;
+    fsiz = (S64) cckd->cdevhdr[ cckd->sfn ].free_total;
+
+    if      (fsiz >= (size = size/2)) gc = 0; // critical   50% - 100%
+    else if (fsiz >= (size = size/2)) gc = 1; // severe     25% - 50%
+    else if (fsiz >= (size = size/2)) gc = 2; // moderate 12.5% - 25%
+    else if (fsiz >= (size = size/2)) gc = 3; // light     6.3% - 12.5%
+    else                              gc = 4; // none        0% - 6.3%
+
+    /* Adjust the state based on the number of free spaces */
+    if (cckd->cdevhdr[ cckd->sfn ].free_num >  800 && gc > 0) gc--;
+    if (cckd->cdevhdr[ cckd->sfn ].free_num > 1800 && gc > 0) gc--;
+    if (cckd->cdevhdr[ cckd->sfn ].free_num > 3000)           gc = 0;
+
+    return gc;
+}
+
+/*-------------------------------------------------------------------*/
 /* Perform garbage collection for a given CCKD64 device              */
 /*-------------------------------------------------------------------*/
 void cckd64_gcol_dev( DEVBLK* dev, struct timeval* tv_now )
 {
 int             rc;                     /* Return code               */
 CCKD64_EXT     *cckd;                   /* -> cckd extension         */
-U64             size, fsiz;             /* File size, free size      */
+U64             size;                   /* Percolate size            */
 int             gc;                     /* Garbage collection state  */
-int             gctab[5]= {             /* default gcol parameters   */
-                           4096,        /* critical  50%   - 100%    */
-                           2048,        /* severe    25%   -  50%    */
-                           1024,        /* moderate  12.5% -  25%    */
-                            512,        /* light      6.3% -  12.5%  */
-                            256};       /* none       0%   -   6.3%  */
 
     if (!dev->cckd64)
     {
@@ -4212,19 +4313,7 @@ int             gctab[5]= {             /* default gcol parameters   */
         }
 
         /* Determine garbage state */
-        size = cckd->cdevhdr[cckd->sfn].cdh_size;
-        fsiz = cckd->cdevhdr[cckd->sfn].free_total;
-
-        if      (fsiz >= (size = size/2)) gc = 0;
-        else if (fsiz >= (size = size/2)) gc = 1;
-        else if (fsiz >= (size = size/2)) gc = 2;
-        else if (fsiz >= (size = size/2)) gc = 3;
-        else                              gc = 4;
-
-        /* Adjust the state based on the number of free spaces */
-        if (cckd->cdevhdr[cckd->sfn].free_num >  800 && gc > 0) gc--;
-        if (cckd->cdevhdr[cckd->sfn].free_num > 1800 && gc > 0) gc--;
-        if (cckd->cdevhdr[cckd->sfn].free_num > 3000)           gc = 0;
+        gc = cckd64_gc_state( dev );
 
         /* Set the size */
         if (cckdblk.gcparm > 0) size = gctab[gc] << cckdblk.gcparm;
@@ -4239,7 +4328,7 @@ int             gctab[5]= {             /* default gcol parameters   */
     release_lock (&cckd->cckdiolock);
 
     /* Call the garbage collector */
-    cckd64_gc_percolate (dev, (unsigned int)size);
+    cckd64_gc_percolate( dev, size );
 
     /* Schedule any updated tracks to be written */
     obtain_lock (&cckd->cckdiolock);
@@ -4280,16 +4369,44 @@ int             gctab[5]= {             /* default gcol parameters   */
 }
 
 /*-------------------------------------------------------------------*/
+/* Garbage Collection error handler helper functions/macros          */
+/*-------------------------------------------------------------------*/
+static int cckd64_gc_perc_error( DEVBLK* dev, CCKD64_EXT* cckd, U64 moved,
+                                 const char* file, int line )
+{
+    cckd_trace( file, line, dev, "gcperc exiting due to error, moved %"PRIu64, moved );
+    release_lock( &cckd->filelock );
+    return (int) moved;
+}
+#define GC64_PERC_ERROR()   cckd64_gc_perc_error( dev, cckd, moved, __FILE__, __LINE__ )
+
+static int cckd64_gc_perc_space_error( DEVBLK* dev, CCKD64_EXT* cckd, U64 upos, S64 i, BYTE* buf, U64 moved,
+                                       const char* file, int line )
+{
+    // "%1d:%04X CCKD file[%d] %s: %s(%d): offset 0x%16.16"PRIx64" unknown space %2.2x%2.2x%2.2x%2.2x%2.2x"
+
+    WRMSG( HHC00342, "E", LCSS_DEVNUM,
+            cckd->sfn, cckd_sf_name( dev, cckd->sfn ), TRIMLOC( file ), line,
+            upos + i, buf[i], buf[i+1],buf[i+2], buf[i+3], buf[i+4]);
+
+    cckd->cdevhdr[ cckd->sfn ].cdh_opts |= CCKD_OPT_SPERRS;
+    cckd_print_itrace();
+    return cckd64_gc_perc_error( dev, cckd, moved, file, line );
+}
+#define GC64_PERC_SPACE_ERROR()   cckd64_gc_perc_space_error( dev, cckd, upos, i, buf, moved, __FILE__, __LINE__ )
+
+/*-------------------------------------------------------------------*/
 /* Garbage Collection -- Percolate algorithm                         */
 /*-------------------------------------------------------------------*/
-int cckd64_gc_percolate(DEVBLK *dev, unsigned int size)
+int cckd64_gc_percolate( DEVBLK* dev, U64 size )
 {
-CCKD64_EXT     *cckd;                   /* -> cckd extension         */
+CCKD64_EXT*     cckd;                   /* -> cckd extension         */
+bool            didmsg = false;         /* HHC00384 issued           */
 int             rc;                     /* Return code               */
 U64             moved = 0;              /* Space moved               */
 S64             after = 0, a;           /* New space after old       */
 S64             sfx;                    /* File index                */
-S64             i, j, l;                /* Indexes                   */
+S64             i, j, k;                /* Indexes                   */
 int             flags;                  /* Write trkimg flags        */
 U64             fpos, upos;             /* File offsets              */
 U64             flen, ulen, len;        /* Lengths                   */
@@ -4303,6 +4420,14 @@ BYTE            buf[256*1024];          /* Buffer                    */
 
     cckd = dev->cckd_ext;
     size = size << SHIFT_1K;
+
+    if (cckd->cdevhdr[ cckd->sfn ].cdh_opts & CCKD_OPT_SPERRS)
+    {
+        // "Skipping garbage collection for CCKD%s file[%d] %1d:%04X %s due to space errors"
+        if (cckdblk.gcmsgs)
+            WRMSG( HHC00385, "I", "64", cckd->sfn, LCSS_DEVNUM, cckd_sf_name( dev, cckd->sfn ));
+        return (int) moved;
+    }
 
     /* Debug */
     OBTAIN_TRACE_LOCK();
@@ -4333,16 +4458,16 @@ BYTE            buf[256*1024];          /* Buffer                    */
     if (!cckd->L2ok)
         cckd64_gc_l2(dev, buf);
 
-    /* garbage collection cycle */
+    /* garbage collection cycle... */
     while (moved < size && after < 4)
     {
-        obtain_lock (&cckd->filelock);
+        obtain_lock( &cckd->filelock );
         sfx = cckd->sfn;
 
         /* Exit if no more free space */
         if (cckd->cdevhdr[sfx].free_total == 0)
         {
-            release_lock (&cckd->filelock);
+            release_lock( &cckd->filelock );
             return (int) moved;
         }
 
@@ -4350,7 +4475,7 @@ BYTE            buf[256*1024];          /* Buffer                    */
         if (!cckd->ifb) cckd64_read_fsp (dev);
 
         /* Find a space to start with */
-        l = -1;
+        k = -1;
         upos = ulen = flen = 0;
         fpos = cckd->cdevhdr[sfx].free_off;
 
@@ -4368,7 +4493,7 @@ BYTE            buf[256*1024];          /* Buffer                    */
         /* Continue to largest if non-zero `after' */
         for ( ; i >= 0 && after; i = cckd->ifb[i].ifb_idxnxt)
         {
-            l = i;
+            k = i;
             if (!cckd->ifb[i].ifb_pending) flen += cckd->ifb[i].ifb_len;
             if (cckd->ifb[i].ifb_len == cckd->cdevhdr[sfx].free_largest)
                 break;
@@ -4384,10 +4509,10 @@ BYTE            buf[256*1024];          /* Buffer                    */
         }
 
         /* Space preceding largest if largest is at the end */
-        if (i < 0 && l >= 0)
+        if (i < 0 && k >= 0)
         {
-            if (!cckd->ifb[l].ifb_pending) flen -= cckd->ifb[i].ifb_len;
-            for (i = cckd->ifb[l].ifb_idxprv; i >= 0; i = cckd->ifb[i].ifb_idxprv)
+            if (!cckd->ifb[k].ifb_pending) flen -= cckd->ifb[i].ifb_len;
+            for (i = cckd->ifb[k].ifb_idxprv; i >= 0; i = cckd->ifb[i].ifb_idxprv)
             {
                 fpos = cckd->ifb[i].ifb_idxprv >= 0
                      ? cckd->ifb[cckd->ifb[i].ifb_idxprv].ifb_offnxt
@@ -4425,7 +4550,7 @@ BYTE            buf[256*1024];          /* Buffer                    */
         if (ulen == 0)
         {
             CCKD_TRACE( "gcperc no applicable space, moved %"PRIu64, moved);
-            release_lock (&cckd->filelock);
+            release_lock( &cckd->filelock );
             return (int) moved;
         }
 
@@ -4436,7 +4561,7 @@ BYTE            buf[256*1024];          /* Buffer                    */
         CCKD_TRACE( "gcperc selected space 0x%16.16"PRIx64" len %"PRId64, upos, ulen);
 
         if (cckd64_read (dev, (int) sfx, upos, buf, (unsigned int) ulen) < 0)
-            goto cckd_gc_perc_error;
+            return GC64_PERC_ERROR();
 
         /* Process each space in the buffer */
         flags = cckd->cdevhdr[sfx].free_num < 100 ? CCKD_SIZE_EXACT : CCKD_SIZE_ANY;
@@ -4445,6 +4570,14 @@ BYTE            buf[256*1024];          /* Buffer                    */
             /* Check for level 2 table */
             for (j = 0; j < cckd->cdevhdr[sfx].num_L1tab; j++)
                 if (cckd->L1tab[sfx][j] == (upos + i)) break;
+
+            if (!didmsg)
+            {
+                // "Collecting garbage for CCKD%s file[%d] %1d:%04X %s..."
+                if (cckdblk.gcmsgs)
+                    WRMSG( HHC00384, "I", "64", cckd->sfn, LCSS_DEVNUM, cckd_sf_name( dev, cckd->sfn ));
+                didmsg = true;
+            }
 
             if (j < cckd->cdevhdr[sfx].num_L1tab)
             {
@@ -4456,26 +4589,26 @@ BYTE            buf[256*1024];          /* Buffer                    */
 
                 /* Make the level 2 table active */
                 if (cckd64_read_l2 (dev, (int)sfx, (int)j) < 0)
-                    goto cckd_gc_perc_error;
+                    return GC64_PERC_ERROR();
 
                 /* Write the level 2 table */
                 if (cckd64_write_l2 (dev) < 0)
-                    goto cckd_gc_perc_error;
+                    return GC64_PERC_ERROR();
             }
             else
             {
                 /* Moving a track image */
                 if ((trk = cckd64_cchh (dev, buf + i, -1)) < 0)
-                    goto cckd_gc_perc_space_error;
+                    return GC64_PERC_SPACE_ERROR();
 
                 L1idx = trk >> 8;
                 l2x = trk & 0xff;
 
                 /* Read the lookup entry for the track */
                 if (cckd64_read_l2ent (dev, &l2, trk) < 0)
-                    goto cckd_gc_perc_error;
+                    return GC64_PERC_ERROR();
                 if (l2.L2_trkoff != (upos + i))
-                    goto cckd_gc_perc_space_error;
+                    return GC64_PERC_SPACE_ERROR();
                 len = l2.L2_size;
                 if ((U64)i + l2.L2_len > ulen) break;
 
@@ -4484,7 +4617,7 @@ BYTE            buf[256*1024];          /* Buffer                    */
 
                 /* Relocate the track image somewhere else */
                 if ((rc = cckd64_write_trkimg (dev, buf + i, (int)l2.L2_len, trk, flags)) < 0)
-                    goto cckd_gc_perc_error;
+                    return GC64_PERC_ERROR();
                 a += rc;
             }
         } /* for each space in the used space */
@@ -4496,29 +4629,17 @@ BYTE            buf[256*1024];          /* Buffer                    */
         cckdblk.stats_gcolmoves++;
         cckdblk.stats_gcolbytes += i;
 
-        release_lock (&cckd->filelock);
+        release_lock( &cckd->filelock );
 
     } /* while (moved < size) */
 
     CCKD_TRACE( "gcperc moved %d 1st 0x%"PRIx64" nbr %"PRIu64, moved,
                 cckd->cdevhdr[cckd->sfn].free_off, cckd->cdevhdr[cckd->sfn].free_num);
+    // "Collected %u bytes of garbage for CCKD%s file[%d] %1d:%04X %s..."
+    if (cckdblk.gcmsgs)
+        WRMSG( HHC00386, "I", (unsigned int) moved, "64", cckd->sfn, LCSS_DEVNUM, cckd_sf_name( dev, cckd->sfn ));
     return (int) moved;
-
-cckd_gc_perc_space_error:
-
-    WRMSG (HHC00342, "E", LCSS_DEVNUM,
-            cckd->sfn,cckd_sf_name(dev, cckd->sfn), upos + i,
-            buf[i], buf[i+1],buf[i+2], buf[i+3], buf[i+4]);
-    cckd->cdevhdr[cckd->sfn].cdh_opts |= CCKD_OPT_SPERRS;
-    cckd_print_itrace();
-
-cckd_gc_perc_error:
-
-    CCKD_TRACE( "gcperc exiting due to error, moved %"PRIu64, moved);
-    release_lock (&cckd->filelock);
-    return (int) moved;
-
-} /* end function cckd_gc_percolate */
+} /* end function cckd64_gc_percolate */
 
 /*-------------------------------------------------------------------*/
 /* Garbage Collection -- Reposition level 2 tables                   */

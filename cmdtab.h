@@ -94,8 +94,9 @@
                                 \
   "Format: \"abs addr[.len]\" or \"abs addr[-addr2]\" to display up to 64K\n"   \
   "of absolute storage, or \"abs addr=value\" to alter up to 32 bytes of\n"     \
-  "absolute storage, where 'value' is a string of up to 32 pairs of hex\n"      \
-  "digits.\n"
+  "absolute storage, where 'value' is either a string of up to 32 pairs of\n"   \
+  "hex digits, or a string of up to 32 characters enclosed within single or\n"  \
+  "double quotes.\n"
 
 #define aea_cmd_desc            "Display AEA tables"
 #define aia_cmd_desc            "Display AIA fields"
@@ -174,6 +175,13 @@
   "Sets the instruction address or address range where you wish to halt\n"      \
   "execution.  This command is synonymous with the \"s+\" command.\n"
 
+#define bear_cmd_desc           "Display or set BEAR register"
+#define bear_cmd_help           \
+                                \
+  "Format: \"bear [address]\" where 'address' is value the BEAR register\n"     \
+  "should be set to. Enter the command without any operand to just display\n"   \
+  "the current value of the BEAR register.\n"
+
 #define cachestats_cmd_desc     "Cache stats command"
 
 #define cckd_cmd_desc           "Compressed CKD command"
@@ -193,9 +201,11 @@
   "  comp=n        Override compression                  (-1,0,1,2)\n"          \
   "  compparm=n    Override compression parm             (-1 ... 9)\n"          \
   "  debug=n       Enable CCW tracing debug messages       (0 or 1)\n"          \
+  "  dtax=n        Dump trace table at exit                (0 or 1)\n"          \
   "  freepend=n    Set free pending cycles               (-1 ... 4)\n"          \
   "  fsync=n       Enable fsync                            (0 or 1)\n"          \
   "  gcint=n       Set garbage collector interval (sec)  ( 0 .. 60)\n"          \
+  "  gcmsgs=n      Display garbage collector messages      (0 or 1)\n"          \
   "  gcparm=n      Set garbage collector parameter       (-8 ... 8)\n"          \
   "  gcstart=n     Start garbage collector                 (0 or 1)\n"          \
   "  linuxnull=n   Check for null linux tracks             (0 or 1)\n"          \
@@ -343,11 +353,21 @@
 #define cpuverid_cmd_help       \
                                 \
   "Format: \"cpuverid xx [force]\" where 'xx' is the 2 hexadecimal digit\n"     \
-  "CPU version code stored by the STIDP instruction when the architecture\n"    \
-  "mode is S/370 or ESA390. If the architecture mode is z/Arch, then the\n"     \
-  "version code is always stored as '00' and the value specified here is\n"     \
-  "ignored unless the 'FORCE' option is specified. The default version code\n"  \
-   "is 'FD' unless set to a different value.\n"
+  "CPU version code stored by the STIDP instruction.\n"                         \
+  "\n"                                                                          \
+  "The default cpuverid version code at startup is 'FD', and that value will\n" \
+  "be stored by the STIDP instruction -- even for z/Arch -- unless and UNTIL\n" \
+  "you set it to a different value via the 'cpuverid' command/statement.\n"     \
+  "\n"                                                                          \
+  "If you try using the cpuverid command/statement to set a non-zero cpuverid\n"\
+  "value when the architecture mode is currently set to z/Arch, the version\n"  \
+  "code stored by the STIDP instruction will STILL be stored as '00' anyway,\n" \
+  "UNLESS ... the 'FORCE' option is used. For z/Arch, the 'FORCE' option is\n"  \
+  "the ONLY way to cause the cpuverid command to force the STIDP instruction\n" \
+  "to store a non-zero version code. (But as explained, at startup, the value\n"\
+  "stored will STILL be 'FD' even for z/Arch since that is the default. This\n" \
+  "means if you want your STIDP version code to be '00' for z/Arch, then you\n" \
+  "MUST use a 'cpuverid' command/statement in your configuration file!)\n"
 
 #define cr_cmd_desc             "Display or alter control registers"
 #define cr_cmd_help             \
@@ -849,9 +869,9 @@
 #define message_cmd_help        \
                                 \
   "Format: \"message * text\". The 'text' field is variable in size.\n"         \
-  "A 'VM' formatted similar to \"13:02:41  * MSG FROM HERCULES: hello\" is\n"   \
+  "A 'VM' message similar to: \"13:02:41 * MSG FROM HERCULES: hello\" is\n"     \
   "diplayed on the console panel as a result of the panel command\n"            \
-  "'message * hello'.\n"
+  "'message * hello'.  (See also the \"msgnoh\" command)\n"
 
 #define model_cmd_desc          "Set/Query STSI model code"
 #define model_cmd_help          \
@@ -1128,6 +1148,7 @@
   "     (no)lock         lock table before updating\n"                              \
   "     (no)tod          timestamp table entries\n"                                 \
   "     (no)wrap         wraparound trace table\n"                                  \
+  "     (no)dtax         dump table at exit\n"                                      \
   "     to=nnn           automatic display timeout  (number of seconds)\n"          \
   "     nnnnnn           table size                 (number of entries)\n"
 
@@ -1225,7 +1246,8 @@
                                 \
   "Format: \"r addr[.len]\" or \"r addr[-addr2]\" to display up to 64K\n"       \
   "of real storage, or \"r addr=value\" to alter up to 32 bytes of real\n"      \
-  "storage, where 'value' is a string of up to 32 pairs of hex digits.\n"
+  "storage, where 'value' is either a string of up to 32 pairs of hex digits,\n" \
+  "or a string of up to 32 characters enclosed in single or double quotes.\n"
 
 #define restart_cmd_desc        "Generate restart interrupt"
 #define resume_cmd_desc         "Resume hercules"
@@ -1307,7 +1329,6 @@
   "Format: \"s?\" displays whether instruction stepping is on or off\n"         \
   "and the range if any.\n"
 
-#define sdev_cmd_desc           "Turn CCW stepping on/off"
 #define splus_cmd_desc          "Activate instruction stepping"
 #define splus_cmd_help          \
                                 \
@@ -1511,12 +1532,16 @@
 #define shrd_cmd_desc           "shrd command"
 #define shrd_cmd_help           \
                                 \
-  "Format: \"SHRD [TRACE[=nnnn]]\" where 'nnnn' is the desired number of\n"     \
-  "trace table entries. Specifying a non-zero value enables debug tracing\n"    \
-  "of the Shared Device Server.  Specifying a value of 0 disables tracing.\n"   \
-  "Entering the command with no arguments displays the current setting.\n"      \
-  "Use 'SHRD TRACE' by itself to print the current table.\n"                    \
-  "SEE ALSO: 'shrdport' command.\n"
+  "Format: \"SHRD [TRACE[=nnnn]|[DTAX=0|1]]\" where 'nnnn' is the desired\n"    \
+  "number of trace table entries, and DTAX is either 0 or 1. Specifying a\n"    \
+  "non-zero TRACE= value enables debug tracing of the Shared Device Server.\n"  \
+  "Specifying a value of 0 disables tracing. DTAX is a boolean true/false\n"    \
+  "value indicating whether or not to automatically dump the trace table\n"     \
+  "when Hercules exits. Both TRACE= and DTAX= must each be set individually\n"  \
+  "via separate commands. They cannot both be specified on the same command.\n" \
+  "Entering the SHRD command by itself with no arguments displays current\n"    \
+  "values. Entering \"SHRD TRACE\" by itself (without defining any value)\n"    \
+  "prints the current trace table. SEE ALSO: the 'shrdport' command.\n"
 
 #define shrdport_cmd_desc       "Set shrdport value"
 #define shrdport_cmd_help       \
@@ -1586,6 +1611,8 @@
   "or with the \"normal\" argument then only a CPU and I/O subsystem reset\n"   \
   "are performed. When the \"clear\" argument is given then this command is\n"  \
   "identical in functionality to the \"sysclear\" command.\n"
+
+#define sysgport_cmd_desc       "Define SYSG console port"
 
 #define tminus_cmd_desc         "Turn off instruction tracing"
 #define t_cmd_desc              "Set tracing range or Query tracing"
@@ -1762,10 +1789,11 @@
                                 \
   "Format: \"v [P|S|H]addr[.len]\" or \"v [P|S|H]addr[-addr2]\" to display\n"   \
   "up to 64K of virtual storage, or \"v [P|S|H]addr=value\" to alter up to\n"   \
-  "32 bytes of virtual storage, where 'value' is a string of up to 32\n"        \
-  "pairs of hex digits. The optional P, S or H address prefix character\n"      \
-  "forces Primary, Secondary or Home Space address translation mode\n"          \
-  "instead of using the current PSW mode, which is the default.\n"
+  "32 bytes of virtual storage, where 'value' is either a string of up to 32\n" \
+  "pairs of hex digits, or a string of up to 32 characters enclosed in single\n"  \
+  "or double quotes. The optional P, S or H address prefix character forces\n"  \
+  "Primary, Secondary or Home Space address translation mode instead of using\n"  \
+  "the current PSW mode, which is the default.\n"
 
 #define version_cmd_desc        "Display version information"
 #define xpndsize_cmd_desc       "Define/Display xpndsize parameter"
@@ -1863,6 +1891,7 @@ COMMAND( "b",                       trace_cmd,              SYSCMDNOPER,        
 COMMAND( "b?",                      trace_cmd,              SYSCMDNOPER,        bquest_cmd_desc,        NULL                )
 COMMAND( "b+",                      trace_cmd,              SYSCMDNOPER,        bplus_cmd_desc,         NULL                )
 
+COMMAND( "bear",                    bear_cmd,               SYSCMDNOPER,        bear_cmd_desc,          bear_cmd_help       )
 COMMAND( "cachestats",              EXTCMD(cachestats_cmd), SYSCMDNOPER,        cachestats_cmd_desc,    NULL                )
 COMMAND( "clocks",                  clocks_cmd,             SYSCMDNOPER,        clocks_cmd_desc,        NULL                )
 COMMAND( "codepage",                codepage_cmd,           SYSCMDNOPER,        codepage_cmd_desc,      codepage_cmd_help   )
@@ -1951,6 +1980,7 @@ COMMAND( "model",                   stsi_model_cmd,         SYSCFGNDIAG8,       
 COMMAND( "plant",                   stsi_plant_cmd,         SYSCFGNDIAG8,       plant_cmd_desc,         NULL                )
 COMMAND( "shcmdopt",                shcmdopt_cmd,           SYSCFGNDIAG8,       shcmdopt_cmd_desc,      shcmdopt_cmd_help   )
 COMMAND( "sysepoch",                sysepoch_cmd,           SYSCFGNDIAG8,       sysepoch_cmd_desc,      NULL                )
+COMMAND( "sysgport",                sysgport_cmd,           SYSCFGNDIAG8,       sysgport_cmd_desc,      NULL                )
 COMMAND( "tzoffset",                tzoffset_cmd,           SYSCFGNDIAG8,       tzoffset_cmd_desc,      NULL                )
 COMMAND( "xpndsize",                xpndsize_cmd,           SYSCFGNDIAG8,       xpndsize_cmd_desc,      xpndsize_cmd_help   )
 COMMAND( "yroffset",                yroffset_cmd,           SYSCFGNDIAG8,       yroffset_cmd_desc,      NULL                )
@@ -2016,7 +2046,6 @@ COMMAND( "dumpdev",                 lddev_cmd,              SYSCMD,             
         // directly to the "OnOffCommand" command function in hsccmd.c.
 
 COMMAND( "f{+/-}adr",               NULL,                   SYSCMDNOPER,        f_cmd_desc,             f_cmd_help          )
-COMMAND( "s{+/-}dev",               NULL,                   SYSCMDNOPER,        sdev_cmd_desc,          NULL                )
 COMMAND( "o{+/-}dev",               NULL,                   SYSCMDNOPER,        odev_cmd_desc,          NULL                )
 COMMAND( "t{+/-}dev",               NULL,                   SYSCMDNOPER,        tdev_cmd_desc,          NULL                )
 #if defined( OPTION_CKD_KEY_TRACING )

@@ -1,5 +1,5 @@
 /* OPCODE.H     (C) Copyright Jan Jaeger, 2000-2012                  */
-/*              (C) and others 2013-2021                             */
+/*              (C) and others 2013-2022                             */
 /*              Instruction decoding macros and prototypes           */
 /*                                                                   */
 /*   Released under "The Q Public License Version 1"                 */
@@ -13,10 +13,15 @@
 #define _OPCODE_H
 
 /*-------------------------------------------------------------------*/
-/*               Architecture INDEPENDENT macros                     */
+/*          (delineates ARCH_DEP from non-arch_dep)                  */
 /*-------------------------------------------------------------------*/
-/*  The following macros are defined ONE TIME                        */
-/*  and thus are the same for all build architectures.               */
+
+/*-------------------------------------------------------------------*/
+/*               Architecture *INDEPENDENT* macros                   */
+/*-------------------------------------------------------------------*/
+/*  The following macros are defined ONE TIME (due to the above      */
+/*  "#ifndef _OPCODE_H" guard) and thus are the same for ALL         */
+/*   build architectures.                                            */
 /*-------------------------------------------------------------------*/
 
 /*-------------------------------------------------------------------*/
@@ -42,8 +47,36 @@
 #endif
 
 /*-------------------------------------------------------------------*/
-/*              Macros for defining opcode table entries             */
+/*            Macros for defining opcode table entries               */
 /*-------------------------------------------------------------------*/
+/*                                                                   */
+/* The below GENx...macros are used to define the NON-archdep master */
+/* opcode table entries in opcode.c. Each entry defines a separate   */
+/* pointer to an architecture DEPENDENT instruction function for all */
+/* three of our supported build architectures, as well as a common   */
+/* instruction tracing function (based on the instruction's format)  */
+/* and a string used during tracing containing the instruction's     */
+/* mnemonic and instruction function's name, because each opcode is  */
+/* expected to define the same instruction for each architecture if  */
+/* that opcode is defined in the given architecture.                 */
+/*                                                                   */
+/* That is to say, using the below macros, it is NOT possible to de- */
+/* fine a table entry for a given opcode for an instruction that is  */
+/* completely different in one architecture than it is in the other  */
+/* architectures. Opcode 'D2' for example, is expected to be the op- */
+/* code for the "MVC" instruction in all three architectures.        */
+/*                                                                   */
+/* With later versions of z/Architecture however, this is not neces- */
+/* sarily always true. In later versions of z/Architecture, IBM has  */
+/* begun re-using opcodes for older S/370-only instructions. In such */
+/* type of situations you need to define an architecture DEPENDENT   */
+/* opcode table instead, using the new 'AD_GENx...' macros defined   */
+/* further below in the architecture-DEPENDENT section of opcode.h   */
+/* (which immediately follows the "#endif" for _OPCODE_H).           */
+/*                                                                   */
+/*-------------------------------------------------------------------*/
+/*                                                                   */
+/*                      PROGRAMMING NOTE                             */
 /*                                                                   */
 /* PROGRAMMING NOTE: the '_ifmt' argument in the below "GENx" macros */
 /* is currently ignored since it is not being used for anything at   */
@@ -69,9 +102,9 @@
 
 #define GENx___x___x___                                     \
     {                                                       \
-        _GEN370( operation_exception )                      \
-        _GEN390( operation_exception )                      \
-        _GEN900( operation_exception )                      \
+                &operation_exception,                       \
+                &operation_exception,                       \
+                &operation_exception,                       \
         (void*) &iprint_ASMFMT_none,                        \
         (void*) &"?????" "\0" "?"                           \
     }
@@ -79,17 +112,17 @@
 #define GENx370x___x___( _mnemonic, _ifmt, _asmfmt, _ifunc_name )  \
     {                                                       \
         _GEN370( _ifunc_name )                              \
-        _GEN390( operation_exception )                      \
-        _GEN900( operation_exception )                      \
+                &operation_exception,                       \
+                &operation_exception,                       \
         (void*) &iprint_ ## _asmfmt,                        \
         (void*) & _mnemonic "\0" #_ifunc_name               \
     }
 
 #define GENx___x390x___( _mnemonic, _ifmt, _asmfmt, _ifunc_name )  \
     {                                                       \
-        _GEN370( operation_exception )                      \
+                &operation_exception,                       \
         _GEN390( _ifunc_name )                              \
-        _GEN900( operation_exception )                      \
+                &operation_exception,                       \
         (void*) &iprint_ ## _asmfmt,                        \
         (void*) & _mnemonic "\0" #_ifunc_name               \
     }
@@ -98,15 +131,15 @@
     {                                                       \
         _GEN370( _ifunc_name )                              \
         _GEN390( _ifunc_name )                              \
-        _GEN900( operation_exception )                      \
+                &operation_exception,                       \
         (void*) &iprint_ ## _asmfmt,                        \
         (void*) & _mnemonic "\0" #_ifunc_name               \
     }
 
 #define GENx___x___x900( _mnemonic, _ifmt, _asmfmt, _ifunc_name )  \
     {                                                       \
-        _GEN370( operation_exception )                      \
-        _GEN390( operation_exception )                      \
+                &operation_exception,                       \
+                &operation_exception,                       \
         _GEN900( _ifunc_name )                              \
         (void*) &iprint_ ## _asmfmt,                        \
         (void*) & _mnemonic "\0" #_ifunc_name               \
@@ -115,7 +148,7 @@
 #define GENx370x___x900( _mnemonic, _ifmt, _asmfmt, _ifunc_name )  \
     {                                                       \
         _GEN370( _ifunc_name )                              \
-        _GEN390( operation_exception )                      \
+                &operation_exception,                       \
         _GEN900( _ifunc_name )                              \
         (void*) &iprint_ ## _asmfmt,                        \
         (void*) & _mnemonic "\0" #_ifunc_name               \
@@ -123,7 +156,7 @@
 
 #define GENx___x390x900( _mnemonic, _ifmt, _asmfmt, _ifunc_name )  \
     {                                                       \
-        _GEN370( operation_exception )                      \
+                &operation_exception,                       \
         _GEN390( _ifunc_name )                              \
         _GEN900( _ifunc_name )                              \
         (void*) &iprint_ ## _asmfmt,                        \
@@ -157,12 +190,16 @@
 /* When the facility is disabled (default), all such instructions    */
 /* will properly Program Check (Operation Exception) when attempted  */
 /* to be executed in S/370 mode.  When the facility enabled however, */
-/* then all such 37X instructions are instead allowed to execute.    */
+/* then all such "37X" instructions are instead allowed to execute.  */
 /*-------------------------------------------------------------------*/
 
-#define GENx37Xx390x___     GENx370x390x___
-#define GENx37Xx___x900     GENx370x___x900
-#define GENx37Xx390x900     GENx370x390x900
+#define    GENx37Xx390x___     GENx370x390x___
+#define    GENx37Xx___x900     GENx370x___x900
+#define    GENx37Xx390x900     GENx370x390x900
+
+#define AD_GENx37Xx390x___  AD_GENx370x390x___
+#define AD_GENx37Xx___x900  AD_GENx370x___x900
+#define AD_GENx37Xx390x900  AD_GENx370x390x900
 
 /*-------------------------------------------------------------------*/
 
@@ -178,11 +215,11 @@
 /*  Instruction tracing helper function to print the instruction     */
 /*-------------------------------------------------------------------*/
 
-#define PRINT_INST( _inst, _prtbuf )            \
+#define PRINT_INST( _regs, _inst, _prtbuf )     \
                                                 \
-           iprint_router_func( (_inst), 0, (_prtbuf) )
+           iprint_router_func( (_regs), (_inst), 0, (_prtbuf) )
 
-extern int iprint_router_func( BYTE inst[], char mnemonic[], char* prtbuf );
+extern int iprint_router_func( REGS* regs, BYTE inst[], char mnemonic[], char* prtbuf );
 
 /*-------------------------------------------------------------------*/
 /*               Individual instruction counting                     */
@@ -607,8 +644,8 @@ do { \
 /*-------------------------------------------------------------------*/
 /*                   Byte swapping macros                            */
 /*-------------------------------------------------------------------*/
-/* The "CSWAPxx()" macros CONDITIONALLY swap the endianess of the    */
-/* given argument depending on the endianess of the current host,    */
+/* The "CSWAPxx()" macros CONDITIONALLY swap the endianness of the   */
+/* given argument depending on the endianness of the current host,   */
 /* much like the "htonl()" networking API functions. If this build   */
 /* of Hercules is for running on a big endian host, then CSWAPxx()   */
 /* will do absolutely nothing since the argument should already be   */
@@ -617,17 +654,17 @@ do { \
 /* so that the result is a big endian value (since z/Architecture    */
 /* is big endian).                                                   */
 /*                                                                   */
-/* The "SWAPxx()" macros however, UNCONDITIONALLY swap the endianess */
-/* of the specified value *regardless* of the endianess Hercules was */
-/* built for or the endianess of the host it is running on. It is    */
+/* The SWAPxx() macros however, UNCONDITIONALLY swap the endianness  */
+/* of the specified value REGARDLESS of the endianness Hercules was  */
+/* built for or the endianness of the host it is running on. It is   */
 /* designed for situations such as what might exist when a number    */
 /* is read or written to/from disk in a format different from the    */
 /* format of the Hercules build or the host it is running on (such   */
 /* as what occurs with Hercules's emulated dasd files). In such a    */
-/* situation the device driver detects the endianess of the system   */
-/* it is running on differs from the endianess that the DASD file    */
+/* situation the device driver detects the endianness of the system  */
+/* it is running on differs from the endianness that the DASD file   */
 /* was written in, thereby requiring it to *UNCONDITIONALLY* swap    */
-/* the value that was read from disk, REGARDLESS of the endianess    */
+/* the value that was read from disk, REGARDLESS of the endianness   */
 /* of the Hercules build or the host it is currently running on.     */
 /*-------------------------------------------------------------------*/
 
@@ -656,7 +693,7 @@ do { \
 /* (via the "CSWAPxx()" macro) to ensure the value placed into guest */
 /* storage is always big endian or that the local work variable is   */
 /* always in the expected big or little endian format (depending on  */
-/* which endianess Hercules was built for).                          */
+/* which endianness Hercules was built for).                         */
 /*-------------------------------------------------------------------*/
 
 #define FETCH_HW( _val, _stor )     (_val) = fetch_hw( _stor )
@@ -691,14 +728,258 @@ do { \
 
 #include "machdep.h"
 
-#endif /*!defined( _OPCODE_H )*/
+#endif /* !defined( _OPCODE_H ) */
 
 /*-------------------------------------------------------------------*/
-/*               Architecture DEPENDENT macros                       */
+/*          (delineates ARCH_DEP from non-arch_dep)                  */
 /*-------------------------------------------------------------------*/
-/* The following macros are undef'ed and then re-defined differently */
-/* for each subsequent new build architecture.                       */
+
 /*-------------------------------------------------------------------*/
+/*               Architecture *DEPENDENT* macros                     */
+/*-------------------------------------------------------------------*/
+/*  The below macros (due to being outside of the above "#endif"     */
+/*  for "_OPCODE_H") are undef'ed and then re-defined differently    */
+/*  for each subsequent new build architecture.                      */
+/*-------------------------------------------------------------------*/
+
+/*-------------------------------------------------------------------*/
+/*    Macros for defining ARCH_DEP master opcode table entries       */
+/*-------------------------------------------------------------------*/
+
+#undef AD_GENx___x___x___
+#undef AD_GENx370x___x___
+#undef AD_GENx___x390x___
+#undef AD_GENx370x390x___
+#undef AD_GENx___x___x900
+#undef AD_GENx370x___x900
+#undef AD_GENx___x390x900
+#undef AD_GENx370x390x900
+
+#if   __GEN_ARCH == 370
+
+#define AD_GENx___x___x___                                  \
+    {                                                       \
+                &operation_exception,                       \
+                &operation_exception,                       \
+                &operation_exception,                       \
+        (void*) &iprint_ASMFMT_none,                        \
+        (void*) &"?????" "\0" "?"                           \
+    }
+
+#define AD_GENx370x___x___( _mnemonic, _ifmt, _asmfmt, _ifunc_name )  \
+    {                                                       \
+        _GEN370( _ifunc_name )                              \
+                &operation_exception,                       \
+                &operation_exception,                       \
+        (void*) &iprint_ ## _asmfmt,                        \
+        (void*) & _mnemonic "\0" #_ifunc_name               \
+    }
+
+#define AD_GENx___x390x___( _mnemonic, _ifmt, _asmfmt, _ifunc_name )  \
+    {                                                       \
+                &operation_exception,                       \
+                &operation_exception,                       \
+                &operation_exception,                       \
+        (void*) &iprint_ ## _asmfmt,                        \
+        (void*) & _mnemonic "\0" #_ifunc_name               \
+    }
+
+#define AD_GENx370x390x___( _mnemonic, _ifmt, _asmfmt, _ifunc_name )  \
+    {                                                       \
+        _GEN370( _ifunc_name )                              \
+                &operation_exception,                       \
+                &operation_exception,                       \
+        (void*) &iprint_ ## _asmfmt,                        \
+        (void*) & _mnemonic "\0" #_ifunc_name               \
+    }
+
+#define AD_GENx___x___x900( _mnemonic, _ifmt, _asmfmt, _ifunc_name )  \
+    {                                                       \
+                &operation_exception,                       \
+                &operation_exception,                       \
+                &operation_exception,                       \
+        (void*) &iprint_ ## _asmfmt,                        \
+        (void*) & _mnemonic "\0" #_ifunc_name               \
+    }
+
+#define AD_GENx370x___x900( _mnemonic, _ifmt, _asmfmt, _ifunc_name )  \
+    {                                                       \
+        _GEN370( _ifunc_name )                              \
+                &operation_exception,                       \
+                &operation_exception,                       \
+        (void*) &iprint_ ## _asmfmt,                        \
+        (void*) & _mnemonic "\0" #_ifunc_name               \
+    }
+
+#define AD_GENx___x390x900( _mnemonic, _ifmt, _asmfmt, _ifunc_name )  \
+    {                                                       \
+                &operation_exception,                       \
+                &operation_exception,                       \
+                &operation_exception,                       \
+        (void*) &iprint_ ## _asmfmt,                        \
+        (void*) & _mnemonic "\0" #_ifunc_name               \
+    }
+
+#define AD_GENx370x390x900( _mnemonic, _ifmt, _asmfmt, _ifunc_name )  \
+    {                                                       \
+        _GEN370( _ifunc_name )                              \
+                &operation_exception,                       \
+                &operation_exception,                       \
+        (void*) &iprint_ ## _asmfmt,                        \
+        (void*) & _mnemonic "\0" #_ifunc_name               \
+    }
+
+#elif __GEN_ARCH == 390
+
+#define AD_GENx___x___x___                                  \
+    {                                                       \
+                &operation_exception,                       \
+                &operation_exception,                       \
+                &operation_exception,                       \
+        (void*) &iprint_ASMFMT_none,                        \
+        (void*) &"?????" "\0" "?"                           \
+    }
+
+#define AD_GENx370x___x___( _mnemonic, _ifmt, _asmfmt, _ifunc_name )  \
+    {                                                       \
+                &operation_exception,                       \
+                &operation_exception,                       \
+                &operation_exception,                       \
+        (void*) &iprint_ ## _asmfmt,                        \
+        (void*) & _mnemonic "\0" #_ifunc_name               \
+    }
+
+#define AD_GENx___x390x___( _mnemonic, _ifmt, _asmfmt, _ifunc_name )  \
+    {                                                       \
+                &operation_exception,                       \
+        _GEN390( _ifunc_name )                              \
+                &operation_exception,                       \
+        (void*) &iprint_ ## _asmfmt,                        \
+        (void*) & _mnemonic "\0" #_ifunc_name               \
+    }
+
+#define AD_GENx370x390x___( _mnemonic, _ifmt, _asmfmt, _ifunc_name )  \
+    {                                                       \
+                &operation_exception,                       \
+        _GEN390( _ifunc_name )                              \
+                &operation_exception,                       \
+        (void*) &iprint_ ## _asmfmt,                        \
+        (void*) & _mnemonic "\0" #_ifunc_name               \
+    }
+
+#define AD_GENx___x___x900( _mnemonic, _ifmt, _asmfmt, _ifunc_name )  \
+    {                                                       \
+                &operation_exception,                       \
+                &operation_exception,                       \
+                &operation_exception,                       \
+        (void*) &iprint_ ## _asmfmt,                        \
+        (void*) & _mnemonic "\0" #_ifunc_name               \
+    }
+
+#define AD_GENx370x___x900( _mnemonic, _ifmt, _asmfmt, _ifunc_name )  \
+    {                                                       \
+                &operation_exception,                       \
+                &operation_exception,                       \
+                &operation_exception,                       \
+        (void*) &iprint_ ## _asmfmt,                        \
+        (void*) & _mnemonic "\0" #_ifunc_name               \
+    }
+
+#define AD_GENx___x390x900( _mnemonic, _ifmt, _asmfmt, _ifunc_name )  \
+    {                                                       \
+                &operation_exception,                       \
+        _GEN390( _ifunc_name )                              \
+                &operation_exception,                       \
+        (void*) &iprint_ ## _asmfmt,                        \
+        (void*) & _mnemonic "\0" #_ifunc_name               \
+    }
+
+#define AD_GENx370x390x900( _mnemonic, _ifmt, _asmfmt, _ifunc_name )  \
+    {                                                       \
+                &operation_exception,                       \
+        _GEN390( _ifunc_name )                              \
+                &operation_exception,                       \
+        (void*) &iprint_ ## _asmfmt,                        \
+        (void*) & _mnemonic "\0" #_ifunc_name               \
+    }
+
+#elif __GEN_ARCH == 900
+
+#define AD_GENx___x___x___                                  \
+    {                                                       \
+                &operation_exception,                       \
+                &operation_exception,                       \
+                &operation_exception,                       \
+        (void*) &iprint_ASMFMT_none,                        \
+        (void*) &"?????" "\0" "?"                           \
+    }
+
+#define AD_GENx370x___x___( _mnemonic, _ifmt, _asmfmt, _ifunc_name )  \
+    {                                                       \
+                &operation_exception,                       \
+                &operation_exception,                       \
+                &operation_exception,                       \
+        (void*) &iprint_ ## _asmfmt,                        \
+        (void*) & _mnemonic "\0" #_ifunc_name               \
+    }
+
+#define AD_GENx___x390x___( _mnemonic, _ifmt, _asmfmt, _ifunc_name )  \
+    {                                                       \
+                &operation_exception,                       \
+                &operation_exception,                       \
+                &operation_exception,                       \
+        (void*) &iprint_ ## _asmfmt,                        \
+        (void*) & _mnemonic "\0" #_ifunc_name               \
+    }
+
+#define AD_GENx370x390x___( _mnemonic, _ifmt, _asmfmt, _ifunc_name )  \
+    {                                                       \
+                &operation_exception,                       \
+                &operation_exception,                       \
+                &operation_exception,                       \
+        (void*) &iprint_ ## _asmfmt,                        \
+        (void*) & _mnemonic "\0" #_ifunc_name               \
+    }
+
+#define AD_GENx___x___x900( _mnemonic, _ifmt, _asmfmt, _ifunc_name )  \
+    {                                                       \
+                &operation_exception,                       \
+                &operation_exception,                       \
+        _GEN900( _ifunc_name )                              \
+        (void*) &iprint_ ## _asmfmt,                        \
+        (void*) & _mnemonic "\0" #_ifunc_name               \
+    }
+
+#define AD_GENx370x___x900( _mnemonic, _ifmt, _asmfmt, _ifunc_name )  \
+    {                                                       \
+                &operation_exception,                       \
+                &operation_exception,                       \
+        _GEN900( _ifunc_name )                              \
+        (void*) &iprint_ ## _asmfmt,                        \
+        (void*) & _mnemonic "\0" #_ifunc_name               \
+    }
+
+#define AD_GENx___x390x900( _mnemonic, _ifmt, _asmfmt, _ifunc_name )  \
+    {                                                       \
+                &operation_exception,                       \
+                &operation_exception,                       \
+        _GEN900( _ifunc_name )                              \
+        (void*) &iprint_ ## _asmfmt,                        \
+        (void*) & _mnemonic "\0" #_ifunc_name               \
+    }
+
+#define AD_GENx370x390x900( _mnemonic, _ifmt, _asmfmt, _ifunc_name )  \
+    {                                                       \
+                &operation_exception,                       \
+                &operation_exception,                       \
+        _GEN900( _ifunc_name )                              \
+        (void*) &iprint_ ## _asmfmt,                        \
+        (void*) & _mnemonic "\0" #_ifunc_name               \
+    }
+
+#else
+#error HUH?!
+#endif
 
 /*-------------------------------------------------------------------*/
 /*               PSW Instruction Address macros                      */
@@ -987,20 +1268,20 @@ do { \
 
 #if !defined( FEATURE_073_TRANSACT_EXEC_FACILITY )
 
-  #undef  ABORT_TRANS                               /* (nothing) */
-  #define ABORT_TRANS( _regs, _retry, _tac )        /* (nothing) */
+  #undef  ABORT_TRANS                                   /* (nothing) */
+  #define ABORT_TRANS( _regs, _retry, _tac )            /* (nothing) */
 
-  #undef  TXF_INSTRADDR_CONSTRAINT                  /* (nothing) */
-  #define TXF_INSTRADDR_CONSTRAINT( _regs )         /* (nothing) */
+  #undef  TXF_INSTRADDR_CONSTRAINT                      /* (nothing) */
+  #define TXF_INSTRADDR_CONSTRAINT( _regs )             /* (nothing) */
 
-  #undef  TXF_INSTRCOUNT_CONSTRAINT                 /* (nothing) */
-  #define TXF_INSTRCOUNT_CONSTRAINT( _ip, _regs )   /* (nothing) */
+  #undef  TXF_INSTRCOUNT_CONSTRAINT                     /* (nothing) */
+  #define TXF_INSTRCOUNT_CONSTRAINT( _ip, _regs )       /* (nothing) */
 
-  #undef  TXF_RAND_ABORT_CONSTRAINT                 /* (nothing) */
-  #define TXF_RAND_ABORT_CONSTRAINT( _regs )        /* (nothing) */
+  #undef  TXF_RAND_ABORT_CONSTRAINT                     /* (nothing) */
+  #define TXF_RAND_ABORT_CONSTRAINT( _regs )            /* (nothing) */
 
-  #undef  CHECK_TXF_CONSTRAINTS                     /* (nothing) */
-  #define CHECK_TXF_CONSTRAINTS( _ip, _regs )       /* (nothing) */
+  #undef  CHECK_TXF_CONSTRAINTS                         /* (nothing) */
+  #define CHECK_TXF_CONSTRAINTS( _ip, _regs )           /* (nothing) */
 
 #else /* defined( FEATURE_073_TRANSACT_EXEC_FACILITY ) */
 
@@ -1143,6 +1424,40 @@ do {                                                                  \
 #endif /* !defined( FEATURE_037_FP_EXTENSION_FACILITY ) */
 
 /*-------------------------------------------------------------------*/
+/*        PER 1 GRA (General Register Alteration) support            */
+/*-------------------------------------------------------------------*/
+
+#undef PER_GRA_MASK
+#undef PER_GRA_MASK2
+#undef PER_GRA_MASK4
+#undef PER_GRA_CHECK
+
+#if defined( FEATURE_PER1 )
+
+  #define PER_GRA_MASK(  _r1 )                  (0x8000 >> (_r1))
+  #define PER_GRA_MASK2( _r1, _r2 )             (PER_GRA_MASK(  _r1 )      | PER_GRA_MASK(  _r2 ))
+  #define PER_GRA_MASK4( _r1, _r2, _r3, _r4 )   (PER_GRA_MASK2( _r1, _r2 ) | PER_GRA_MASK2( _r3, _r4 ))
+  #define PER_GRA_CHECK( _regs, _mask )                               \
+    do                                                                \
+    {                                                                 \
+      if (1                                                           \
+          && EN_IC_PER_GRA( _regs )                                   \
+          && (_mask) & ((_regs)->CR(9) & CR9_GRMASK)                  \
+      )                                                               \
+        ARCH_DEP( per1_gra )( _regs );                                \
+    }                                                                 \
+    while (0)
+
+#else /* !defined( FEATURE_PER1 ) */
+
+  #define PER_GRA_MASK(  _r1 )
+  #define PER_GRA_MASK2( _r1, _r2 )
+  #define PER_GRA_MASK4( _r1, _r2, _r3, _r4 )
+  #define PER_GRA_CHECK( _regs, _mask )
+
+#endif /* defined( FEATURE_PER1 ) */
+
+/*-------------------------------------------------------------------*/
 /*          PER3 Breaking-Event-Address Register (BEAR)              */
 /*-------------------------------------------------------------------*/
 
@@ -1161,6 +1476,110 @@ do {                                                                  \
 
   #define SET_BEAR_REG(    _regs, _ip )
   #define SET_BEAR_EX_REG( _regs, _ip )
+
+#endif
+
+/*-------------------------------------------------------------------*/
+/*                 PER3 Event Suppression                            */
+/*-------------------------------------------------------------------*/
+
+#undef  IS_PER_SUPRESS
+
+#if defined( FEATURE_PER3 )
+
+  #define IS_PER_SUPRESS( _regs, _event )                             \
+    ARCH_DEP( is_per3_event_suppressed )( (_regs), (_event) )
+
+#else
+
+  #define IS_PER_SUPRESS( _regs, _event )                             \
+    false
+
+#endif
+
+/*-------------------------------------------------------------------*/
+/*            PER3 Zero-Address Detection Facility                   */
+/*-------------------------------------------------------------------*/
+
+#undef  PER_ZEROADDR_CHECK
+#undef  PER_ZEROADDR_CHECK2
+
+#undef  PER_ZEROADDR_LCHECK
+#undef  PER_ZEROADDR_LCHECK2
+
+#undef  PER_ZEROADDR_L24CHECK
+#undef  PER_ZEROADDR_L24CHECK2
+
+#undef  PER_ZEROADDR_XCHECK
+#undef  PER_ZEROADDR_XCHECK2
+
+#if defined( FEATURE_PER_ZERO_ADDRESS_DETECTION_FACILITY )
+
+  // The CHECK macros are designed for instructions where the operand
+  // address is specified in a register but the operand length is not
+  // (or is otherwise implied, perhaps by a function code in another
+  // operand register for example), and/or for instructions where it
+  // is otherwise unpredictable whether operand data will actually be
+  // accessed or not. Thus the only thing we can check is whether the
+  // register holding the address of the operand is zero or not.
+
+  #define PER_ZEROADDR_CHECK(   _regs,  _r1 )                         \
+   ARCH_DEP( per3_zero_check )((_regs),(_r1))
+
+  #define PER_ZEROADDR_CHECK2(   _regs,  _r1,  _r2 )                  \
+   ARCH_DEP( per3_zero_check2 )((_regs),(_r1),(_r2))
+
+  // The LCHECK macros are designed for RR and RRE and similar format
+  // type instructions where a PER Zero-Address event does NOT occur
+  // when the operand length (specified in another register) is zero,
+  // thus causing that operand's storage to never be accessed. Note
+  // that all 32 (or 64) bits of the length register are checked.
+
+  #define PER_ZEROADDR_LCHECK(   _regs,  _r1,  _l1 )                  \
+   ARCH_DEP( per3_zero_lcheck )((_regs),(_r1),(_l1))
+
+  #define PER_ZEROADDR_LCHECK2(   _regs,  _r1,  _l1,  _r2,  _l2 )     \
+   ARCH_DEP( per3_zero_lcheck2 )((_regs),(_r1),(_l1),(_r2),(_l2))
+
+  // The L24CHECK macros are identical to the LCHECK macros except
+  // for the operand length check: instead of checking all 32 or 64
+  // bits of the register containing the operand length, we instead
+  // check only the low-order 24 bits of the length register via the
+  // GR_LA24 macro. They are designed for MVCL and CLCL and other
+  // similar type instructions.
+
+  #define PER_ZEROADDR_L24CHECK(   _regs,  _r1,  _l1 )                \
+   ARCH_DEP( per3_zero_l24check )((_regs),(_r1),(_l1))
+
+  #define PER_ZEROADDR_L24CHECK2(   _regs,  _r1,  _l1,  _r2,  _l2 )   \
+   ARCH_DEP( per3_zero_l24check2 )((_regs),(_r1),(_l1),(_r2),(_l2))
+
+  // The XCHECK macros are designed for RS/RX/S and similar format
+  // type instructions where a PER Zero-Address event does NOT occur
+  // unless the specified base or index register number is non-zero.
+  // When the base or index register number is specified as zero, it
+  // is not used in effective address calculations and thus PER Zero
+  // Address Detection does not apply for that register.
+
+  #define PER_ZEROADDR_XCHECK(   _regs,  _b1 )                        \
+   ARCH_DEP( per3_zero_xcheck )((_regs),(_b1))
+
+  #define PER_ZEROADDR_XCHECK2(   _regs,  _x2,  _b2 )                 \
+   ARCH_DEP( per3_zero_xcheck2 )((_regs),(_x2),(_b2))
+
+#else
+
+  #define PER_ZEROADDR_CHECK(  _regs, _r1 )
+  #define PER_ZEROADDR_CHECK2( _regs, _r1, _r2 )
+
+  #define PER_ZEROADDR_LCHECK(  _regs, _r1, _l1 )
+  #define PER_ZEROADDR_LCHECK2( _regs, _r1, _l1, _r2, _l2 )
+
+  #define PER_ZEROADDR_L24CHECK(  _regs, _r1, _l1 )
+  #define PER_ZEROADDR_L24CHECK2( _regs, _r1, _l1, _r2, _l2 )
+
+  #define PER_ZEROADDR_XCHECK(  _regs, _b1 )
+  #define PER_ZEROADDR_XCHECK2( _regs, _x2, _b2 )
 
 #endif
 
@@ -1482,48 +1901,50 @@ do {                                                                  \
 #endif
 
 /*-------------------------------------------------------------------*/
-/*        Transactional-Execution Facility support macros            */
+/*      Transactional-Execution Facility (TXF) support macros        */
 /*-------------------------------------------------------------------*/
 
-#undef CONTRAN_INSTR_CHECK
-#undef CONTRAN_INSTR_CHECK_IP
-#undef CONTRAN_BRANCH_CHECK_IP
-#undef CONTRAN_RELATIVE_BRANCH_CHECK_IP
-#undef TRAN_INSTR_CHECK
-#undef TRAN_FLOAT_INSTR_CHECK
-#undef TRAN_ACCESS_INSTR_CHECK
-#undef TRAN_NONRELATIVE_BRANCH_CHECK_IP
-#undef TRAN_BRANCH_SET_MODE_CHECK_IP
-#undef TRAN_SET_ADDRESSING_MODE_CHECK
-#undef TRAN_MISC_INSTR_CHECK
-#undef TRAN_EXECUTE_INSTR_CHECK
-#undef ALLOC_TXFMAP
-#undef FREE_TXFMAP
+#undef TXFC_INSTR_CHECK                     /* 'TXFC' == Constrained */
+#undef TXFC_INSTR_CHECK_IP                  /* 'TXFC' == Constrained */
+#undef TXFC_BRANCH_CHECK_IP                 /* 'TXFC' == Constrained */
+#undef TXFC_RELATIVE_BRANCH_CHECK_IP        /* 'TXFC' == Constrained */
+
+#undef TXF_INSTR_CHECK
+#undef TXF_FLOAT_INSTR_CHECK
+#undef TXF_ACCESS_INSTR_CHECK
+#undef TXF_NONRELATIVE_BRANCH_CHECK_IP
+#undef TXF_BRANCH_SET_MODE_CHECK_IP
+#undef TXF_SET_ADDRESSING_MODE_CHECK
+#undef TXF_MISC_INSTR_CHECK
+#undef TXF_EXECUTE_INSTR_CHECK
+#undef TXF_ALLOCMAP
+#undef TXF_FREEMAP
 #undef TXF_MADDRL
 
 #if !defined( FEATURE_073_TRANSACT_EXEC_FACILITY )
 
-  #define CONTRAN_INSTR_CHECK( _regs )
-  #define CONTRAN_INSTR_CHECK_IP( _regs )
-  #define CONTRAN_BRANCH_CHECK_IP( _regs, _m3, _i4 )
-  #define CONTRAN_RELATIVE_BRANCH_CHECK_IP( _regs )
-  #define TRAN_INSTR_CHECK( _regs )
-  #define TRAN_FLOAT_INSTR_CHECK( _regs )
-  #define TRAN_ACCESS_INSTR_CHECK( _regs )
-  #define TRAN_MISC_INSTR_CHECK( _regs )
-  #define TRAN_NONRELATIVE_BRANCH_CHECK_IP( _regs, _r )
-  #define TRAN_BRANCH_SET_MODE_CHECK_IP( _regs, _r2 )
-  #define TRAN_SET_ADDRESSING_MODE_CHECK( _regs )
-  #define TRAN_EXECUTE_INSTR_CHECK( _regs )
-  #define ALLOC_TXFMAP( _regs )
-  #define FREE_TXFMAP( _regs )
+  #define TXFC_INSTR_CHECK( _regs )
+  #define TXFC_INSTR_CHECK_IP( _regs )
+  #define TXFC_BRANCH_CHECK_IP( _regs, _m3, _i4 )
+  #define TXFC_RELATIVE_BRANCH_CHECK_IP( _regs )
+
+  #define TXF_INSTR_CHECK( _regs )
+  #define TXF_FLOAT_INSTR_CHECK( _regs )
+  #define TXF_ACCESS_INSTR_CHECK( _regs )
+  #define TXF_MISC_INSTR_CHECK( _regs )
+  #define TXF_NONRELATIVE_BRANCH_CHECK_IP( _regs, _r )
+  #define TXF_BRANCH_SET_MODE_CHECK_IP( _regs, _r2 )
+  #define TXF_SET_ADDRESSING_MODE_CHECK( _regs )
+  #define TXF_EXECUTE_INSTR_CHECK( _regs )
+  #define TXF_ALLOCMAP( _regs )
+  #define TXF_FREEMAP( _regs )
 
   #define TXF_MADDRL( _vaddr, _len, _arn, _regs, _acctype, _maddr ) \
     /* Return the very same address as what was passed */ (_maddr)
 
 #else /* defined( FEATURE_073_TRANSACT_EXEC_FACILITY ) */
 
-  #define CONTRAN_INSTR_CHECK( _regs )                                                  \
+  #define TXFC_INSTR_CHECK( _regs )                                                     \
     /* Restricted instruction in CONSTRAINED transaction mode */                        \
     do {                                                                                \
       if ((_regs)->txf_contran)                                                         \
@@ -1533,7 +1954,7 @@ do {                                                                  \
       }                                                                                 \
     } while (0)
 
-  #define CONTRAN_INSTR_CHECK_IP( _regs )                                               \
+  #define TXFC_INSTR_CHECK_IP( _regs )                                                  \
     /* Restricted instruction in CONSTRAINED transaction mode */                        \
     do {                                                                                \
       if ((_regs)->txf_contran)                                                         \
@@ -1547,7 +1968,7 @@ do {                                                                  \
       }                                                                                 \
     } while (0)
 
-  #define CONTRAN_BRANCH_CHECK_IP( _regs, _m3, _i4 )                                    \
+  #define TXFC_BRANCH_CHECK_IP( _regs, _m3, _i4 )                                       \
     /* Branches restricted in CONSTRAINED mode if mask zero or offset negative */       \
     do {                                                                                \
       if ((_regs)->txf_contran &&                                                       \
@@ -1565,7 +1986,7 @@ do {                                                                  \
       }                                                                                 \
     } while (0)
 
-  #define CONTRAN_RELATIVE_BRANCH_CHECK_IP( _regs )                                     \
+  #define TXFC_RELATIVE_BRANCH_CHECK_IP( _regs )                                        \
     /* Relative branches restricted in CONSTRAINED mode */                              \
     /* if the mask is zero or the offset is negative    */                              \
     do {                                                                                \
@@ -1584,7 +2005,7 @@ do {                                                                  \
       }                                                                                 \
     } while (0)
 
-  #define TRAN_INSTR_CHECK( _regs )                                                     \
+  #define TXF_INSTR_CHECK( _regs )                                                      \
     /* Restricted instruction in any transaction mode */                                \
     do {                                                                                \
       if ((_regs)->txf_tnd)                                                             \
@@ -1594,7 +2015,7 @@ do {                                                                  \
       }                                                                                 \
     } while (0)
 
-  #define TRAN_FLOAT_INSTR_CHECK( _regs )                                               \
+  #define TXF_FLOAT_INSTR_CHECK( _regs )                                                \
     /* Restricted instruction if CONSTRAINED mode or float bit zero */                  \
     do {                                                                                \
       if (1                                                                             \
@@ -1610,7 +2031,7 @@ do {                                                                  \
       }                                                                                 \
     } while (0)
 
-  #define TRAN_ACCESS_INSTR_CHECK( _regs )                                              \
+  #define TXF_ACCESS_INSTR_CHECK( _regs )                                               \
     /* Restricted instruction if access control bit zero */                             \
     do {                                                                                \
       if (1                                                                             \
@@ -1623,7 +2044,7 @@ do {                                                                  \
       }                                                                                 \
     } while (0)
 
-  #define TRAN_NONRELATIVE_BRANCH_CHECK_IP( _regs, _r )                                 \
+  #define TXF_NONRELATIVE_BRANCH_CHECK_IP( _regs, _r )                                  \
     /* BALR/BASR/BASSM are restricted when the branch     */                            \
     /* register is non-zero and BRANCH tracing is enabled */                            \
     do {                                                                                \
@@ -1641,7 +2062,7 @@ do {                                                                  \
       }                                                                                 \
     } while (0)
 
-  #define TRAN_BRANCH_SET_MODE_CHECK_IP( _regs, _r2 )                                   \
+  #define TXF_BRANCH_SET_MODE_CHECK_IP( _regs, _r2 )                                    \
     /* BASSM/BSM are restricted if the r2 field */                                      \
     /* is non-zero and MODE tracing is enabled. */                                      \
     do {                                                                                \
@@ -1659,7 +2080,7 @@ do {                                                                  \
       }                                                                                 \
     } while (0)
 
-  #define TRAN_SET_ADDRESSING_MODE_CHECK( _regs )                                       \
+  #define TXF_SET_ADDRESSING_MODE_CHECK( _regs )                                        \
     /* SAM24/31/64 is restricted if mode tracing is enabled. */                         \
     do {                                                                                \
       if (1                                                                             \
@@ -1672,7 +2093,7 @@ do {                                                                  \
       }                                                                                 \
     } while (0)
 
-  #define TRAN_MISC_INSTR_CHECK( _regs )                                                \
+  #define TXF_MISC_INSTR_CHECK( _regs )                                                 \
     /* Restricted instruction in any transaction mode */                                \
     do {                                                                                \
       if ((_regs)->txf_tnd)                                                             \
@@ -1682,7 +2103,7 @@ do {                                                                  \
       }                                                                                 \
     } while (0)
 
-  #define TRAN_EXECUTE_INSTR_CHECK( _regs )                                             \
+  #define TXF_EXECUTE_INSTR_CHECK( _regs )                                              \
     /* Most all TXF instructions cannot be executed */                                  \
     do {                                                                                \
       if ((_regs)->execflag)                                                            \
@@ -1694,8 +2115,8 @@ do {                                                                  \
   #define TXF_MADDRL(   _vaddr,   _len,   _arn,   _regs,   _acctype,   _maddr  )        \
           txf_maddr_l( (_vaddr), (_len), (_arn), (_regs), (_acctype), (_maddr) )
 
-  #define ALLOC_TXFMAP( _regs )     alloc_txfmap( _regs )
-  #define FREE_TXFMAP( _regs )      free_txfmap( _regs )
+  #define TXF_ALLOCMAP( _regs )     alloc_txfmap( _regs )
+  #define TXF_FREEMAP( _regs )      free_txfmap( _regs )
 
 #endif /* defined( FEATURE_073_TRANSACT_EXEC_FACILITY ) */
 
@@ -1932,7 +2353,7 @@ CPU_DLL_IMPORT int  ARCH_DEP( fix_program_interrupt_PSW )( REGS* regs );
 CPU_DLL_IMPORT void ARCH_DEP( trace_program_interrupt   )( REGS* regs, int pcode, int ilc );
 
 void *cpu_thread (void *cpu);
-DLL_EXPORT void copy_psw (REGS *regs, BYTE *addr);
+CPU_DLL_IMPORT void copy_psw (REGS *regs, BYTE *addr);
 int   display_psw(                 REGS* regs, char* buf, int buflen );
 char* str_psw(                     REGS* regs, char* buf, int buflen );
 char* str_arch_psw( int arch_mode, REGS* regs, char* buf, int buflen );
@@ -2788,8 +3209,21 @@ DEF_INST( cipher_message_with_output_feedback );
 DEF_INST( cipher_message_with_counter );
 #endif
 
+#if defined( FEATURE_080_DFP_PACK_CONV_FACILITY )
+DEF_INST(convert_packed_to_dfp_ext);
+DEF_INST(convert_packed_to_dfp_long);
+DEF_INST(convert_dfp_ext_to_packed);
+DEF_INST(convert_dfp_long_to_packed);
+#endif
+
 #if defined( FEATURE_145_INS_REF_BITS_MULT_FACILITY )
 DEF_INST( insert_reference_bits_multiple );
+#endif
+
+#if defined( FEATURE_193_BEAR_ENH_FACILITY )
+DEF_INST( load_bear );
+DEF_INST( store_bear );
+DEF_INST( load_program_status_word_extended_y );
 #endif
 
 /*-------------------------------------------------------------------*/
