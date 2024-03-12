@@ -1,3 +1,9 @@
+sdl-hercules (4.7-1ppa1~ubuntu22.04) jammy; urgency=medium
+
+  * New upstream release
+
+ -- Cheng H. Lee <cheng.h.lee@gmail.com>  Tue, 12 Mar 2024 17:55:11 -0500
+
 sdl-hercules (4.6-1ppa1~ubuntu22.04) jammy; urgency=medium
 
   * New upstream release
