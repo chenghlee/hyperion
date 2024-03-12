@@ -127,6 +127,9 @@
 #define MAX_390_MAINSIZE_PAGES      (MAX_390_MAINSIZE_BYTES  >> SHIFT_4K)
 #define MAX_900_MAINSIZE_PAGES      (MAX_900_MAINSIZE_BYTES  >> SHIFT_4K)
 
+#define MIN_ARCH_MAINSIZE_BYTES     0   // (slot 0 = minimum for arch)
+#define MAX_ARCH_MAINSIZE_BYTES     1   // (slot 1 = maximum for arch)
+
 /*-------------------------------------------------------------------*/
 /* Miscellaneous system related constants we could be missing...     */
 /*-------------------------------------------------------------------*/
@@ -616,5 +619,24 @@
         | PGMBIT(  PGM_REGION_SECOND_TRANSLATION_EXCEPTION   )        \
         | PGMBIT(  PGM_REGION_THIRD_TRANSLATION_EXCEPTION    )        \
      ))
+
+/*-------------------------------------------------------------------*/
+/*         Channel constants, also needed by ckddasd code            */
+/*-------------------------------------------------------------------*/
+
+/*  CAUTION: for performance reasons the size of the data portion
+    of IOBUF (i.e. IOBUF_MINSIZE) should never be less than 64K-1,
+    and sizes greater than 64K may cause stack overflows to occur.
+*/
+#define IOBUF_ALIGN         4096          /* Must be a power of 2    */
+#define IOBUF_HDRSIZE       IOBUF_ALIGN   /* Multiple of IOBUF_ALIGN */
+#define IOBUF_MINSIZE       65536         /* Multiple of IOBUF_ALIGN */
+#define IOBUF_INCREASE      1048576       /* Multiple of IOBUF_ALIGN */
+
+/*-------------------------------------------------------------------*/
+/*         Default command prefixes for Integrated Consoles          */
+/*-------------------------------------------------------------------*/
+
+#define DEF_CMDPREFIXES     "/`=~@$%^&_:?0123456789"
 
 #endif // _HCONSTS_H

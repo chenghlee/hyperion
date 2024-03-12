@@ -226,7 +226,7 @@ int ARCH_DEP( system_reset )( const int target_mode, const bool clear,
                     /* Release intlock, take a nap, and re-acquire */
                     RELEASE_INTLOCK( NULL );
                     {
-                        usleep( 10000 );  // (wait 10 milliseconds)
+                        USLEEP( 10000 );  // (wait 10 milliseconds)
                     }
                     OBTAIN_INTLOCK( NULL );
                 }
@@ -492,11 +492,14 @@ int rc;
     OBTAIN_INTLOCK(NULL);
 
     /* Clear the interrupt pending and device busy conditions */
-    obtain_lock (&sysblk.iointqlk);
-    DEQUEUE_IO_INTERRUPT_QLOCKED(&dev->ioint);
-    DEQUEUE_IO_INTERRUPT_QLOCKED(&dev->pciioint);
-    DEQUEUE_IO_INTERRUPT_QLOCKED(&dev->attnioint);
-    release_lock(&sysblk.iointqlk);
+    OBTAIN_IOINTQLK();
+    {
+        DEQUEUE_IO_INTERRUPT_QLOCKED(&dev->ioint);
+        DEQUEUE_IO_INTERRUPT_QLOCKED(&dev->pciioint);
+        DEQUEUE_IO_INTERRUPT_QLOCKED(&dev->attnioint);
+    }
+    RELEASE_IOINTQLK();
+
     dev->busy = 0;
     dev->scsw.flag2 = 0;
     dev->scsw.flag3 = 0;

@@ -73,11 +73,25 @@ typedef struct mopt MOPT;
 #define TM struct tm
 
 /*-------------------------------------------------------------------*/
+/*           Table of thread-numbers and thread-names                */
+/*-------------------------------------------------------------------*/
+struct tidtab
+{
+    U64   tidnum;       // Thread-id number (not 'TID'!)
+    char  thrdname[16]; // Thread name
+};
+typedef struct tidtab TIDTAB;
+
+static TIDTAB* tidtab = NULL;   // (ptr to table)
+static int numtids = 0;         // (number of entries)
+
+/*-------------------------------------------------------------------*/
 /*               static global work variables                        */
 /*-------------------------------------------------------------------*/
 static char* pgm       = NULL;          /* less any extension (.ext) */
 static FILE* inf       = NULL;          /* Input file stream         */
 static int   arg_errs  = 0;             /* Parse options error count */
+static size_t hdr_size = sizeof(TFHDR); /* Size of file's TFHDR's    */
 static bool  info_only = false;         /* --info option             */
 static bool  regsfirst = false;         /* --traceopt REGSFIRST      */
 static bool  noregs    = false;         /* --traceopt NOREGS         */
@@ -106,6 +120,7 @@ static time_t  end_dat = {0};           /* --date option             */
 static U16   prvcpuad  = 0;             /* cpuad  of prv printed rec */
 static U16   prvdevnum = 0;             /* devnum of prv printed rec */
 static bool  previnst  = true;          /* prv was instruction print */
+static BYTE  sys_ffmt  = TF_FMT;        /* Saved TFSYS file format   */
 static char  pathname[ MAX_PATH ] = {0};/* Trace file name           */
 static BYTE  iobuff[ _64_KILOBYTE ];    /* Trace file I/O buffer     */
 
@@ -679,6 +694,57 @@ static void tf_store_psw( PSW* psw, QWORD* qw, BYTE arch_mode )
         STORE_DW( addr + 8, psw->IA_G );
 }
 
+/*-------------------------------------------------------------------*/
+/*       Sort tidtab into ascending thread name sequence             */
+/*-------------------------------------------------------------------*/
+static int sort_tidtab_by_thrdname( const void* a, const void* b )
+{
+    const TIDTAB* tab_a = (const TIDTAB*)a;
+    const TIDTAB* tab_b = (const TIDTAB*)b;
+    int rc = strncmp( tab_a->thrdname, tab_b->thrdname, sizeof( tab_a->thrdname ));
+    if (!rc)
+        rc = (tab_a->tidnum - tab_b->tidnum);
+    return rc;
+}
+
+/*-------------------------------------------------------------------*/
+/*       Sort tidtab into ascending thread-id number sequence        */
+/*-------------------------------------------------------------------*/
+static int sort_tidtab_by_tidnum( const void* a, const void* b )
+{
+    const TIDTAB* tab_a = (const TIDTAB*)a;
+    const TIDTAB* tab_b = (const TIDTAB*)b;
+    return (tab_a->tidnum - tab_b->tidnum);
+}
+
+/*-------------------------------------------------------------------*/
+/*               Save threading information                          */
+/*-------------------------------------------------------------------*/
+static void tf_save_tidinfo( const TFHDR* hdr )
+{
+    TIDTAB* my_tidptr = tidtab;
+    int i;
+
+    /* Check if we already have this thread in our table */
+    for (i=0; i < numtids; ++i)
+    {
+        if (my_tidptr[i].tidnum > hdr->tidnum)
+            break; // (past it; not in table)
+
+        if (my_tidptr[i].tidnum == hdr->tidnum)
+            return; // (already in our table)
+    }
+
+    /* Add this new entry to our table */
+    tidtab = realloc( tidtab, sizeof( TIDTAB ) * (numtids + 1 ));
+    tidtab[ numtids ].tidnum = hdr->tidnum;
+    STRLCPY( tidtab[ numtids ].thrdname, hdr->thrdname );
+    numtids += 1;
+
+    /* Keep the table in ascending thread-id number order */
+    qsort( tidtab, numtids, sizeof( TIDTAB ), sort_tidtab_by_tidnum );
+}
+
 /******************************************************************************/
 /*                                                                            */
 /*                     RECORD FILTERING FUNCTIONS                             */
@@ -967,17 +1033,47 @@ static void tf_dev_do_blank_sep( TFHDR* hdr )
     tf_dev_do_blank_sep( &rec->rhdr );                                \
     FLOGMSG( stdout, "%s " # _hhc "I " _hhc "\n", &timstr[ 11 ]
 
+// (same as above, but for "E" error message)
+#define TF_DEV_FLOGMSG_E( _nnnn )                                     \
+                                                                      \
+    TF_DEV_FLOGMSG_HHC_E( HHC0 ## _nnnn )
+
+// (same as TF_FLOGMSG_HHC, but for "E" error message)
+#define TF_DEV_FLOGMSG_HHC_E( _hhc )                                  \
+                                                                      \
+    tf_dev_do_blank_sep( &rec->rhdr );                                \
+    FLOGMSG( stdout, "%s " # _hhc "E " _hhc "\n", &timstr[ 11 ]
+
 //---------------------------------------------------------------------
 
 /* Used by device trace messages 1300-1336... */
 #define PRINT_DEV_FUNC( _nnnn )                                       \
-    PRINT_DEV_TF0( _nnnn )
+    PRINT_DEV_TF1( _nnnn )
 
-/* Same as above but with filename before remaining printf arguments.
-   Used by device trace messages 0424-0442 and 0516-0520...
+/* Almost the entire device trace printing function,
+   except for last few printf arguments...
+*/
+#define PRINT_DEV_TF1( _nnnn )                                        \
+                                                                      \
+    static inline void print_TF0 ## _nnnn( TF0 ## _nnnn* rec )        \
+    {                                                                 \
+        char timstr[ 64] = {0};                                       \
+        FormatTIMEVAL( &rec->rhdr.tod, timstr, sizeof( timstr ));     \
+                                                                      \
+        TF_DEV_FLOGMSG( _nnnn ),                                      \
+            rec->rhdr.lcss, rec->rhdr.devnum
+
+//---------------------------------------------------------------------
+
+/* Same as above but with thread-id & filename before remaining printf
+   arguments. Used by device trace messages 0423-0442 and 0516-0520...
 */
 #define PRINT_DEV_FUNC0( _nnnn )                                      \
-    PRINT_DEV_TF0( _nnnn ), rec->filename     // (filename too!)
+    PRINT_DEV_TF0( _nnnn ), rec->filename
+
+// (same as above, but for "E" error message)
+#define PRINT_DEV_FUNC0_E( _nnnn )                                    \
+    PRINT_DEV_TF0_E( _nnnn ), rec->filename
 
 /* Almost the entire device trace printing function,
    except for last few printf arguments...
@@ -990,7 +1086,18 @@ static void tf_dev_do_blank_sep( TFHDR* hdr )
         FormatTIMEVAL( &rec->rhdr.tod, timstr, sizeof( timstr ));     \
                                                                       \
         TF_DEV_FLOGMSG( _nnnn ),                                      \
-            rec->rhdr.lcss, rec->rhdr.devnum
+        sys_ffmt >= TF_FMT2 ? rec->rhdr.tidnum : 0, rec->rhdr.lcss, rec->rhdr.devnum
+
+// (same as above, but for "E" error message)
+#define PRINT_DEV_TF0_E( _nnnn )                                      \
+                                                                      \
+    static inline void print_TF0 ## _nnnn( TF0 ## _nnnn* rec )        \
+    {                                                                 \
+        char timstr[ 64] = {0};                                       \
+        FormatTIMEVAL( &rec->rhdr.tod, timstr, sizeof( timstr ));     \
+                                                                      \
+        TF_DEV_FLOGMSG_E( _nnnn ),                                    \
+        sys_ffmt >= TF_FMT2 ? rec->rhdr.tidnum : 0, rec->rhdr.lcss, rec->rhdr.devnum
 
 /*-------------------------------------------------------------------*/
 /*                    print TFSYS record                             */
@@ -1016,14 +1123,14 @@ static void print_TFSYS( TFSYS* sys, bool was_bigend )
     FormatTIMEVAL( &sys->beg_tod, buffer, sizeof( buffer ));
     WRMSG( HHC03209, "I", "began", buffer );
 
-    // "Trace count: ins=%s records, dev=%s records"
-    fmt_S64( inscnt, (S64) sys->tot_ins );
-    fmt_S64( devcnt, (S64) sys->tot_dev );
-    WRMSG( HHC03211, "I", inscnt, devcnt );
-
     // "Trace %s: %s"
     FormatTIMEVAL( &sys->end_tod, buffer, sizeof( buffer ));
     WRMSG( HHC03209, "I", "ended", buffer );
+
+    // "Trace count: instruction=%s records, device=%s records"
+    fmt_S64( inscnt, (S64) sys->tot_ins );
+    fmt_S64( devcnt, (S64) sys->tot_dev );
+    WRMSG( HHC03211, "I", inscnt, devcnt );
 
     /* Build pre-formatted processor type strings for all CPUs */
     for (i=0; i < MAX_CPU_ENGS; ++i)
@@ -1618,7 +1725,7 @@ static inline void print_840_ext_rupt( TF00840* rec )
             pfx[23] = '2'; // HHC00842I
             FLOGMSG( stdout, "%s: CPU timer=%16.16"PRIX64"\n", pfx, rec->cpu_timer );
             break;
-            
+
         case EXT_INTERVAL_TIMER_INTERRUPT:
 
             // "Processor %s%02X: External interrupt: interval timer"
@@ -1729,7 +1836,7 @@ static inline void print_op_stor( const char* pfx, BYTE arch_mode, BYTE real_mod
         RTRIM(   pfx_and_vadr );        // (vadr likely empty)
         STRLCAT( pfx_and_vadr, " " );   // (blank is expected)
 
-        FLOGMSG( stdout, "%sTranslation exception %04.4"PRIX16" (%s)\n",
+        FLOGMSG( stdout, "%sTranslation exception %04"PRIX16" (%s)\n",
             pfx_and_vadr, op->xcode, PIC2Name( op->xcode ));
     }
     else
@@ -1750,10 +1857,10 @@ static inline void print_op_stor( const char* pfx, BYTE arch_mode, BYTE real_mod
         // (more efficient to print everything than to loop)
         MSGBUF( hbuf,
 
-            "%02.2X%02.2X%02.2X%02.2X "
-            "%02.2X%02.2X%02.2X%02.2X "
-            "%02.2X%02.2X%02.2X%02.2X "
-            "%02.2X%02.2X%02.2X%02.2X",
+            "%02X%02X%02X%02X "
+            "%02X%02X%02X%02X "
+            "%02X%02X%02X%02X "
+            "%02X%02X%02X%02X",
 
             op->stor[ 0], op->stor[ 1], op->stor[ 2], op->stor[ 3],
             op->stor[ 4], op->stor[ 5], op->stor[ 6], op->stor[ 7],
@@ -1767,7 +1874,7 @@ static inline void print_op_stor( const char* pfx, BYTE arch_mode, BYTE real_mod
         for (i=0; i < op->amt; i++)
         {
             c = guest_to_host( op->stor[ i ]);
-            if (!isprint( c )) c = '.';
+            if (!isprint( (unsigned char)c )) c = '.';
             cbuf[ i ] = c;
         }
 
@@ -1779,12 +1886,12 @@ static inline void print_op_stor( const char* pfx, BYTE arch_mode, BYTE real_mod
         /* And finally print all pieces together as one line */
         if (ARCH_900_IDX == arch_mode)
         {
-            FLOGMSG( stdout, "%s%sR:%16.16"PRIX64":K:%02.2X=%s\n",
+            FLOGMSG( stdout, "%s%sR:%016"PRIX64":K:%02X=%s\n",
                 pfx, vadr, op->raddr, op->skey, stor );
         }
         else
         {
-            FLOGMSG( stdout, "%s%sR:%8.8"PRIX32":K:%02.2X=%s\n",
+            FLOGMSG( stdout, "%s%sR:%08"PRIX32":K:%02X=%s\n",
                 pfx, vadr, (U32)op->raddr, op->skey, stor );
         }
     }
@@ -1865,7 +1972,7 @@ static inline void print_814_sigp( TF00814* rec )
         MSGBUF( prm, "%8.8"PRIX32, (U32) rec->parm );
 
     // "Processor %s: CC %d%s"
-    MSGBUF( pfx, "%s HHC00814I Processor %s: SIGP %-32s (%02.2X) %s, PARM %s: CC %d",
+    MSGBUF( pfx, "%s HHC00814I Processor %s: SIGP %-32s (%02X) %s, PARM %s: CC %d",
         &tim[ 11 ], ptyp_str( rec->rhdr.cpuad ),
         order2name( rec->order ), rec->order,
         ptyp_str( rec->cpad ), prm, rec->cc );
@@ -1875,7 +1982,7 @@ static inline void print_814_sigp( TF00814* rec )
     if (rec->got_status)
         FLOGMSG( stdout, "%s\n", pfx );
     else
-        FLOGMSG( stdout, "%s status %8.8X\n", pfx, rec->status );
+        FLOGMSG( stdout, "%s status %08X\n", pfx, rec->status );
 }
 
 /******************************************************************************/
@@ -1886,15 +1993,17 @@ static inline void print_814_sigp( TF00814* rec )
 /******************************************************************************/
 
 /*-------------------------------------------------------------------*/
-/*          fmtdata -- format hex and character buffer data          */
+/*  e7_fmtdata -- format 64 bytes of hex and character buffer data   */
 /*-------------------------------------------------------------------*/
-static const char* fmtdata( BYTE* data, BYTE amt )
+static const char* e7_fmtdata( BYTE code, BYTE* data, BYTE amt )
 {
-    static char both_buf[96] = {0};
-           char byte_buf[64] = {0};
-           char char_buf[32] = {0};
+    static char both_buf[(64/16)*96] = {0};
+           char byte_buf[(64/16)*64] = {0};
+           char char_buf[(64/16)*32] = {0};
 
-    if (amt > 16) CRASH();  // (sanity check)
+    UNREFERENCED( code );
+
+    if (amt > 64) CRASH();  // (sanity check)
 
     if (!amt)   // (might be e.g. TIC, which doesn't xfer any data)
     {
@@ -1902,9 +2011,24 @@ static const char* fmtdata( BYTE* data, BYTE amt )
         return both_buf;
     }
 
-    MSGBUF( byte_buf, " => %2.2X%2.2X%2.2X%2.2X %2.2X%2.2X%2.2X%2.2X %2.2X%2.2X%2.2X%2.2X %2.2X%2.2X%2.2X%2.2X",
-        data[0], data[1], data[ 2], data[ 3], data[ 4], data[ 5], data[ 6], data[ 7],
-        data[8], data[9], data[10], data[11], data[12], data[13], data[14], data[15]
+    MSGBUF( byte_buf,
+        " => "
+        "%2.2X%2.2X%2.2X%2.2X %2.2X%2.2X%2.2X%2.2X %2.2X%2.2X%2.2X%2.2X %2.2X%2.2X%2.2X%2.2X "
+        "%2.2X%2.2X%2.2X%2.2X %2.2X%2.2X%2.2X%2.2X %2.2X%2.2X%2.2X%2.2X %2.2X%2.2X%2.2X%2.2X "
+        "%2.2X%2.2X%2.2X%2.2X %2.2X%2.2X%2.2X%2.2X %2.2X%2.2X%2.2X%2.2X %2.2X%2.2X%2.2X%2.2X "
+        "%2.2X%2.2X%2.2X%2.2X %2.2X%2.2X%2.2X%2.2X %2.2X%2.2X%2.2X%2.2X %2.2X%2.2X%2.2X%2.2X"
+
+        , data[ 0], data[ 1], data[ 2], data[ 3], data[ 4], data[ 5], data[ 6], data[ 7]
+        , data[ 8], data[ 9], data[10], data[11], data[12], data[13], data[14], data[15]
+
+        , data[16], data[17], data[18], data[19], data[20], data[21], data[22], data[23]
+        , data[24], data[25], data[26], data[27], data[28], data[29], data[30], data[31]
+
+        , data[32], data[33], data[34], data[35], data[36], data[37], data[38], data[39]
+        , data[40], data[41], data[42], data[43], data[44], data[45], data[46], data[47]
+
+        , data[48], data[49], data[50], data[51], data[52], data[53], data[54], data[55]
+        , data[56], data[57], data[58], data[59], data[60], data[61], data[62], data[63]
     );
 
     // Truncate according to passed len (the below accounts for the
@@ -1917,90 +2041,140 @@ static const char* fmtdata( BYTE* data, BYTE amt )
 
     prt_guest_to_host( data, char_buf, amt );
 
-    MSGBUF( both_buf, "%-40.40s%s", byte_buf, char_buf );
+    MSGBUF( both_buf, "%-*.*s%s", 4+((64/4)*9),
+                                  4+((64/4)*9),
+                                  byte_buf, char_buf );
 
     return both_buf;
 }
 
 /*-------------------------------------------------------------------*/
+/*   fmtdata -- format 16 bytes of hex and character buffer data     */
+/*-------------------------------------------------------------------*/
+static const char* fmtdata( BYTE code, BYTE* data, BYTE amt )
+{
+    if (sys_ffmt >= TF_FMT1 && code == 0xE7)
+        return e7_fmtdata( code, data, amt );
+    else
+    {
+        static char both_buf[(16/16)*96] = {0};
+               char byte_buf[(16/16)*64] = {0};
+               char char_buf[(16/16)*32] = {0};
+
+        if (amt > 16) CRASH();  // (sanity check)
+
+        if (!amt)   // (might be e.g. TIC, which doesn't xfer any data)
+        {
+            both_buf[0] = 0;
+            return both_buf;
+        }
+
+        MSGBUF( byte_buf,
+            " => "
+            "%2.2X%2.2X%2.2X%2.2X %2.2X%2.2X%2.2X%2.2X %2.2X%2.2X%2.2X%2.2X %2.2X%2.2X%2.2X%2.2X"
+
+            , data[0], data[1], data[ 2], data[ 3], data[ 4], data[ 5], data[ 6], data[ 7]
+            , data[8], data[9], data[10], data[11], data[12], data[13], data[14], data[15]
+        );
+
+        // Truncate according to passed len (the below accounts for the
+        // 4 char " => " prefix, plus the 2 printed hex characters for
+        // each byte, plus the blank/space after every 4 printed bytes.
+
+        byte_buf[ 4 + (amt << 1) + (amt >> 2) ] = 0;
+
+        // Now format the character representation of those bytes
+
+        prt_guest_to_host( data, char_buf, amt );
+
+        MSGBUF( both_buf, "%-*.*s%s", 4+((16/4)*9),
+                                      4+((16/4)*9),
+                                      byte_buf, char_buf );
+
+        return both_buf;
+    }
+}
+
+/*-------------------------------------------------------------------*/
 /*         The Device Trace printing functions themselves            */
-/*                  msgnum 424... and 516...                         */
+/*                  msgnum 423... and 516...                         */
 /*-------------------------------------------------------------------*/
 
-//HHC00423 "%1d:%04X CKD file %s: search key %s"
+//HHC00423 "Thread "TIDPAT" %1d:%04X CKD file %s: search key %s"
 PRINT_DEV_FUNC0( 0423 ), RTRIM( str_guest_to_host( rec->key, rec->key, rec->kl ))); }
 
-//HHC00424 "%1d:%04X CKD file %s: read trk %d cur trk %d"
+//HHC00424 "Thread "TIDPAT" %1d:%04X CKD file %s: read trk %d cur trk %d"
 PRINT_DEV_FUNC0( 0424 ), rec->trk, rec->bufcur ); }
 
-//HHC00425 "%1d:%04X CKD file %s: read track updating track %d"
+//HHC00425 "Thread "TIDPAT" %1d:%04X CKD file %s: read track updating track %d"
 PRINT_DEV_FUNC0( 0425 ), rec->bufcur ); }
 
-//HHC00426 "%1d:%04X CKD file %s: read trk %d cache hit, using cache[%d]"
+//HHC00426 "Thread "TIDPAT" %1d:%04X CKD file %s: read trk %d cache hit, using cache[%d]"
 PRINT_DEV_FUNC0( 0426 ), rec->trk, rec->idx ); }
 
-//HHC00427 "%1d:%04X CKD file %s: read trk %d no available cache entry, waiting"
+//HHC00427 "Thread "TIDPAT" %1d:%04X CKD file %s: read trk %d no available cache entry, waiting"
 PRINT_DEV_FUNC0( 0427 ), rec->trk ); }
 
-//HHC00428 "%1d:%04X CKD file %s: read trk %d cache miss, using cache[%d]"
+//HHC00428 "Thread "TIDPAT" %1d:%04X CKD file %s: read trk %d cache miss, using cache[%d]"
 PRINT_DEV_FUNC0( 0428 ), rec->trk, rec->idx ); }
 
-//HHC00429 "%1d:%04X CKD file %s: read trk %d reading file %d offset %"PRId64" len %d"
+//HHC00429 "Thread "TIDPAT" %1d:%04X CKD file %s: read trk %d reading file %d offset %"PRId64" len %d"
 PRINT_DEV_FUNC0( 0429 ), rec->trk, rec->fnum, rec->offset, rec->len ); }
 
-//HHC00430 "%1d:%04X CKD file %s: read trk %d trkhdr %02X %02X%02X %02X%02X"
+//HHC00430 "Thread "TIDPAT" %1d:%04X CKD file %s: read trk %d trkhdr %02X %02X%02X %02X%02X"
 PRINT_DEV_FUNC0( 0430 ), rec->trk, rec->buf[0], rec->buf[1], rec->buf[2], rec->buf[3], rec->buf[4] ); }
 
-//HHC00431 "%1d:%04X CKD file %s: seeking to cyl %d head %d"
+//HHC00431 "Thread "TIDPAT" %1d:%04X CKD file %s: seeking to cyl %d head %d"
 PRINT_DEV_FUNC0( 0431 ), rec->cyl, rec->head ); }
 
-//HHC00432 "%1d:%04X CKD file %s: error: MT advance: locate record %d file mask %02X"
-PRINT_DEV_FUNC0( 0432 ), rec->count, rec->mask ); }
+//HHC00432 "Thread "TIDPAT" %1d:%04X CKD file %s: error: MT advance: locate record %d file mask %02X"
+// (Note: PRINT_DEV_FUNC0_E = "E" error message, not "I" informational message!)
+PRINT_DEV_FUNC0_E( 0432 ), rec->count, rec->mask ); }
 
-//HHC00433 "%1d:%04X CKD file %s: MT advance to cyl(%d) head(%d)"
+//HHC00433 "Thread "TIDPAT" %1d:%04X CKD file %s: MT advance to cyl(%d) head(%d)"
 PRINT_DEV_FUNC0( 0433 ), rec->cyl, rec->head ); }
 
-//HHC00434 "%1d:%04X CKD file %s: read count orientation %s"
+//HHC00434 "Thread "TIDPAT" %1d:%04X CKD file %s: read count orientation %s"
 static const char* orient[] = { "none", "index", "count", "key", "data", "eot" };
 PRINT_DEV_FUNC0( 0434 ), orient[ rec->orient ] ); }
 
-//HHC00435 "%1d:%04X CKD file %s: cyl %d head %d record %d kl %d dl %d of %d"
+//HHC00435 "Thread "TIDPAT" %1d:%04X CKD file %s: cyl %d head %d record %d kl %d dl %d of %d"
 PRINT_DEV_FUNC0( 0435 ), rec->cyl, rec->head, rec->record, rec->kl, rec->dl, rec->offset ); }
 
-//HHC00436 "%1d:%04X CKD file %s: read key %d bytes"
+//HHC00436 "Thread "TIDPAT" %1d:%04X CKD file %s: read key %d bytes"
 PRINT_DEV_FUNC0( 0436 ), rec->kl ); }
 
-//HHC00437 "%1d:%04X CKD file %s: read data %d bytes"
+//HHC00437 "Thread "TIDPAT" %1d:%04X CKD file %s: read data %d bytes"
 PRINT_DEV_FUNC0( 0437 ), rec->dl ); }
 
-//HHC00438 "%1d:%04X CKD file %s: writing cyl %d head %d record %d kl %d dl %d"
+//HHC00438 "Thread "TIDPAT" %1d:%04X CKD file %s: writing cyl %d head %d record %d kl %d dl %d"
 PRINT_DEV_FUNC0( 0438 ), rec->cyl, rec->head, rec->recnum, rec->keylen, rec->datalen ); }
 
-//HHC00439 "%1d:%04X CKD file %s: setting track overflow flag for cyl %d head %d record %d"
+//HHC00439 "Thread "TIDPAT" %1d:%04X CKD file %s: setting track overflow flag for cyl %d head %d record %d"
 PRINT_DEV_FUNC0( 0439 ), rec->cyl, rec->head, rec->recnum ); }
 
-//HHC00440 "%1d:%04X CKD file %s: updating cyl %d head %d record %d kl %d dl %d"
+//HHC00440 "Thread "TIDPAT" %1d:%04X CKD file %s: updating cyl %d head %d record %d kl %d dl %d"
 PRINT_DEV_FUNC0( 0440 ), rec->cyl, rec->head, rec->recnum, rec->keylen, rec->datalen ); }
 
-//HHC00441 "%1d:%04X CKD file %s: updating cyl %d head %d record %d dl %d"
+//HHC00441 "Thread "TIDPAT" %1d:%04X CKD file %s: updating cyl %d head %d record %d dl %d"
 PRINT_DEV_FUNC0( 0441 ), rec->cyl, rec->head, rec->recnum, rec->datalen ); }
 
-//HHC00442 "%1d:%04X CKD file %s: set file mask %02X"
+//HHC00442 "Thread "TIDPAT" %1d:%04X CKD file %s: set file mask %02X"
 PRINT_DEV_FUNC0( 0442 ), rec->mask ); }
 
-//HHC00516 "%1d:%04X FBA file %s: read blkgrp %d cache hit, using cache[%d]"
+//HHC00516 "Thread "TIDPAT" %1d:%04X FBA file %s: read blkgrp %d cache hit, using cache[%d]"
 PRINT_DEV_FUNC0( 0516 ), rec->blkgrp, rec->idx ); }
 
-//HHC00517 "%1d:%04X FBA file %s: read blkgrp %d no available cache entry, waiting"
+//HHC00517 "Thread "TIDPAT" %1d:%04X FBA file %s: read blkgrp %d no available cache entry, waiting"
 PRINT_DEV_FUNC0( 0517 ), rec->blkgrp ); }
 
-//HHC00518 "%1d:%04X FBA file %s: read blkgrp %d cache miss, using cache[%d]"
+//HHC00518 "Thread "TIDPAT" %1d:%04X FBA file %s: read blkgrp %d cache miss, using cache[%d]"
 PRINT_DEV_FUNC0( 0518 ), rec->blkgrp, rec->idx ); }
 
-//HHC00519 "%1d:%04X FBA file %s: read blkgrp %d offset %"PRId64" len %d"
+//HHC00519 "Thread "TIDPAT" %1d:%04X FBA file %s: read blkgrp %d offset %"PRId64" len %d"
 PRINT_DEV_FUNC0( 0519 ), rec->blkgrp, rec->offset, rec->len ); }
 
-//HHC00520 "%1d:%04X FBA file %s: positioning to 0x%"PRIX64" %"PRId64
+//HHC00520 "Thread "TIDPAT" %1d:%04X FBA file %s: positioning to 0x%"PRIX64" %"PRId64
 PRINT_DEV_FUNC0( 0520 ), rec->rba, rec->rba ); }
 
 /*-------------------------------------------------------------------*/
@@ -2024,21 +2198,21 @@ static inline void print_TF01301( TF01301* rec )
     case PF_IDAW1:
         // "%1d:%04X CHAN: idaw %8.8"PRIX32", len %3.3"PRIX16"%s"
         TF_DEV_FLOGMSG( 1302 ),
-            rec->rhdr.lcss, rec->rhdr.devnum, (U32)rec->addr, rec->count, fmtdata( rec->data, rec->amt ));
+            rec->rhdr.lcss, rec->rhdr.devnum, (U32)rec->addr, rec->count, fmtdata( rec->code, rec->data, rec->amt ));
         break;
 
     case PF_IDAW2:
 
         // "%1d:%04X CHAN: idaw %16.16"PRIX64", len %4.4"PRIX16"%s"
         TF_DEV_FLOGMSG( 1303 ),
-            rec->rhdr.lcss, rec->rhdr.devnum, (U64)rec->addr, rec->count, fmtdata( rec->data, rec->amt ));
+            rec->rhdr.lcss, rec->rhdr.devnum, (U64)rec->addr, rec->count, fmtdata( rec->code, rec->data, rec->amt ));
         break;
 
     case PF_MIDAW:
 
         // "%1d:%04X CHAN: midaw %2.2X %4.4"PRIX16" %16.16"PRIX64"%s"
         TF_DEV_FLOGMSG( 1301 ),
-            rec->rhdr.lcss, rec->rhdr.devnum, rec->mflag, rec->count, (U64)rec->addr, fmtdata( rec->data, rec->amt ));
+            rec->rhdr.lcss, rec->rhdr.devnum, rec->mflag, rec->count, (U64)rec->addr, fmtdata( rec->code, rec->data, rec->amt ));
         break;
 
     default: CRASH(); UNREACHABLE_CODE( return );
@@ -2114,10 +2288,10 @@ static inline void print_TF01315( TF01315* rec )
 
     // "%1d:%04X CHAN: ccw %2.2X%2.2X%2.2X%2.2X %2.2X%2.2X%2.2X%2.2X%s"
     TF_DEV_FLOGMSG( 1315 ),
-        rec->rhdr.lcss, rec->rhdr.devnum, 
+        rec->rhdr.lcss, rec->rhdr.devnum,
         rec->ccw[0], rec->ccw[1], rec->ccw[2], rec->ccw[3],
         rec->ccw[4], rec->ccw[5], rec->ccw[6], rec->ccw[7],
-        fmtdata( rec->data, rec->amt ));
+        fmtdata( rec->ccw[0], rec->data, rec->amt ));
 }
 
 // "%1d:%04X CHAN: csw %2.2X, stat %2.2X%2.2X, count %2.2X%2.2X, ccw %2.2X%2.2X%2.2X"
@@ -2469,7 +2643,7 @@ static void process_TF02324( TF02324* rec )
        PLEASE NOTE that we wish to treat each instruction that is
        printed as if it were a single line (even though multiple
        lines are always ptinted for each).
-       
+
        Thus the "print_all_available_regs" function prints the blank
        line for us before it prints the registers, but only does so
        if the REGSFIRST option was specified. Otherwise it doesn't,
@@ -2620,8 +2794,21 @@ static bool finish_reading_rec( U16 msgnum )
     rec = (BYTE*) (hdr + 1);          /* point past TFHDR to the rec */
     cpuad = (BYTE) hdr->cpuad;        /* which CPU this rec is for   */
 
-    /* Read in the remainder of this record */
-    amt = hdr->curr - sizeof( TFHDR );
+    /* Read in the remainder of this record. PROGRAMMING NOTE: we
+       read the rest of the record into our I/O buffer at an offset
+       that matches the CURRENT size of the THDR portion, such that
+       the entire record that ends up in our buffer (TFHDR + record
+       fields) ends up looking like a NEW (current) format record,
+       and not the old format of the file being read and processed.
+
+       This makes the rest of our trace file printing logic simpler
+       as they can then simply access the record fields directly
+       without being concerned about the difference in the THDR sizes
+       between the old and new formats, since will never access any
+       of the new TFHDR fields anyway without first checking if they
+       actually exist beforehand.
+    */
+    amt = hdr->curr - hdr_size;
     if ((bytes_read = fread( rec, 1, amt, inf )) < 0)
     {
         /* "Error reading trace file: %s" */
@@ -2637,6 +2824,12 @@ static bool finish_reading_rec( U16 msgnum )
         FWRMSG( stderr, HHC03207, "E", buf );
         exit( -1 );
     }
+
+    /* AT THIS POINT, the trace record in our buffer now looks like
+       what a NEW (current) format trace record looks like, with all
+       of its fields aligned correctly. This makes the remainder of
+       our processing logic much simpler and more straightforward.
+    */
 
     /* Don't save this record if they're not interested in it */
     if (!is_wanted( hdr ))
@@ -2673,6 +2866,7 @@ int main( int argc, char* argv[] )
     TFHDR*  hdr         = NULL;     /* Ptr to record header          */
     size_t  bytes_read  = 0;        /* Number of BYTES read          */
     bool    was_bigend  = false;    /* Endianness of TFSYS record    */
+    int     i;                      /* Work for iterating            */
 
     INITIALIZE_UTILITY( UTILITY_NAME, UTILITY_DESC, &pgm );
 
@@ -2714,7 +2908,7 @@ int main( int argc, char* argv[] )
     }
 
     if (0
-        || sys->ffmt[3] < '0'
+        || sys->ffmt[3] < TF_FMT0
         || sys->ffmt[3] > TF_FMT
     )
     {
@@ -2722,6 +2916,13 @@ int main( int argc, char* argv[] )
         FWRMSG( stderr, HHC03213, "E", sys->ffmt[3] );
         exit( -1 );
     }
+
+    /* Remember the format of the file we're processing */
+    sys_ffmt = sys->ffmt[3];
+
+    /* Determine TFHDR size */
+    if (sys_ffmt < TF_FMT2)
+        hdr_size = offsetof( TFHDR, tidnum );
 
     if (sys->engs > MAX_CPU_ENGS)
     {
@@ -2759,7 +2960,7 @@ int main( int argc, char* argv[] )
     while (recnum < torec)
     {
         /* Read just TFHDR for now, so we can identify record */
-        if ((bytes_read = fread( hdr, 1, sizeof( TFHDR ), inf )) != sizeof( TFHDR ))
+        if ((bytes_read = fread( hdr, 1, hdr_size, inf )) != hdr_size)
         {
             /* Stop when EOF reached */
             if (!bytes_read)
@@ -2775,7 +2976,7 @@ int main( int argc, char* argv[] )
             show_file_progress();
 
         /* Make sure we have a complete header to work with */
-        if (bytes_read < sizeof( TFHDR ))
+        if (bytes_read < hdr_size)
         {
             // "Truncated %s record; aborting"
             FWRMSG( stderr, HHC03207, "E", "TFHDR" );
@@ -2784,13 +2985,20 @@ int main( int argc, char* argv[] )
 
         /* Swap endianness of header, if needed */
         if (doendswap)
-            tf_swap_hdr( hdr );
+            tf_swap_hdr( sys_ffmt, hdr );
+
+        /* Save the thread information */
+        if (sys_ffmt >= TF_FMT2)
+            tf_save_tidinfo( hdr );
 
         /* Fix the 'cpuad' if this is a device trace record */
         if (hdr->cpuad == 0xFFFF)
             hdr->cpuad = MAX_CPU_ENGS;
 
-        /* Switch based on header's message number */
+        /* Now finish reading the rest of the record (via the
+           'finish_reading_rec()' function) and then process it
+           afterwards, all based on the hdr's message number.
+        */
         switch (hdr->msgnum)
         {
 
@@ -2820,14 +3028,19 @@ int main( int argc, char* argv[] )
         CASE_FOR_MSGNUM0( 802 ); // PER event
         CASE_FOR_MSGNUM0( 803 ); // Program interrupt loop
         CASE_FOR_MSGNUM0( 804 ); // I/O interrupt (S/370)
+
         CASE_FOR_MSGNUM0( 806 ); // I/O Interrupt
         CASE_FOR_MSGNUM0( 807 ); // Machine Check Interrupt
         CASE_FOR_MSGNUM0( 808 ); // Store Status
         CASE_FOR_MSGNUM0( 809 ); // Disabled Wait State
+
         CASE_FOR_MSGNUM0( 811 ); // Architecture mode
         CASE_FOR_MSGNUM0( 812 ); // Vector facility online (370/390)
+
         CASE_FOR_MSGNUM0( 814 ); // Signal Processor
+
         CASE_FOR_MSGNUM0( 840 ); // External Interrupt
+
         CASE_FOR_MSGNUM0( 844 ); // Block I/O Interrupt
         CASE_FOR_MSGNUM0( 845 ); // Block I/O External interrupt
         CASE_FOR_MSGNUM0( 846 ); // Service Signal External Interrupt
@@ -2836,8 +3049,11 @@ int main( int argc, char* argv[] )
         CASE_FOR_MSGNUM( 2270 ); // Floating Point Registers
         CASE_FOR_MSGNUM( 2271 ); // Control Registers
         CASE_FOR_MSGNUM( 2272 ); // Access Registers
+
         CASE_FOR_MSGNUM( 2276 ); // Floating Point Control Register
+
         CASE_FOR_MSGNUM( 2324 ); // Instruction Trace
+
         CASE_FOR_MSGNUM( 2326 ); // Instruction Operands
 
         // Device tracing ...
@@ -2871,6 +3087,7 @@ int main( int argc, char* argv[] )
 
         CASE_FOR_MSGNUM( 1300 ); // Halt subchannel
         CASE_FOR_MSGNUM( 1301 ); // IDAW/MIDAW
+
         CASE_FOR_MSGNUM( 1304 ); // Attention signaled
         CASE_FOR_MSGNUM( 1305 ); // Attention
         CASE_FOR_MSGNUM( 1306 ); // Initial status interrupt
@@ -2881,18 +3098,22 @@ int main( int argc, char* argv[] )
         CASE_FOR_MSGNUM( 1311 ); // Resumed
         CASE_FOR_MSGNUM( 1312 ); // I/O stat
         CASE_FOR_MSGNUM( 1313 ); // Sense
+
         CASE_FOR_MSGNUM( 1315 ); // CCW
         CASE_FOR_MSGNUM( 1316 ); // CSW (370)
         CASE_FOR_MSGNUM( 1317 ); // SCSW
         CASE_FOR_MSGNUM( 1318 ); // TEST I/O
+
         CASE_FOR_MSGNUM( 1320 ); // S/370 SIO conversion started
         CASE_FOR_MSGNUM( 1321 ); // S/370 SIO conversion success
+
         CASE_FOR_MSGNUM( 1329 ); // Halt I/O
         CASE_FOR_MSGNUM( 1330 ); // HIO modification
         CASE_FOR_MSGNUM( 1331 ); // Clear subchannel
         CASE_FOR_MSGNUM( 1332 ); // Halt subchannel
         CASE_FOR_MSGNUM( 1333 ); // Resume subchannel
         CASE_FOR_MSGNUM( 1334 ); // ORB
+
         CASE_FOR_MSGNUM( 1336 ); // Startio cc=2
 
         default:
@@ -2921,9 +3142,26 @@ int main( int argc, char* argv[] )
         FWRMSG( stdout, HHC03215, "I", tiocnt, "device I/O's" );
     }
 
+    /* List thread-id numbers and their corresponding names... */
+    if (sys_ffmt >= TF_FMT2)
+    {
+        printf( "\n" );
+
+        /* Sort the table into a more user-friendly name sequence */
+        qsort( tidtab, numtids, sizeof( TIDTAB ), sort_tidtab_by_thrdname );
+
+        /* Now print the table */
+        for (i=0; i < numtids; ++i)
+        {
+            // Thread Id "TIDPAT" is %s"
+            FWRMSG( stdout, HHC03223, "I", tidtab[i].tidnum, tidtab[i].thrdname );
+        }
+    }
+
 done:
 
-    /* Close file and exit */
+    /* Free resources, close input file and exit */
+    free( tidtab );
     fclose( inf );
     return info_only ? 0 : ((totins > 0 || totios > 0) ? 0 : 1);
 
@@ -3564,7 +3802,7 @@ static bool convert_storage_opt_str( bool ishex, const char* str, U64* pU64, MOP
 
     if (str[1] == ':')
     {
-        char str0 = toupper( str[0] );
+        char str0 = toupper( (unsigned char)str[0] );
 
         if (1
             && str0 != 'V'      // Virtual address?
@@ -3741,8 +3979,8 @@ static void parse_option_date( const char* optname )
         goto opt_error;
 
     *pDash = 0;
-    STRLCPY( begstr, optarg ); 
-    STRLCPY( endstr, pDash+1); 
+    STRLCPY( begstr, optarg );
+    STRLCPY( endstr, pDash+1);
     *pDash = '-';
 
     if (!parse_date_str( begstr, &beg_dat ))
@@ -3774,8 +4012,8 @@ static void parse_option_time( const char* optname )
         goto opt_error;
 
     *pDash = 0;
-    STRLCPY( begstr, optarg ); 
-    STRLCPY( endstr, pDash+1); 
+    STRLCPY( begstr, optarg );
+    STRLCPY( endstr, pDash+1);
     *pDash = '-';
 
     if (!parse_time_str( begstr, &beg_tim ))
@@ -3829,7 +4067,7 @@ static bool convert_opcode_opt_str( bool ishex, const char* str, U64* pU64, MOPT
 
     for (i=0; i < n; i += 2)
     {
-        c = toupper( str[i] );      // Left nibble
+        c = toupper( (unsigned char)str[i] );      // Left nibble
 
         if (is_hex_l( &c, 1 ))
         {
@@ -3844,7 +4082,7 @@ static bool convert_opcode_opt_str( bool ishex, const char* str, U64* pU64, MOPT
             left_mask = 0;
         }
 
-        c = toupper( str[i+1] );    // Right nibble
+        c = toupper( (unsigned char)str[i+1] );    // Right nibble
 
         if (is_hex_l( &c, 1 ))
         {

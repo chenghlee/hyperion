@@ -241,7 +241,7 @@ char    fmt_mem[8];
         if (aaddr >= sysblk.mainsize)
         {
             int rc;
-       
+
             if (read( fd, &rc, 1 ) > 0)
             {
                 rc = +1;
@@ -306,7 +306,7 @@ REGS*   regs;                           /* -> Regs                   */
 FILE*   fp;
 char    inputbuff[MAX_PATH];
 char*   inputline;
-char    filename[MAX_PATH];             /* filename of image file    */
+char    filename[MAX_PATH+1];           /* filename of image file    */
 char    pathname[MAX_PATH];             /* pathname of image file    */
 U32     fileaddr;
 int     rc = 0;                         /* Return codes (work)       */

@@ -1545,9 +1545,15 @@ DEVBLK *dev;                            /* dev presenting interrupt  */
     /* Trace the I/O interrupt */
     if (CPU_STEPPING_OR_TRACING( regs, 0 ) || dev->ccwtrace)
     {
-        if (regs->insttrace && sysblk.traceFILE)
-            tf_0806( regs, ioid, ioparm, iointid );
-        else
+        if (sysblk.traceFILE)
+        {
+            if (regs->insttrace || dev->ccwtrace)
+            {
+                // (handles both HHC00805 and HHC00806)
+                tf_0806( regs, ioid, ioparm, iointid );
+            }
+        }
+        else // (!sysblk.traceFILE)
         {
 #if !defined( FEATURE_001_ZARCH_INSTALLED_FACILITY ) && !defined( _FEATURE_IO_ASSIST )
             // "Processor %s%02X: I/O interrupt code %8.8X parm %8.8X"
@@ -1855,7 +1861,7 @@ cpustate_stopping:
                 || !(sysblk.started_mask ^ regs->cpubit)
             )
             {
-                char buf[40];
+                char buf[128];
                 STR_PSW( regs, buf );
 
                 if (regs->insttrace && sysblk.traceFILE)
@@ -1864,6 +1870,10 @@ cpustate_stopping:
                 // "Processor %s%02X: disabled wait state %s"
                 WRMSG( HHC00809, "I", PTYPSTR( regs->cpuad ),
                     regs->cpuad, buf );
+
+                // "Processor %s%02X: processor %sstopped due to disabled wait"
+                WRMSG( HHC00826, "W", PTYPSTR( regs->cpuad ),
+                    regs->cpuad, "auto-" );
             }
             regs->cpustate = CPUSTATE_STOPPING;
             RELEASE_INTLOCK( regs );
@@ -1953,7 +1963,7 @@ int     aswitch;
         if (regs->vf->online)
         {
             if (regs->insttrace && sysblk.traceFILE)
-                tf_0812( regs, get_arch_name( regs ));
+                tf_0812( regs );
 
             // "Processor %s%02X: vector facility online"
             WRMSG( HHC00812, "I", PTYPSTR( cpu ), cpu );
@@ -2028,7 +2038,7 @@ int     aswitch;
         UPDATE_SYSBLK_INSTCOUNT( (i * 2) );
 
         /* Perform automatic instruction tracing if it's enabled */
-        do_automatic_tracing();
+        DO_AUTOMATIC_TRACING();
     }
 
     /* Set `execflag' to 0 in case EXecuted instruction did a longjmp() */
@@ -2088,7 +2098,7 @@ enter_fastest_no_txf_loop:
     UPDATE_SYSBLK_INSTCOUNT( (i * 2) );
 
     /* Perform automatic instruction tracing if it's enabled */
-    do_automatic_tracing();
+    DO_AUTOMATIC_TRACING();
     goto fastest_no_txf_loop;
 
 #if defined( FEATURE_073_TRANSACT_EXEC_FACILITY )
@@ -2125,7 +2135,7 @@ enter_txf_faster_loop:
     UPDATE_SYSBLK_INSTCOUNT( (i * 2) );
 
     /* Perform automatic instruction tracing if it's enabled */
-    do_automatic_tracing();
+    DO_AUTOMATIC_TRACING();
 
 //txf_slower_loop:
 
@@ -2159,7 +2169,7 @@ enter_txf_slower_loop:
     UPDATE_SYSBLK_INSTCOUNT( (i * 2) );
 
     /* Perform automatic instruction tracing if it's enabled */
-    do_automatic_tracing();
+    DO_AUTOMATIC_TRACING();
     goto txf_facility_loop;
 
 #endif /* defined( FEATURE_073_TRANSACT_EXEC_FACILITY ) */
@@ -2354,7 +2364,7 @@ int   rc;
     }
 
     /* Set CPU thread priority */
-    set_thread_priority( sysblk.cpuprio);
+    SET_THREAD_PRIORITY( sysblk.cpuprio, sysblk.qos_user_initiated );
 
     /* Display thread started message on control panel */
 
@@ -2725,8 +2735,8 @@ void do_automatic_tracing()
     int cpu;
 
     /* Return immediately if automatic tracing not enabled or active */
-    if (!sysblk.auto_trace_amt)
-        return;
+    //if (!sysblk.auto_trace_amt)
+    //    return;
 
     OBTAIN_INTLOCK( NULL );
     {

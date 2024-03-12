@@ -745,7 +745,7 @@ static void* quit_thread( void* arg )
     // messages at least twice to ensure that the "exit"
     // command has time to be echoed to the screen.
 
-    usleep( quitdelay_usecs );
+    USLEEP( quitdelay_usecs );
 
     // Now proceed with a normal shutdown, which waits for
     // the guest to quiesce itself beforehand (if appropriate)
@@ -1987,7 +1987,7 @@ static void try_scsi_refresh( DEVBLK* dev )
     gen_parms.dev     = dev;
 
     VERIFY( dev->tmh->generic( &gen_parms ) == 0 ); // (maybe update status)
-    usleep( 10 * 1000 );                            // (let thread start/end)
+    USLEEP( 10 * 1000 );                            // (let thread start/end)
 }
 
 /*-------------------------------------------------------------------*/
@@ -3266,64 +3266,142 @@ int sclproot_cmd( int argc, char* argv[], char* cmdline )
 /*-------------------------------------------------------------------*/
 /* engines command                                                   */
 /*-------------------------------------------------------------------*/
-int engines_cmd(int argc, char *argv[], char *cmdline)
+int engines_cmd( int argc, char* argv[], char* cmdline )
 {
-char *styp;                           /* -> Engine type string     */
-BYTE ptyp;                           /* Processor engine type     */
-int  cpu,count;
-BYTE c;
-char *strtok_str = NULL;
+    int cpu, count;
 
-    UNREFERENCED(cmdline);
+    UNREFERENCED( cmdline );
 
-    /* Parse processor engine types operand */
-    /* example: ENGINES 4*CP,AP,2*IP */
-    if ( argc == 2 )
+    UPPER_ARGV_0( argv );
+
+    if (argc < 1 || argc > 2)
     {
-        styp = strtok_r(argv[1],",",&strtok_str );
-        for (cpu = 0; styp != NULL; )
+        // "Invalid number of arguments for %s"
+        WRMSG( HHC01455, "E", argv[0] );
+        return -1;
+    }
+
+    if (argc == 2)
+    {
+        BYTE   c;
+        BYTE   type;                    /* Processor engine type     */
+        BYTE   ptyp[ MAX_CPU_ENGS ];    /* SCCB ptyp for each engine */
+        char*  styp;                    /* -> Engine type string     */
+        char*  strtok_str = NULL;       /* strtok_r work variable    */
+        char*  arg1 = strdup( argv[1] );/* (save before modifying)   */
+
+        /* Default all engines to type "CP" */
+        memset( ptyp, short2ptyp( "CP" ), sizeof( ptyp ));
+
+        /* Parse processor engine types operand, and save the results
+           for eventual sysblk update if no errors are detected.
+           Example: "ENGINES  4*CP,AP,2*IP"
+        */
+        styp = strtok_r( argv[1], ",", &strtok_str );
+
+        for (cpu=0; styp;)
         {
             count = 1;
-            if (isdigit(styp[0]))
+
+            if (isdigit( (unsigned char)styp[0] ))
             {
                 if (0
-                    || sscanf(styp, "%d%c", &count, &c) != 2
+                    || sscanf( styp, "%d%c", &count, &c ) != 2
                     || c != '*'
                     || count < 1
                 )
                 {
                     // "Invalid syntax %s for %s"
                     WRMSG( HHC01456, "E", styp, argv[0] );
+                    free( arg1 );
                     return -1;
                 }
-                styp = strchr(styp,'*') + 1;
+
+                styp = strchr( styp, '*' ) + 1;
             }
-                 if (CMD( styp, CP, 2)) ptyp = short2ptyp( "CP" );
-            else if (CMD( styp, CF, 2)) ptyp = short2ptyp( "CF" );
-            else if (CMD( styp, IL, 2)) ptyp = short2ptyp( "IL" );
-            else if (CMD( styp, AP, 2)) ptyp = short2ptyp( "AP" );
-            else if (CMD( styp, IP, 2)) ptyp = short2ptyp( "IP" );
+
+                 if (CMD( styp, CP, 2)) type = short2ptyp( "CP" );
+            else if (CMD( styp, CF, 2)) type = short2ptyp( "CF" );
+            else if (CMD( styp, IL, 2)) type = short2ptyp( "IL" );
+            else if (CMD( styp, AP, 2)) type = short2ptyp( "AP" );
+            else if (CMD( styp, IP, 2)) type = short2ptyp( "IP" );
             else
             {
                 // "Invalid value %s specified for %s"
                 WRMSG( HHC01451, "E", styp, argv[0] );
+                free( arg1 );
                 return -1;
             }
+
+            /* (update ptyp work array) */
             while (count-- > 0 && cpu < sysblk.maxcpu)
-            {
-                sysblk.ptyp[cpu] = ptyp;
-                // "Processor %s%02X: engine %02X type %1d set: %s"
-                WRMSG( HHC00827, "I", PTYPSTR(cpu), cpu, cpu, ptyp, ptyp2short( ptyp ));
-                cpu++;
-            }
-            styp = strtok_r(NULL,",",&strtok_str );
+                ptyp[ cpu++ ] = type;
+
+            styp = strtok_r( NULL, ",", &strtok_str );
         }
+
+        /* If we make it this far, then update sysblk */
+        for (cpu=0; cpu < sysblk.maxcpu; ++cpu)
+        {
+            sysblk.ptyp[ cpu ] = ptyp[ cpu ];
+
+            // "Processor %s%02X: engine %02X type %1d set: %s"
+            WRMSG( HHC00827, "I"
+                , PTYPSTR( cpu ), cpu
+                , cpu
+                , ptyp[ cpu ]
+                , ptyp2short( ptyp[ cpu ])
+            );
+        }
+
+        // "%-14s set to %s"
+        WRMSG( HHC02204, "I", argv[0], arg1 );
+        free( arg1 );
     }
-    else
+    else // (display current setting)
     {
-        // "Invalid number of arguments for %s"
-        WRMSG( HHC01455, "E", argv[0] );
-        return -1;
+        char typ[ 7 + 1 ];  // "nnn*XX,\0"
+        char arg1[ (MAX_CPU_ENGS * 7) + 1 ] = {0};
+
+        count = 0;
+
+        for (cpu=0; cpu < sysblk.maxcpu; ++cpu)
+        {
+            if (cpu == 0)
+                count = 1;
+            else
+            {
+                if (sysblk.ptyp[ cpu ] == sysblk.ptyp[ cpu-1 ])
+                    ++count;
+                else
+                {
+                    if (count == 1)
+                        MSGBUF( typ, "%s,", PTYPSTR( cpu-1 ));
+                    else
+                        MSGBUF( typ, "%1d*%s,", count, PTYPSTR( cpu-1 ));
+
+                    STRLCAT( arg1, typ );
+                    count = 1;
+                }
+            }
+        }
+
+        if (count <= 1)
+        {
+            if (count)
+                MSGBUF( typ, "%s,", PTYPSTR( cpu-1 ));
+            else
+                STRLCPY( typ, "(none)" );
+        }
+        else
+            MSGBUF( typ, "%1d*%s,", count, PTYPSTR( cpu-1 ));
+
+        STRLCAT( arg1, typ );
+
+        RTRIMS( arg1, "," );
+
+        // "%-14s: %s"
+        WRMSG( HHC02203, "I", argv[0], arg1 );
     }
 
     return 0;
@@ -3578,7 +3656,7 @@ int mainsize_cmd( int argc, char* argv[], char* cmdline )
 
         if (rc == 2)
         {
-            switch (toupper( f ))
+            switch (toupper( (unsigned char)f ))
             {
             case 'B':
                 suffix_oflow_mask = 0;
@@ -3740,7 +3818,7 @@ u_int   locktype = 0;
                                                             : sizeof(U32);
         if ( rc == 2 )
         {
-            switch (toupper(f))
+            switch (toupper((unsigned char)f))
             {
             case 'B':
                 shiftsize >>= SHIFT_MEBIBYTE;
@@ -4197,7 +4275,7 @@ int cnslport_cmd( int argc, char* argv[], char* cmdline )
 
         for (i=0; i < (int) strlen( port ); i++)
         {
-            if (!isdigit( port[i] ))
+            if (!isdigit( (unsigned char)port[i] ))
             {
                 // "Invalid value %s specified for %s"
                 WRMSG( HHC01451, "E", port, argv[0] );
@@ -4340,7 +4418,7 @@ int sysgport_cmd( int argc, char* argv[], char* cmdline )
 
             for (i=0; i < (int) strlen( port ); i++)
             {
-                if (!isdigit( port[i] ))
+                if (!isdigit( (unsigned char)port[i] ))
                 {
                     // "Invalid value %s specified for %s"
                     WRMSG( HHC01451, "E", port, argv[0] );
@@ -4729,7 +4807,7 @@ int sh_cmd( int argc, char* argv[], char* cmdline )
         return -1;
     }
 
-    for (cmdline += 2; isspace( *cmdline ); ++cmdline) /* (nop) */;
+    for (cmdline += 2; isspace( (unsigned char)*cmdline ); ++cmdline) /* (nop) */;
     return (*cmdline) ? herc_system( cmdline ) : -1;
 }
 
@@ -5113,8 +5191,8 @@ int stsi_model_cmd( int argc, char* argv[], char* cmdline )
             {
                 for (i=0; i < len; i++)
                 {
-                    if (!isalnum( model[m][i] ) ||
-                       (!isupper( model[m][i] ) && !isdigit( model[m][i] )))
+                    if (!isalnum( (unsigned char)model[m][i] ) ||
+                       (!isupper( (unsigned char)model[m][i] ) && !isdigit( (unsigned char)model[m][i] )))
                     {
                         char msgbuf[64];
                         MSGBUF( msgbuf, "%s-model = <%s>", model_name[m], model[m] );
@@ -5205,8 +5283,8 @@ int stsi_plant_cmd( int argc, char* argv[], char* cmdline )
 
         for (i=0; i < strlen( argv[1] ); i++)
         {
-            if (isalnum( argv[1][i] ) &&
-               (isupper( argv[1][i] ) || isdigit( argv[1][i] )))
+            if (isalnum( (unsigned char)argv[1][i] ) &&
+               (isupper( (unsigned char)argv[1][i] ) || isdigit( (unsigned char)argv[1][i] )))
                 continue;
 
             // "Invalid argument %s%s"
@@ -5263,8 +5341,8 @@ int stsi_manufacturer_cmd( int argc, char* argv[], char* cmdline )
 
         for (i=0; i < strlen( argv[1] ); i++)
         {
-            if (isalnum( argv[1][i] ) &&
-               (isupper( argv[1][i] ) || isdigit( argv[1][i] )))
+            if (isalnum( (unsigned char)argv[1][i] ) &&
+               (isupper( (unsigned char)argv[1][i] ) || isdigit( (unsigned char)argv[1][i] )))
                 continue;
 
             // "Invalid argument %s%s"
@@ -6087,9 +6165,9 @@ int devlist_cmd( int argc, char* argv[], char* cmdline )
                 MSGBUF( cdevnum, "%1d:%04X", SSID_TO_LCSS( dev->ssid ),
                     dev->devnum );
 
-            MSGBUF( buf, "%s %4.4X %s %s%s%s"
+            MSGBUF( buf, "%s %s %s %s%s%s"
                 , cdevnum
-                , dev->devtype
+                , dev->typname
                 , devstat
                 , dev->fd   >  2   ? "open "    : ""
                 , dev->busy        ? "busy "    : ""
@@ -6365,7 +6443,7 @@ int qd_cmd( int argc, char* argv[], char* cmdline )
                 if (j % 4 == 0)
                     len += sprintf( buf + len, " " );
                 len += sprintf( buf + len, "%2.2X", iobuf[j] );
-                cbuf[ j % 16 ] = isprint( guest_to_host( iobuf[j] )) ? guest_to_host( iobuf[j] ) : '.';
+                cbuf[ j % 16 ] = isprint( (unsigned char)guest_to_host( iobuf[j] )) ? guest_to_host( iobuf[j] ) : '.';
             }
             len += sprintf( buf + len, " |%s|", cbuf );
             // "%s" // qd command
@@ -6494,12 +6572,12 @@ int detach_cmd( int argc, char* argv[], char* cmdline )
     */
     if (!force)
     {
-        obtain_lock( &dev->lock );
+        OBTAIN_DEVLOCK( dev );
         {
             /* Check if specified device is busy */
             if (dev->busy)
             {
-                release_lock( &dev->lock );
+                RELEASE_DEVLOCK( dev );
                 if (intlock_needed)
                     RELEASE_INTLOCK( NULL );
                 // "%1d:%04X busy or interrupt pending"
@@ -6517,7 +6595,7 @@ int detach_cmd( int argc, char* argv[], char* cmdline )
                 {
                     if ((memdev = group->memdev[i])->busy)
                     {
-                        release_lock( &dev->lock );
+                        RELEASE_DEVLOCK( dev );
                         if (intlock_needed)
                             RELEASE_INTLOCK( NULL );
                         // "%1d:%04X busy or interrupt pending"
@@ -6527,7 +6605,7 @@ int detach_cmd( int argc, char* argv[], char* cmdline )
                 }
             }
         }
-        release_lock( &dev->lock );
+        RELEASE_DEVLOCK( dev );
     }
 
     /* Note: 'detach_device' will call 'detach_devblk' which obtains
@@ -6928,20 +7006,22 @@ int devtmax_cmd(int argc, char *argv[], char *cmdline)
            and more threads can be created */
 
         /* the IOQ lock is obtained in order to write to sysblk.devtwait */
-        obtain_lock(&sysblk.ioqlock);
-        if (sysblk.ioq && (!sysblk.devtmax || sysblk.devtnbr < sysblk.devtmax))
+        OBTAIN_IOQLOCK();
         {
-            int rc;
+            if (sysblk.ioq && (!sysblk.devtmax || sysblk.devtnbr < sysblk.devtmax))
+            {
+                int rc;
 
-            rc = create_thread(&tid, DETACHED, device_thread, NULL, "idle device thread");
-            if (rc)
-                WRMSG(HHC00102, "E", strerror(rc));
+                rc = create_thread( &tid, DETACHED, device_thread, NULL, "idle device thread" );
+                if (rc)
+                    WRMSG(HHC00102, "E", strerror(rc));
+            }
+
+            /* Wakeup threads in case they need to terminate */
+            sysblk.devtwait = 0;
+            broadcast_condition( &sysblk.ioqcond );
         }
-
-        /* Wakeup threads in case they need to terminate */
-        sysblk.devtwait=0;
-        broadcast_condition (&sysblk.ioqcond);
-        release_lock(&sysblk.ioqlock);
+        RELEASE_IOQLOCK();
     }
     else
         WRMSG(HHC02242, "I",
@@ -6963,7 +7043,6 @@ U16      devnum;                        /* Device number             */
 U16      lcss;                          /* Logical CSS               */
 int      flag = 1;                      /* sf- flag (default merge)  */
 int      level = 2;                     /* sfk level (default 2)     */
-TID      tid;                           /* sf command thread id      */
 char     c;                             /* work for sscan            */
 int      rc;
 
@@ -7103,14 +7182,50 @@ int      rc;
             cckdblk.sflevel = level;
     }
 
+    /* Reject the command if the guest has been IPLed */
+    if (action != 'd')
+    {
+        /* Unless test mode mode is active! Test scripts MUST be
+           allowed to e.g. discard shadow files after their tests
+           have completed to prevent them from failing the next
+           time the test is run due to the state of the test dasd
+           having been changed by the previous run! But if we're
+           NOT running in test mode (i.e. if this is normal user
+           execution), then don't allow them since doing to could
+           cause damage to their guest's running state.
+        */
+        if (!sysblk.scrtest)    // (normal user non-test mode?)
+        {
+            if (sysblk.ipled)
+            {
+                // "Command cannot be issued once system has been IPLed"
+                // "Hercules needs to be restarted before proceeding"
+                WRMSG( HHC00829, "E" );
+                WRMSG( HHC00831, "W" );
+                return -1;
+            }
+
+            sysblk.sfcmd = TRUE;
+        }
+    }
+
     /* Process the command */
     switch (action)
     {
+#if defined( OPTION_NOASYNC_SF_CMDS )
+        case '+': cckd_sf_add   ( dev ); break;
+        case '-': cckd_sf_remove( dev ); break;
+        case 'c': cckd_sf_comp  ( dev ); break;
+        case 'd': cckd_sf_stats ( dev ); break;
+        case 'k': cckd_sf_chk   ( dev ); break;
+#else
+        TID tid;
         case '+': if (create_thread( &tid, DETACHED, cckd_sf_add,    dev, "sf+ command" )) cckd_sf_add   ( dev ); break;
         case '-': if (create_thread( &tid, DETACHED, cckd_sf_remove, dev, "sf- command" )) cckd_sf_remove( dev ); break;
         case 'c': if (create_thread( &tid, DETACHED, cckd_sf_comp,   dev, "sfc command" )) cckd_sf_comp  ( dev ); break;
         case 'd': if (create_thread( &tid, DETACHED, cckd_sf_stats,  dev, "sfd command" )) cckd_sf_stats ( dev ); break;
         case 'k': if (create_thread( &tid, DETACHED, cckd_sf_chk,    dev, "sfk command" )) cckd_sf_chk   ( dev ); break;
+#endif
     }
 
     return 0;
@@ -7200,7 +7315,7 @@ BYTE     unitstat, code = 0;
     {
         for (rc = 0; rc < (int)strlen(argv[3]); rc++)
         {
-            if ( !isdigit(argv[3][rc]) )
+            if ( !isdigit((unsigned char)argv[3][rc]) )
             {
                 WRMSG( HHC02205, "E", argv[3], "; not in range of 1-9999");
                 return -1;
@@ -7230,14 +7345,14 @@ BYTE     unitstat, code = 0;
     }
 
     /* Obtain the device lock */
-    obtain_lock (&dev->lock);
+    OBTAIN_DEVLOCK( dev );
 
     /* Reject if device is busy or interrupt pending */
     if ( dev->busy || IOPENDING(dev) || (dev->scsw.flag3 & SCSW3_SC_PEND))
     {
         if (!sysblk.sys_reset)      // is the system in a reset status?
         {
-            release_lock (&dev->lock);
+            RELEASE_DEVLOCK( dev );
             WRMSG(HHC02231, "E", lcss, devnum );
             return -1;
         }
@@ -7248,7 +7363,7 @@ BYTE     unitstat, code = 0;
 
     if ( strcmp(devclass,"TAPE") != 0 )
     {
-        release_lock (&dev->lock);
+        RELEASE_DEVLOCK( dev );
         WRMSG(HHC02209, "E", lcss, devnum, "TAPE" );
         return -1;
 
@@ -7257,7 +7372,7 @@ BYTE     unitstat, code = 0;
     ASSERT( dev->tmh && dev->tmh->tapeloaded );
     if ( !dev->tmh->tapeloaded( dev, NULL, 0 ) )
     {
-        release_lock (&dev->lock);
+        RELEASE_DEVLOCK( dev );
         WRMSG(HHC02298, "E", LCSS_DEVNUM);
         return -1;
     }
@@ -7480,7 +7595,7 @@ BYTE     unitstat, code = 0;
         }
     }
 
-    release_lock (&dev->lock);
+    RELEASE_DEVLOCK( dev );
 
     WRMSG( HHC02802, "I", LCSS_DEVNUM, dev->curfilen );
     WRMSG( HHC02803, "I", LCSS_DEVNUM, dev->blockid  );
@@ -7524,7 +7639,7 @@ char   **save_argv = NULL;
     }
 
     /* Obtain the device lock */
-    obtain_lock (&dev->lock);
+    OBTAIN_DEVLOCK( dev );
 
     /* wait up to 0.1 seconds for the busy to go away */
     {
@@ -7533,9 +7648,9 @@ char   **save_argv = NULL;
                          || IOPENDING(dev)
                          || (dev->scsw.flag3 & SCSW3_SC_PEND)))
         {
-            release_lock(&dev->lock);
-            usleep(5000);
-            obtain_lock(&dev->lock);
+            RELEASE_DEVLOCK( dev );
+            USLEEP(5000);
+            OBTAIN_DEVLOCK( dev );
         }
     }
 
@@ -7544,7 +7659,7 @@ char   **save_argv = NULL;
      || (dev->scsw.flag3 & SCSW3_SC_PEND))
       && !sysblk.sys_reset)
     {
-        release_lock (&dev->lock);
+        RELEASE_DEVLOCK( dev );
         WRMSG(HHC02231, "E", lcss, devnum );
         return -1;
     }
@@ -7584,7 +7699,7 @@ char   **save_argv = NULL;
     if (dev->argv)
         free(dev->argv);
     dev->argc = init_argc;
-    if (init_argc)
+    if (init_argc > 0)
     {
         dev->argv = malloc ( init_argc * sizeof(char*) );
         for (i = 0; i < init_argc; i++)
@@ -7609,7 +7724,7 @@ char   **save_argv = NULL;
     dev->reinit = 0;
 
     /* Release the device lock */
-    release_lock (&dev->lock);
+    RELEASE_DEVLOCK( dev );
 
     /* Free work memory */
     if (save_argv)
@@ -8038,19 +8153,18 @@ int OnOffCommand( int argc, char* argv[], char* cmdline )
     bool    plus_enable_on;             /* true == x+, false == x-   */
     char*   onoroff;                    /* x+ == "on", x- == "off"   */
     DEVBLK* dev;
+    BYTE    ccwops[256];
     U16     devnum;
     U16     lcss;
     REGS*   regs;
-
-    UNREFERENCED( argc );
-    UNREFERENCED( argv );
+    size_t  cmdlen = strlen( cmdline );
 
     if (cmd[1] == '+')
     {
         plus_enable_on = true;
         onoroff = "ON";
     }
-    else
+    else // (cmd[1] == '-')
     {
         plus_enable_on = false;
         onoroff = "OFF";
@@ -8277,18 +8391,91 @@ int OnOffCommand( int argc, char* argv[], char* cmdline )
 
         if (1
             && (cmd[0] == 'o' || cmd[0] == 't')
-            && parse_single_devnum_silent( &cmd[2], &lcss, &devnum ) == 0
+            && parse_single_devnum_silent( &argv[0][2], &lcss, &devnum ) == 0
         )
         {
-            char* typ;
-            char buf[40];
+            size_t  buflen = cmdlen + 20 + 10 + 1;
+            char*   typ;
+            char*   for_ccws;
+            char*   buf = malloc( buflen );
+
+            if (!buf)
+            {
+                // "Error in function %s: %s"
+                WRMSG( HHC02219, "E", "malloc()", strerror( ENOMEM ));
+                RELEASE_INTLOCK( NULL );
+                return -1;
+            }
 
             if (!(dev = find_device_by_devnum( lcss, devnum )))
             {
                 // HHC02200 "%1d:%04X device not found"
                 devnotfound_msg( lcss, devnum );
                 RELEASE_INTLOCK( NULL );
+                free( buf );
                 return -1;
+            }
+
+            // Check for and parse optional "(aa,bb,cc,...zz)" CCWs argument
+
+            if (argc >= 2 && argv[1])
+            {
+                bool   err = false;
+                char*  copyofarg1;
+                char*  token;
+                BYTE   ccw_opcode;
+
+                if (strspn( argv[1], "(,)0123456789abcdefABCDEF" ) != strlen( argv[1] ))
+                {
+                    RELEASE_INTLOCK( NULL );
+                    // "Invalid argument %s%s"
+                    WRMSG( HHC02205, "E", argv[1], "" );
+                    return -1;
+                }
+
+                copyofarg1 = strdup( argv[1] );
+                memset( ccwops, 0, 256 );
+                token = strtok( copyofarg1, "(,)" );
+
+                while (token)
+                {
+                    // Validate token...
+                    if (0
+                        || strlen( token ) != 2
+                        || !is_hex( token )
+                    )
+                    {
+                        err = true;
+                        break;
+                    }
+
+                    // Process token
+                    ccw_opcode = (BYTE) strtol( token, NULL, 16 );
+                    ccwops[ ccw_opcode ] = 0xFF;
+
+                    // Get next token...
+                    token = strtok( NULL, "(,)" );
+                }
+
+                free( copyofarg1 );
+
+                if (err)
+                {
+                    RELEASE_INTLOCK( NULL );
+                    // "Invalid argument %s%s"
+                    WRMSG( HHC02205, "E", argv[1], "" );
+                    return -1;
+                }
+
+                dev->ccwopstrace = true;
+                memcpy( dev->ccwops, ccwops, 256 );
+                for_ccws = " for CCWs ";
+            }
+            else
+            {
+                for_ccws = "";
+                memset( dev->ccwops, 0xFF, 256 );
+                dev->ccwopstrace = false;
             }
 
             if (cmd[0] == 'o')
@@ -8302,9 +8489,15 @@ int OnOffCommand( int argc, char* argv[], char* cmdline )
                 dev->orbtrace = plus_enable_on;
                 dev->ccwtrace = plus_enable_on;
             }
-            MSGBUF( buf, "%s for %1d:%04X", typ, lcss, devnum );
+
+            snprintf( buf, buflen, "%s for %1d:%04X%s%s",
+                typ, lcss, devnum,
+                for_ccws[0] ? for_ccws : "",
+                for_ccws[0] ? argv[1]  : "" );
+
             // "%-14s set to %s"
             WRMSG( HHC02204, "I", buf, onoroff );
+            free( buf );
             RELEASE_INTLOCK( NULL );
             return 0;
         }
@@ -8398,6 +8591,136 @@ int cmdsep_cmd( int argc, char* argv[], char* cmdline )
     }
 
     return rc;
+}
+
+/*-------------------------------------------------------------------*/
+/* iconpfxs -- define integrated console prefix characters           */
+/*-------------------------------------------------------------------*/
+int iconpfxs_cmd( int argc, char* argv[], char* cmdline )
+{
+    int    num_pfxs;                    /* Number  command prefixes  */
+    char*  cmd_pfxs;                    /* Default command prefixes  */
+    char*  used_pfxs;                   /* Used    command prefixes  */
+    char*  p;                           /* (work)                    */
+
+    UNREFERENCED( cmdline );
+
+    UPPER_ARGV_0( argv );
+
+    /* Display current settings? */
+    if (argc == 1)
+    {
+        // "%-14s: %s"
+        WRMSG( HHC02203, "I", argv[0], sysblk.cmd_pfxs );
+        return 0;
+    }
+
+    /* Too many arguments? */
+    if (argc > 2)
+    {
+        // "Invalid command usage. Type 'help %s' for assistance."
+        WRMSG( HHC02299, "E", argv[0] );
+        return -1;
+    }
+
+    /* Reset list back to its original default? */
+    if (str_eq( argv[1], "*" ))
+    {
+        num_pfxs  = (int) strlen( DEF_CMDPREFIXES );
+        cmd_pfxs  = malloc( num_pfxs );
+        used_pfxs = malloc( num_pfxs );
+
+        if (!cmd_pfxs || !used_pfxs)
+        {
+            free( cmd_pfxs );
+            free( used_pfxs );
+
+            // "Out of memory"
+            WRMSG( HHC00152, "E" );
+            return -1;
+        }
+
+        memcpy( cmd_pfxs, DEF_CMDPREFIXES, num_pfxs );
+    }
+    else
+    {
+        int i;
+
+        /* Define new set of command prefixes */
+
+        num_pfxs = (int) strlen( argv[1] );
+        ASSERT( num_pfxs > 0 );
+
+        /* Verify each character is unique */
+
+        for (i=0; i < num_pfxs-1; ++i)
+        {
+            p = memchr( &argv[1][i+1], argv[1][i], num_pfxs-i-1 );
+
+            if (p)
+            {
+                // "Invalid argument %s%s"
+                WRMSG( HHC02205, "E", argv[1], "" );
+                return -1;
+            }
+        }
+
+        cmd_pfxs  = malloc( num_pfxs );
+        used_pfxs = malloc( num_pfxs );
+
+        if (!cmd_pfxs || !used_pfxs)
+        {
+            free( cmd_pfxs );
+            free( used_pfxs );
+
+            // "Out of memory"
+            WRMSG( HHC00152, "E" );
+            return -1;
+        }
+
+        memcpy( cmd_pfxs, argv[1], num_pfxs );
+    }
+
+    OBTAIN_INTLOCK( NULL );
+    {
+        DEVBLK*  dev;
+        size_t   i;
+
+        /* Ensure the new "used" list is set accurately */
+
+        memset( used_pfxs, 0, num_pfxs );
+
+        for (dev = sysblk.firstdev; dev; dev = dev->nextdev)
+        {
+            /* Is this device's prefix char in the new list? */
+            if (IS_INTEGRATED_CONS( dev ))
+            {
+                p = memchr( cmd_pfxs, dev->filename[0], num_pfxs );
+
+                if (p)
+                {
+                    i = (p - cmd_pfxs);
+                    used_pfxs[i] = TRUE;
+                }
+            }
+        }
+
+        /* Update sysblk with the new values */
+
+        sysblk.num_pfxs = num_pfxs;
+
+        free( sysblk.cmd_pfxs  );
+        free( sysblk.used_pfxs );
+
+        sysblk.cmd_pfxs  = cmd_pfxs;
+        sysblk.used_pfxs = used_pfxs;
+    }
+    RELEASE_INTLOCK( NULL );
+
+    // "%-14s set to %s"
+    WRMSG( HHC02204, "I", argv[0], sysblk.cmd_pfxs );
+
+    return 0;
 }
 
 #if defined( _FEATURE_SYSTEM_CONSOLE )

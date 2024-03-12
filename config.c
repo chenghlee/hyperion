@@ -167,53 +167,53 @@ U64 adjust_mainsize( int archnum, U64 mainsize )
     {
 #if defined(       _ARCH_NUM_0 )
   #if       370 == _ARCH_NUM_0
-      { MIN_370_MAINSIZE_BYTES,
-        MAX_370_MAINSIZE_BYTES },
+      { MIN_370_MAINSIZE_BYTES,     // (MIN_ARCH_MAINSIZE_BYTES)
+        MAX_370_MAINSIZE_BYTES },   // (MAX_ARCH_MAINSIZE_BYTES)
 
   #elif     390 == _ARCH_NUM_0
-      { MIN_390_MAINSIZE_BYTES,
-        MAX_390_MAINSIZE_BYTES },
+      { MIN_390_MAINSIZE_BYTES,     // etc...
+        MAX_390_MAINSIZE_BYTES },   // etc...
 
   #else //  900 == _ARCH_NUM_0
-      { MIN_900_MAINSIZE_BYTES,
-        MAX_900_MAINSIZE_BYTES },
+      { MIN_900_MAINSIZE_BYTES,     // etc...
+        MAX_900_MAINSIZE_BYTES },   // etc...
   #endif
 #endif
 #if defined(       _ARCH_NUM_1 )
   #if       370 == _ARCH_NUM_1
-      { MIN_370_MAINSIZE_BYTES,
-        MAX_370_MAINSIZE_BYTES },
+      { MIN_370_MAINSIZE_BYTES,     // etc...
+        MAX_370_MAINSIZE_BYTES },   // etc...
 
   #elif     390 == _ARCH_NUM_1
-      { MIN_390_MAINSIZE_BYTES,
-        MAX_390_MAINSIZE_BYTES },
+      { MIN_390_MAINSIZE_BYTES,     // etc...
+        MAX_390_MAINSIZE_BYTES },   // etc...
 
   #else //  900 == _ARCH_NUM_1
-      { MIN_900_MAINSIZE_BYTES,
-        MAX_900_MAINSIZE_BYTES },
+      { MIN_900_MAINSIZE_BYTES,     // etc...
+        MAX_900_MAINSIZE_BYTES },   // etc...
   #endif
 #endif
 #if defined(       _ARCH_NUM_2 )
   #if       370 == _ARCH_NUM_2
-      { MIN_370_MAINSIZE_BYTES,
-        MAX_370_MAINSIZE_BYTES },
+      { MIN_370_MAINSIZE_BYTES,     // etc...
+        MAX_370_MAINSIZE_BYTES },   // etc...
 
   #elif     390 == _ARCH_NUM_2
-      { MIN_390_MAINSIZE_BYTES,
-        MAX_390_MAINSIZE_BYTES },
+      { MIN_390_MAINSIZE_BYTES,     // etc...
+        MAX_390_MAINSIZE_BYTES },   // etc...
 
   #else //  900 == _ARCH_NUM_2
-      { MIN_900_MAINSIZE_BYTES,
-        MAX_900_MAINSIZE_BYTES },
+      { MIN_900_MAINSIZE_BYTES,     // etc...
+        MAX_900_MAINSIZE_BYTES },   // etc...
   #endif
 #endif
     };
 
-    if (mainsize < minmax_mainsize[ archnum ][0])
-        mainsize = minmax_mainsize[ archnum ][0];
+    if (mainsize < minmax_mainsize[ archnum ][ MIN_ARCH_MAINSIZE_BYTES ])
+        mainsize = minmax_mainsize[ archnum ][ MIN_ARCH_MAINSIZE_BYTES ];
 
-    if (mainsize > minmax_mainsize[ archnum ][1])
-        mainsize = minmax_mainsize[ archnum ][1];
+    if (mainsize > minmax_mainsize[ archnum ][ MAX_ARCH_MAINSIZE_BYTES ])
+        mainsize = minmax_mainsize[ archnum ][ MAX_ARCH_MAINSIZE_BYTES ];
 
     /* Special case: if no CPUs then no storage is needed */
     if (sysblk.maxcpu <= 0)
@@ -623,7 +623,7 @@ static void DelSubchanFastLookup(U16 ssid, U16 subchan)
 /*                        get_devblk                                 */
 /*-------------------------------------------------------------------*/
 
-/* NOTE: also does obtain_lock(&dev->lock); */
+/* NOTE: also does OBTAIN_DEVLOCK( dev ); */
 
 static DEVBLK *get_devblk(U16 lcss, U16 devnum)
 {
@@ -679,7 +679,7 @@ char      buf[32];
     }
 
     /* Obtain the device lock. Caller will release it. */
-    obtain_lock (&dev->lock);
+    OBTAIN_DEVLOCK( dev );
 
     dev->group = NULL;
     dev->member = 0;
@@ -747,7 +747,7 @@ char      buf[32];
 /*                        ret_devblk                                 */
 /*-------------------------------------------------------------------*/
 
-/* NOTE: also does release_lock(&dev->lock);*/
+/* NOTE: also does RELEASE_DEVLOCK( dev );*/
 
 static void ret_devblk(DEVBLK *dev)
 {
@@ -761,7 +761,7 @@ static void ret_devblk(DEVBLK *dev)
     /* Mark device invalid */
     dev->allocated = 0;
     dev->pmcw.flag5 &= ~PMCW5_V;
-    release_lock(&dev->lock);
+    RELEASE_DEVLOCK( dev );
 }
 
 /*-------------------------------------------------------------------*/
@@ -787,14 +787,14 @@ int     i;                              /* Loop index                */
 
     /* Obtain the device lock. ret_devblk will release it */
     if (!locked)
-        obtain_lock(&dev->lock);
+        OBTAIN_DEVLOCK( dev );
 
     DelSubchanFastLookup(dev->ssid, dev->subchan);
     if(dev->pmcw.flag5 & PMCW5_V)
         DelDevnumFastLookup(LCSS_DEVNUM);
 
     /* Close file or socket */
-    if ((dev->fd > 2) || dev->console)
+    if ((dev->fd >= 0) || dev->console)
         /* Call the device close handler */
         (dev->hnd->close)(dev);
 
@@ -830,7 +830,7 @@ int     i;                              /* Loop index                */
     free(dev->typname);
 
     /* Release lock and return the device to the DEVBLK pool */
-    ret_devblk( dev ); /* also does release_lock(&dev->lock);*/
+    ret_devblk( dev ); /* also does RELEASE_DEVLOCK( dev );*/
 
     return 0;
 } /* end function detach_devblk */
@@ -905,10 +905,12 @@ int     cpu;
         }
 
     /* Terminate device threads */
-    obtain_lock (&sysblk.ioqlock);
-    sysblk.devtwait=0;
-    broadcast_condition (&sysblk.ioqcond);
-    release_lock (&sysblk.ioqlock);
+    OBTAIN_IOQLOCK();
+    {
+        sysblk.devtwait = 0;
+        broadcast_condition( &sysblk.ioqcond );
+    }
+    RELEASE_IOQLOCK();
 
     /* release storage          */
     sysblk.lock_mainstor = 0;
@@ -1076,7 +1078,7 @@ int configure_cpu( int target_cpu )
         /* provided the _POSIX_THREAD_CPUTIME is supported.                       */
         pthread_getcpuclockid( sysblk.cputid[ target_cpu ], &sysblk.cpuclockid[ target_cpu ]);
         if (!sysblk.hhc_111_112)
-            WRMSG( HHC00111, "I", _POSIX_THREAD_CPUTIME );
+            WRMSG( HHC00111, "I", (long int)_POSIX_THREAD_CPUTIME );
 #else
         /* When not supported, we zero the cpuclockid, which will trigger a       */
         /* different approach to obtain the thread CPU time in clock.c            */
@@ -1153,7 +1155,9 @@ int deconfigure_cpu( int target_cpu )
 
             /* Wait for cpu_thread to completely exit */
             join_thread( sysblk.cputid[ target_cpu ], NULL );
-            detach_thread( sysblk.cputid[ target_cpu ]);
+#if defined( OPTION_FTHREADS )
+            detach_thread( sysblk.cputid[ target_cpu ]);    // only needed for Fish threads
+#endif
 
             /*-----------------------------------------------------------*/
             /* Note: While this is the logical place to cleanup and to   */
@@ -1308,7 +1312,7 @@ int     i;                              /* Loop index                */
     }
 
     /* Obtain device block from our DEVBLK pool and lock the device. */
-    dev = get_devblk(lcss, devnum); /* does obtain_lock(&dev->lock); */
+    dev = get_devblk(lcss, devnum); /* does OBTAIN_DEVLOCK( dev ); */
 
     // PROGRAMMING NOTE: the rule is, once a DEVBLK has been obtained
     // from the pool it can be returned back to the pool via a simple
@@ -1321,7 +1325,7 @@ int     i;                              /* Loop index                */
     {
         // "%1d:%04X devtype %s not recognized"
         WRMSG (HHC01462, "E", lcss, devnum, type);
-        ret_devblk(dev); /* also does release_lock(&dev->lock);*/
+        ret_devblk(dev); /* also does RELEASE_DEVLOCK( dev );*/
         release_lock(&sysblk.config);
         return 1;
     }
@@ -1391,7 +1395,7 @@ int     i;                              /* Loop index                */
     }
 
     /* Release device lock */
-    release_lock(&dev->lock);
+    RELEASE_DEVLOCK( dev );
 
 #ifdef _FEATURE_CHANNEL_SUBSYSTEM
     /* Build Channel Report */
@@ -1488,7 +1492,7 @@ DEVBLK *dev;                            /* -> Device block           */
 #endif /*_FEATURE_CHANNEL_SUBSYSTEM*/
 
     /* Obtain the device lock */
-    obtain_lock(&dev->lock);
+    OBTAIN_DEVLOCK( dev );
 
     /* Update the device number in the DEVBLK */
     dev->devnum = newdevn;
@@ -1501,7 +1505,7 @@ DEVBLK *dev;                            /* -> Device block           */
     AddDevnumFastLookup(dev,lcss,newdevn);
 
     /* Release device lock */
-    release_lock(&dev->lock);
+    RELEASE_DEVLOCK( dev );
 
 #ifdef _FEATURE_CHANNEL_SUBSYSTEM
     /* Build Channel Report */
@@ -2170,18 +2174,12 @@ int parse_and_attach_devices(const char *sdevnum,
                if(rc!=0)
                {
                    baddev=1;
-                   break;
                }
-            }
-            if(baddev)
-            {
-                break;
             }
         }
 
         free(newargv);
         free(orig_newargv);
-
         free(dnd.da);
         return baddev?-1:0;
 }

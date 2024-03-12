@@ -1225,7 +1225,7 @@ sie_fetch_instruction:
                 UPDATE_SYSBLK_INSTCOUNT( (i * 2) );
 
                 /* Perform automatic instruction tracing if it's enabled */
-                do_automatic_tracing();
+                DO_AUTOMATIC_TRACING();
                 goto endloop;
 
 #if defined( FEATURE_073_TRANSACT_EXEC_FACILITY )
@@ -1259,7 +1259,7 @@ txf_facility_loop:
                 UPDATE_SYSBLK_INSTCOUNT( (i * 2) );
 
                 /* Perform automatic instruction tracing if it's enabled */
-                do_automatic_tracing();
+                DO_AUTOMATIC_TRACING();
                 goto endloop;
 
 txf_slower_loop:
@@ -1286,7 +1286,7 @@ txf_slower_loop:
                 UPDATE_SYSBLK_INSTCOUNT( (i * 2) );
 
                 /* Perform automatic instruction tracing if it's enabled */
-                do_automatic_tracing();
+                DO_AUTOMATIC_TRACING();
                 goto endloop;
 
 #endif /* defined( FEATURE_073_TRANSACT_EXEC_FACILITY ) */
@@ -1336,7 +1336,7 @@ endloop:        ; // (nop to make compiler happy)
                 UPDATE_SYSBLK_INSTCOUNT( MAX_CPU_LOOPS/2 );
 
                 /* Perform automatic instruction tracing if it's enabled */
-                do_automatic_tracing();
+                DO_AUTOMATIC_TRACING();
             }
         }
 
@@ -1597,7 +1597,7 @@ void ARCH_DEP( sie_exit )( REGS* regs, int icode )
            transaction was aborted as a result of this intercepted
            program interrupt. For safety, return a "NULL" (empty)
            Interception TDB instead. (Sorry Dan! Could not locate
-           Claudia Schiffer’s phone number!)
+           Claudia Schiffer's phone number!)
         */
         memset( HOSTREGS->mainstor + itdba, 0, sizeof( TDB ));
     }
@@ -1959,33 +1959,31 @@ U32    newgr1;
         return;
     }
 
-    /* Obtain the device lock */
-    obtain_lock (&dev->lock);
-
-    /* Set newgr1 to the current value of pending and interlock control */
-    newgr1 = ((dev->scsw.flag3 & SCSW3_SC_PEND)
-              || (dev->pciscsw.flag3 & SCSW3_SC_PEND)) ? 0x02 : 0;
-    if(dev->pmcw.flag27 & PMCW27_I)
-        newgr1 |= 0x01;
-
-    /* Do a compare-and-swap operation on the interrupt interlock
-       control bit where both interlock and pending bits are
-       compared, but only the interlock bit is swapped */
-    if((regs->GR_L(r1) & 0x03) == newgr1)
+    OBTAIN_DEVLOCK( dev );
     {
-        dev->pmcw.flag27 &= ~PMCW27_I;
-        dev->pmcw.flag27 |= (regs->GR_L(r3) & 0x01) ? PMCW27_I : 0;
-        regs->psw.cc = 0;
-    }
-    else
-    {
-        regs->GR_L(r1) &= ~0x03;
-        regs->GR_L(r1) |= newgr1;
-        regs->psw.cc = 1;
-    }
+        /* Set newgr1 to the current value of pending and interlock control */
+        newgr1 = ((dev->scsw.flag3 & SCSW3_SC_PEND)
+                  || (dev->pciscsw.flag3 & SCSW3_SC_PEND)) ? 0x02 : 0;
+        if(dev->pmcw.flag27 & PMCW27_I)
+            newgr1 |= 0x01;
 
-    /* Release the device lock */
-    release_lock (&dev->lock);
+        /* Do a compare-and-swap operation on the interrupt interlock
+           control bit where both interlock and pending bits are
+           compared, but only the interlock bit is swapped */
+        if((regs->GR_L(r1) & 0x03) == newgr1)
+        {
+            dev->pmcw.flag27 &= ~PMCW27_I;
+            dev->pmcw.flag27 |= (regs->GR_L(r3) & 0x01) ? PMCW27_I : 0;
+            regs->psw.cc = 0;
+        }
+        else
+        {
+            regs->GR_L(r1) &= ~0x03;
+            regs->GR_L(r1) |= newgr1;
+            regs->psw.cc = 1;
+        }
+    }
+    RELEASE_DEVLOCK( dev );
 }
 #endif /* defined( FEATURE_IO_ASSIST ) */
 

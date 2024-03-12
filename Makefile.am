@@ -852,6 +852,7 @@ EXTRA_DIST =                  \
   msvc.makefile.includes/REXX_RULES.msvc      \
   README.md                       \
   readme/images/herclogo.jpg      \
+  readme/images/httpsrvr.jpg      \
   readme/images/image_header_herculeshyperionSDL.png  \
   readme/README.ADDING.md         \
   readme/README.AIX.md            \
@@ -860,6 +861,7 @@ EXTRA_DIST =                  \
   readme/README.CCKD64.md         \
   readme/README.CMPSC.md          \
   readme/README.COMMADPT.md       \
+  readme/README.DAEMON.md         \
   readme/README.DYNMOD.md         \
   readme/README.ECPSVM.md         \
   readme/README.EXTPKG.md         \
@@ -886,6 +888,7 @@ EXTRA_DIST =                  \
   readme/README.TAPE.md           \
   readme/README.TCPIP.md          \
   readme/README.TCPNJE.md         \
+  readme/README.TRACEFILE.md      \
   readme/README.VMFPLC2.md        \
   readme/README.WIN64.md          \
   RELEASE.NOTES               \

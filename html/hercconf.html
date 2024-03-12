@@ -980,6 +980,19 @@ a real System/390.  The configuration file is an ASCII text file.
     the HTTP server, whereas <tt>NOAUTH</tt> indicates that a userid and password
     are not required. The userid and password may be any valid string.
     <p>
+    <i><b><u>Security Alert!</u></b> &nbsp;When <tt>AUTH</tt> is specified
+    (and specifying a userid and password is thus required), one must exercise
+    due diligence to prevent unauthorized access to Hercules's configuration file
+    that contains those userids and passwords.
+    </i>
+    <p>
+    <i><b><u>Security Alert!</u></b> &nbsp;The HTTP Server currently utilizes the
+    insecure "http" protocol, not the more secure "https" protocol. All commands
+    and responses are transmitted over the network in the clear, allowing anyone
+    sniffing network traffic to see everything you do and possibly inject unauthorized
+    commands of their own. Exercise caution when using the HTTP Server feature.
+    </i>
+    <p>
 
 <a name="HTTPROOT"></a>
 <dt><code>HTTP &nbsp; ROOT &nbsp; <em>directory</em></code>
@@ -1160,9 +1173,9 @@ a real System/390.  The configuration file is an ASCII text file.
     rounded up to the next 4K boundary. Otherwise, storage sizes not on
     a 1M boundary are rounded up to the next 1M boundary.
     <p>
-    The minimum size is 4K for S/370 and ESA/390, and 8K for
-    z/Arch.  A maximum of 64M may be specified for S/370,
-    2048M (2G) for ESA/390, and 16E for z/Arch.
+    The minimum size is 64K for S/370 and 1M for ESA/390 and
+    z/Arch.  A maximum of 2G may be specified for S/370 and
+    ESA/390, and 16E for z/Arch.
     <p>
     <b>Notes:</b>
     <ol><p><li>
@@ -1607,7 +1620,8 @@ a real System/390.  The configuration file is an ASCII text file.
     When the z/Architecure Transactional-Execution Facility <i><u>is</u></i> installed and
     enabled, the minimum and default intervals are 200 and 400 microseconds.
     <p>
-    The maximum allowed interval is 1000000 microseconds (one second).
+    The maximum allowed interval is 999999 microseconds
+    (one microsecond less than one second).
     <p>
     Also note that due to host system limitations and/or design, some
     hosts may round up and/or
@@ -3191,6 +3205,7 @@ a real System/390.  The configuration file is an ASCII text file.
 
     <p>
 
+<a name="TAPE_ADD_PARMS"></a>
     <dt>The following additional parameters apply to
         <b><a href="#AWS">AWS</a></b>, <b><a href="#HET">HET</a></b>
         and <b><a href="#FAKETAPE">FakeTape</a></b> virtual tape files:
@@ -4750,6 +4765,14 @@ ROUTE  00  172.21.3.32  255.255.255.224
         Here the disk is not intended to be updated (MVS updates the DSCB
         last referenced field for a readonly file) and any writes appear to
         be successful even though nothing actually gets written.
+        <p>
+        Please also note the <code>fakewrite</code> option is only valid when
+        the <code>readonly</code> option is also specified. That is to say,
+        regardless of whether the host dasd image file is actually read/only
+        or read/write, specifying the <code>fakewrite</code> option without
+        the <code>readonly</code> option also being specified, is invalid.
+        The <code>fakewrite</code> option should always be considered to be
+        a <i><u>subset</u></i> of the <code>readonly</code> option.
         <p>
         <code>fakewrite</code> may be abbreviated as
         <code>fakewrt</code> or <code>fw</code>

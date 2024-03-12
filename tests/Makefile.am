@@ -10,6 +10,9 @@ EXTRA_DIST =                    \
      agf.listing                \
      agf.tst                    \
      alsi.txt                   \
+     3330.cckd64                \
+     3380.cckd64                \
+     3390.cckd64                \
      awsbsf.aws                 \
      awsbsf.tst                 \
      axtr.txt                   \
@@ -151,6 +154,7 @@ EXTRA_DIST =                    \
      CCW-ILS.pdf                \
      CCW-ILS.tst                \
      CCWILS.3390-1.comp-z       \
+     datetime.rexx              \
      cdfr.txt                   \
      cdgr.txt                   \
      CDSG.asm                   \
@@ -218,6 +222,26 @@ EXTRA_DIST =                    \
      csxtr.assemble             \
      csxtr.listing              \
      csxtr.tst                  \
+     CU12-01-xpage.asm          \
+     CU12-01-xpage.core         \
+     CU12-01-xpage.list         \
+     CU12-01-xpage.pdf          \
+     CU12-01-xpage.tst          \
+     CU12-02-performance.asm    \
+     CU12-02-performance.core   \
+     CU12-02-performance.list   \
+     CU12-02-performance.pdf    \
+     CU12-02-performance.tst    \
+     CU14-01-xpage.asm          \
+     CU14-01-xpage.core         \
+     CU14-01-xpage.list         \
+     CU14-01-xpage.pdf          \
+     CU14-01-xpage.tst          \
+     CU14-02-performance.asm    \
+     CU14-02-performance.core   \
+     CU14-02-performance.list   \
+     CU14-02-performance.pdf    \
+     CU14-02-performance.tst    \
      CUSE-01-basic.asm          \
      CUSE-01-basic.core         \
      CUSE-01-basic.list         \
@@ -247,7 +271,13 @@ EXTRA_DIST =                    \
      dotest                     \
      dummy.subtst               \
      dxtr.txt                   \
+     E7Prefix.asm               \
+     E7Prefix.core              \
+     E7Prefix.list              \
+     E7Prefix.pdf               \
+     E7Prefix.tst               \
      epsw.txt                   \
+     ex.txt                     \
      exrl.txt                   \
      FAC53.asm                  \
      FAC53.core                 \
@@ -271,6 +301,11 @@ EXTRA_DIST =                    \
      float.list                 \
      float.tst                  \
      float.pdf                  \
+     GH615.asm                  \
+     GH615.core                 \
+     GH615.list                 \
+     GH615.pdf                  \
+     GH615.tst                  \
      hetbsf-bzip2.het           \
      hetbsf.het                 \
      hetbsf.tst                 \

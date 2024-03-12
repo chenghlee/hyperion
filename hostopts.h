@@ -307,14 +307,14 @@
 #define HOW_TO_IMPLEMENT_SH_COMMAND       USE_ANSI_SYSTEM_API_FOR_SH_COMMAND
 #define SET_CONSOLE_CURSOR_SHAPE_METHOD   CURSOR_SHAPE_NOT_SUPPORTED
 #undef  OPTION_EXTCURS                  /* Normal cursor handling    */
-#undef  SCANDIR_CONST_STRUCT_DIRENT     /* define if scandir uses
+#define SCANDIR_CONST_STRUCT_DIRENT     /* define if scandir uses
                                            const for struct dirent   */
 
 
 /*-------------------------------------------------------------------*/
 /* Hard-coded GNU Linux-specific features and options...             */
 /*-------------------------------------------------------------------*/
-#elif defined(__gnu_linux__)            /* GNU Linux options         */
+#elif defined(__gnu_linux__) || defined(__linux__) /* Linux options  */
 
 #define DLL_IMPORT              extern
 #define DLL_EXPORT

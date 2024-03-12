@@ -48,8 +48,8 @@
 #define OPTION_MVS_TELNET_WORKAROUND    // Handle non-std MVS telnet
 #define OPTION_SIE_PURGE_DAT_ALWAYS     // Ivan 2016-07-30: purge DAT
                                         // ALWAYS at start SIE mode
-//#define NO_OPTINST                      // Doesn't really help much?
-#define OPTION_NO_E3_OPTINST            // Problematic!
+#define OPTION_NOASYNC_SF_CMDS          // Bypass bug in cache logic
+                                        // (see GitHub Issue #618!)
 
 /*-------------------------------------------------------------------*/
 /*              Normal default OPTIONs and FEATUREs                  */
@@ -70,12 +70,12 @@
 
 #define MIN_TOD_UPDATE_USECS         50 /* Min TOD updt freq (usecs) */
 #define DEF_TOD_UPDATE_USECS         50 /* Def TOD updt freq (usecs) */
-#define MAX_TOD_UPDATE_USECS    1000000 /* Max TOD updt freq (usecs) */
+#define MAX_TOD_UPDATE_USECS     999999 /* Max TOD updt freq (usecs) */
 
 #define MAX_DEVICE_THREAD_IDLE_SECS 300 /* 5 Minute thread timeout   */
 //efine OPTION_LONG_HOSTINFO            /* Detailed host & logo info */
 #undef  OPTION_FOOTPRINT_BUFFER /* 2048 ** Size must be a power of 2 */
-#undef  OPTION_INSTRUCTION_COUNTING     /* First use trace and count */
+#undef  OPTION_INSTR_COUNT_AND_TIME     /* First use trace and count */
 #undef  MODEL_DEPENDENT_STCM            /* STCM, STCMH always store  */
 #define OPTION_NOP_MODEL158_DIAGNOSE    /* NOP mod 158 specific diags*/
 
@@ -89,6 +89,7 @@
 #if !defined( OPTION_OPTINST ) && !defined( NO_OPTINST )
 #define OPTION_OPTINST                  /* Optimized instructions    */
 #endif
+#define OPTION_NO_E3_OPTINST            /* Problematic!              */
 
 #if defined( HAVE_FULL_KEEPALIVE )
   #if !defined( HAVE_PARTIAL_KEEPALIVE ) || !defined( HAVE_BASIC_KEEPALIVE )

@@ -64,16 +64,17 @@ static int fba_read (DEVBLK *dev, BYTE *buf, int len, BYTE *unitstat);
 /*-------------------------------------------------------------------*/
 int fba_dasd_init_handler ( DEVBLK *dev, int argc, char *argv[] )
 {
-int     rc;                             /* Return code               */
-struct  stat statbuf;                   /* File information          */
-int     startblk;                       /* Device origin block number*/
-int     numblks;                        /* Device block count        */
-BYTE    c;                              /* Character work area       */
-char   *cu = NULL;                      /* Specified control unit    */
-int     cfba = 0;                       /* 1 = Compressed fba        */
-int     i;                              /* Loop index                */
-CKD_DEVHDR      devhdr;                 /* Device header             */
-CCKD_DEVHDR     cdevhdr;                /* Compressed device header  */
+CKD_DEVHDR   devhdr;                    /* Device header             */
+CCKD_DEVHDR  cdevhdr;                   /* Compressed device header  */
+int          rc;                        /* Return code               */
+struct stat  statbuf;                   /* File information          */
+int          startblk;                  /* Device origin block number*/
+int          numblks;                   /* Device block count        */
+BYTE         c;                         /* Character work area       */
+char        *cu = NULL;                 /* Specified control unit    */
+bool         cfba = false;              /* true = Compressed fba     */
+int          i;                         /* Loop index                */
+char         filename[FILENAME_MAX+3];  /* work area for display     */
 
     /* For re-initialisation, close the existing file, if any */
     if (dev->fd >= 0)
@@ -95,6 +96,11 @@ CCKD_DEVHDR     cdevhdr;                /* Compressed device header  */
 
     /* Save the file name in the device block */
     hostpath(dev->filename, argv[0], sizeof(dev->filename));
+
+    if (!strchr( dev->filename, SPACE ))
+        MSGBUF( filename, "%s", dev->filename );
+    else
+        MSGBUF( filename, "'%s'", dev->filename );
 
 #if defined( OPTION_SHARED_DEVICES )
     /* Device is shareable */
@@ -152,7 +158,7 @@ CCKD_DEVHDR     cdevhdr;                /* Compressed device header  */
     {
         dev->cckd64 = 0;
 
-        cfba = 1;
+        cfba = true;
 
         /* Read the compressed device header */
         rc = read (dev->fd, &cdevhdr, CCKD_DEVHDR_SIZE);
@@ -213,6 +219,14 @@ CCKD_DEVHDR     cdevhdr;                /* Compressed device header  */
     else
     {
         dev->cckd64 = 0;
+
+        if (dev->dasdsfn || dev->dasdsfx)
+        {
+            // "%1d:%04X %s file %s: shadow files not supported for %s dasd"
+            WRMSG( HHC00469, "E", LCSS_DEVNUM, FBATYP( cfba, dev->cckd64 ),
+                filename, FBATYP( cfba, dev->cckd64 ) );
+            return -1;
+        }
 
         /* Determine the device size */
         rc = fstat (dev->fd, &statbuf);
@@ -585,7 +599,7 @@ fba_read_blkgrp_retry:
         cache_setage(CACHE_DEVBUF, i);
         cache_unlock(CACHE_DEVBUF);
 
-        // "%1d:%04X FBA file %s: read blkgrp %d cache hit, using cache[%d]"
+        // "Thread "TIDPAT" %1d:%04X FBA file %s: read blkgrp %d cache hit, using cache[%d]"
         if (dev->ccwtrace && sysblk.traceFILE)
             tf_0516( dev, blkgrp, i );
         else
@@ -605,7 +619,7 @@ fba_read_blkgrp_retry:
     /* Wait if no available cache entry */
     if (o < 0)
     {
-        // "%1d:%04X FBA file %s: read blkgrp %d no available cache entry, waiting"
+        // "Thread "TIDPAT" %1d:%04X FBA file %s: read blkgrp %d no available cache entry, waiting"
         if (dev->ccwtrace && sysblk.traceFILE)
             tf_0517( dev, blkgrp );
         else
@@ -616,7 +630,7 @@ fba_read_blkgrp_retry:
     }
 
     /* Cache miss */
-    // "%1d:%04X FBA file %s: read blkgrp %d cache miss, using cache[%d]"
+    // "Thread "TIDPAT" %1d:%04X FBA file %s: read blkgrp %d cache miss, using cache[%d]"
     if (dev->ccwtrace && sysblk.traceFILE)
         tf_0518( dev, blkgrp, o );
     else
@@ -635,7 +649,7 @@ fba_read_blkgrp_retry:
     offset = (off_t)((S64)blkgrp * CFBA_BLKGRP_SIZE);
     len = fba_blkgrp_len (dev, blkgrp);
 
-    // "%1d:%04X FBA file %s: read blkgrp %d offset %"PRId64" len %d"
+    // "Thread "TIDPAT" %1d:%04X FBA file %s: read blkgrp %d offset %"PRId64" len %d"
     if (dev->ccwtrace && sysblk.traceFILE)
         tf_0519( dev, blkgrp, offset, fba_blkgrp_len( dev, blkgrp ));
     else
@@ -1097,7 +1111,7 @@ int     repcnt;                         /* Replication count         */
                      + dev->fbalcblk - dev->fbaxfirst
                       ) * dev->fbablksiz;
 
-        // "%1d:%04X FBA file %s: positioning to 0x%"PRIX64" %"PRId64
+        // "Thread "TIDPAT" %1d:%04X FBA file %s: positioning to 0x%"PRIX64" %"PRId64
         if (dev->ccwtrace && sysblk.traceFILE)
             tf_0520( dev );
         else
@@ -1220,9 +1234,11 @@ int     repcnt;                         /* Replication count         */
 
         if (dev->hnd->release) (dev->hnd->release) (dev);
 
-        obtain_lock (&dev->lock);
-        dev->reserved = 0;
-        release_lock (&dev->lock);
+        OBTAIN_DEVLOCK( dev );
+        {
+            dev->reserved = 0;
+        }
+        RELEASE_DEVLOCK( dev );
 
         /* Return sense information */
         goto sense;
@@ -1241,9 +1257,11 @@ int     repcnt;                         /* Replication count         */
 
         /* Reserve device to the ID of the active channel program */
 
-        obtain_lock (&dev->lock);
-        dev->reserved = 1;
-        release_lock (&dev->lock);
+        OBTAIN_DEVLOCK( dev );
+        {
+            dev->reserved = 1;
+        }
+        RELEASE_DEVLOCK( dev );
 
         if (dev->hnd->reserve) (dev->hnd->reserve) (dev);
 
@@ -1264,9 +1282,11 @@ int     repcnt;                         /* Replication count         */
 
         /* Reserve device to the ID of the active channel program */
 
-        obtain_lock (&dev->lock);
-        dev->reserved = 1;
-        release_lock (&dev->lock);
+        OBTAIN_DEVLOCK( dev );
+        {
+            dev->reserved = 1;
+        }
+        RELEASE_DEVLOCK( dev );
 
         if (dev->hnd->reserve) (dev->hnd->reserve) (dev);
 

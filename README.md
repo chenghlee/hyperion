@@ -60,6 +60,7 @@ to our **bug report tracking system** by adding/creating a new
 ### Features and Operation
 
 [Customizable Hercules 3270 Logo](readme/README.HERCLOGO.md)  
+[Running Hercules in Daemon mode](readme/README.DAEMON.md)  
 [Guest Access To Host IP Stack - The TCPIP (X'75') Instruction](readme/README.TCPIP.md)  
 [HAO (Hercules Automatic Operator)](readme/README.HAO.md)  
 [Hercules CCKD64 Support](readme/README.CCKD64.md)  
@@ -84,3 +85,4 @@ to our **bug report tracking system** by adding/creating a new
 [HQA Build Scenarios](readme/README.HQA.md)  
 [Low-level Test Cases](tests/README.md)  
 [PTT Tracing](readme/README.PTT.md)  
+[Trace-to-File Support](readme/README.TRACEFILE.md)  

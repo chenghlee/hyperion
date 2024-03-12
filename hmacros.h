@@ -1,4 +1,3 @@
-
 /* HMACROS.H    (C) Copyright Roger Bowler, 1999-2012                */
 /*               Hercules macros...                                  */
 /*                                                                   */
@@ -447,6 +446,20 @@ typedef int CMPFUNC(const void*, const void*);
 #define RELEASE_CRWLOCK()   release_lock( &sysblk.crwlock )
 
 /*-------------------------------------------------------------------*/
+/*      Obtain/Release lock helper macros                            */
+/*      used mostly by channel.c                                     */
+/*-------------------------------------------------------------------*/
+
+#define OBTAIN_IOQLOCK()          obtain_lock(  &sysblk.ioqlock )
+#define RELEASE_IOQLOCK()         release_lock( &sysblk.ioqlock )
+
+#define OBTAIN_IOINTQLK()         obtain_lock(  &sysblk.iointqlk )
+#define RELEASE_IOINTQLK()        release_lock( &sysblk.iointqlk )
+
+#define OBTAIN_DEVLOCK( dev )     obtain_lock(  &dev->lock )
+#define RELEASE_DEVLOCK( dev )    release_lock( &dev->lock )
+
+/*-------------------------------------------------------------------*/
 /* Return whether specified CPU is waiting to acquire intlock or not */
 /*-------------------------------------------------------------------*/
 #define AT_SYNCPOINT(_regs) (HOST(_regs)->intwait)
@@ -462,6 +475,16 @@ typedef int CMPFUNC(const void*, const void*);
   #define IS_DEV(_dev) \
     ((_dev)->allocated && ((_dev)->pmcw.flag5 & PMCW5_V))
 #endif // defined(_FEATURE_INTEGRATED_3270_CONSOLE)
+
+#define INTEGRATED_CONS_FD              INT_MAX
+
+#define IS_INTEGRATED_CONS( _dev )          \
+    (1                                      \
+     && !(_dev)->console                    \
+     && (_dev)->connected                   \
+     && (_dev)->fd == INTEGRATED_CONS_FD    \
+     && strlen( (_dev)->filename ) > 0      \
+    )
 
 /*-------------------------------------------------------------------*/
 /*      HDL macro to call optional function override                 */

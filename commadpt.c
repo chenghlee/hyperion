@@ -1042,7 +1042,7 @@ static void commadpt_read_tty(COMMADPT *ca, BYTE * bfr, int len)
             }
             if  (ca->uctrans && c >= 'a' && c <= 'z')
             {
-                c = toupper( c );     /* make uppercase */
+                c = toupper( (unsigned char)c );     /* make uppercase */
             }
             /* now map the character from ASCII into proper S/370 byte format */
             if (ca->term == COMMADPT_TERM_TTY)
@@ -1307,7 +1307,7 @@ static void *commadpt_thread(void *vca)
     init_signaled=0;
 
     /* Set server thread priority; ignore any errors */
-    set_thread_priority( sysblk.srvprio);
+    SET_THREAD_PRIORITY( sysblk.srvprio, sysblk.qos_user_initiated );
 
     MSGBUF(threadname, "%1d:%04X communication thread", SSID_TO_LCSS(ca->dev->ssid), devnum);
     LOG_THREAD_BEGIN( threadname );
@@ -1474,7 +1474,7 @@ static void *commadpt_thread(void *vca)
                 if(ca->inbfr.havedata || ca->eol_flag)
                 {
                     if (ca->term == COMMADPT_TERM_2741) {
-                        usleep(10000);
+                        USLEEP(10000);
                     }
                     ca->curpending=COMMADPT_PEND_IDLE;
                     signal_condition(&ca->ipc);

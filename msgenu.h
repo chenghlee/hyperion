@@ -134,16 +134,23 @@ LOGM_DLL_IMPORT int  panel_command_capture( char* cmd, char** resp, bool quiet )
 #define LOGDEVTR( id, sev, ... )                                \
     do                                                          \
     {                                                           \
-        if (dev->ccwtrace)                                      \
+        if (1                                                   \
+            && dev->ccwtrace                                    \
+            && (0                                               \
+                || !dev->ccwopstrace                            \
+                ||  dev->ccwops[ dev->code ]                    \
+               )                                                \
+        )                                                       \
         {                                                       \
             /* PROGRAMMING NOTE: we must call 'fwritemsg'       \
                directly since attempting to use the 'WRMSG'     \
-               macro instead seems to confuse gcc/clang.        \
+               macro confuses poor dumb gcc/clang. (SIGH!)      \
             */                                                  \
-            /* "%1d:%04X ....(debug trace message)... */        \
+            /* "Thread "TIDPAT" %1d:%04X .... */                \
             fwritemsg( __FILE__, __LINE__, __FUNCTION__,        \
                 WRMSG_NORMAL, stdout,                           \
                 #id "%s " id "\n", sev,                         \
+                TID_CAST(hthread_self()),                       \
                 SSID_TO_LCSS( dev->ssid ),                      \
                 dev->devnum, ## __VA_ARGS__ );                  \
         }                                                       \
@@ -232,10 +239,10 @@ LOGM_DLL_IMPORT int  panel_command_capture( char* cmd, char** resp, bool quiet )
 #define HHC00007 "Previous message from function '%s' at %s(%d)"
 //efine HHC00008 (available)
 #define HHC00009 "RRR...RING...GGG!\a"
-#define HHC00010 "Enter input for console %1d:%04X"
+#define HHC00010 "Enter '%s' input for console %1d:%04X"
 #define HHC00011 "Function %s failed; cache %d size %d: [%02d] %s"
 #define HHC00012 "Releasing inactive buffer storage"
-//efine HHC00013 (available)
+#define HHC00013 "'%s' input entered for console %1d:%04X: \"%s\""
 #define HHC00014 "select: %s"
 #define HHC00015 "keyboard read: %s"
 //efine HHC00016 (available)
@@ -280,7 +287,8 @@ LOGM_DLL_IMPORT int  panel_command_capture( char* cmd, char** resp, bool quiet )
 #define HHC00089 "The are no HAO rules defined"
 #define HHC00090 "HAO thread waiting for logger facility to become active"
 #define HHC00091 "Logger facility now active; HAO thread proceeding"
-//efine HHC00092 - HHC00099 (available)
+#define HHC00092 "Warning in function %s: %s"
+//efine HHC00093 - HHC00099 (available)
 
 // reserve 100-129 thread related
 #define HHC00100 "Thread id "TIDPAT", prio %d, name '%s' started"
@@ -293,9 +301,10 @@ LOGM_DLL_IMPORT int  panel_command_capture( char* cmd, char** resp, bool quiet )
 #define HHC00108 "Ending thread "TIDPAT" %s, pri=%d, started=%d, max=%d exceeded"
 #define HHC00109 "set_thread_priority( %d ) failed: %s"
 #define HHC00110 "Defaulting all threads to priority %d"
-#define HHC00111 "Thread CPU Time IS available (_POSIX_THREAD_CPUTIME=%d)"
+#define HHC00111 "Thread CPU Time IS available (_POSIX_THREAD_CPUTIME=%ld)"
 #define HHC00112 "Thread CPU Time is NOT available."
-//efine HHC00113 - HHC00129 (available)
+#define HHC00113 "Setting main thread QoS to USER_INITIATED failed: %s"
+//efine HHC00114 - HHC00129 (available)
 
 #define HHC00130 "PGMPRDOS LICENSED specified and a licenced program product operating system is running"
 #define HHC00131 "A licensed program product operating system detected, all processors have been stopped"
@@ -346,7 +355,7 @@ LOGM_DLL_IMPORT int  panel_command_capture( char* cmd, char** resp, bool quiet )
 #define HHC00203 "%1d:%04X Tape file %s, type %s: invalid tapemark at offset 0x%16.16"PRIX64
 #define HHC00204 "%1d:%04X Tape file %s, type %s: error in function %s, offset 0x%16.16"PRIX64": %s"
 #define HHC00205 "%1d:%04X Tape file %s, type %s: error in function %s: %s"
-#define HHC00206 "%1d:%04X Tape file %s, type %s: not a valid @TDF file"
+#define HHC00206 "%1d:%04X Tape file %s, type %s: not a valid @TDF file: %s"
 #define HHC00207 "%1d:%04X Tape file %s, type %s: line %d: %s"
 #define HHC00208 "%1d:%04X Tape file %s, type %s: maximum tape capacity exceeded"
 #define HHC00209 "%1d:%04X Tape file %s, type %s: maximum tape capacity enforced"
@@ -477,7 +486,7 @@ LOGM_DLL_IMPORT int  panel_command_capture( char* cmd, char** resp, bool quiet )
 #define HHC00387 "%1d:%04X CCKD%s image %s is SEVERELY fragmented!"
 #define HHC00388 "%1d:%04X CCKD%s image %s is moderately fragmented"
 #define HHC00389 "%1d:%04X CCKD%s image %s is slightly fragmented"
-//efine HHC00390 (available)
+#define HHC00390 "%1d:%04X CCKD file: device has no shadow files"
 //efine HHC00391 (available)
 //efine HHC00392 (available)
 //efine HHC00393 (available)
@@ -512,27 +521,28 @@ LOGM_DLL_IMPORT int  panel_command_capture( char* cmd, char** resp, bool quiet )
 #define HHC00420 "%1d:%04X CKD file %s: error write kd orientation"
 #define HHC00421 "%1d:%04X CKD file %s: error write data orientation"
 #define HHC00422 "%1d:%04X CKD file %s: data chaining not supported for non-read CCW %02X"
-#define HHC00423 "%1d:%04X CKD file %s: search key %s"
-#define HHC00424 "%1d:%04X CKD file %s: read trk %d cur trk %d"
-#define HHC00425 "%1d:%04X CKD file %s: read track updating track %d"
-#define HHC00426 "%1d:%04X CKD file %s: read trk %d cache hit, using cache[%d]"
-#define HHC00427 "%1d:%04X CKD file %s: read trk %d no available cache entry, waiting"
-#define HHC00428 "%1d:%04X CKD file %s: read trk %d cache miss, using cache[%d]"
-#define HHC00429 "%1d:%04X CKD file %s: read trk %d reading file %d offset %"PRId64" len %d"
-#define HHC00430 "%1d:%04X CKD file %s: read trk %d trkhdr %02X %02X%02X %02X%02X"
-#define HHC00431 "%1d:%04X CKD file %s: seeking to cyl %d head %d"
-#define HHC00432 "%1d:%04X CKD file %s: error: MT advance: locate record %d file mask %02X"
-#define HHC00433 "%1d:%04X CKD file %s: MT advance to cyl(%d) head(%d)"
-#define HHC00434 "%1d:%04X CKD file %s: read count orientation %s"
-#define HHC00435 "%1d:%04X CKD file %s: cyl %d head %d record %d kl %d dl %d of %d"
-#define HHC00436 "%1d:%04X CKD file %s: read key %d bytes"
-#define HHC00437 "%1d:%04X CKD file %s: read data %d bytes"
-#define HHC00438 "%1d:%04X CKD file %s: writing cyl %d head %d record %d kl %d dl %d"
-#define HHC00439 "%1d:%04X CKD file %s: setting track overflow flag for cyl %d head %d record %d"
-#define HHC00440 "%1d:%04X CKD file %s: updating cyl %d head %d record %d kl %d dl %d"
-#define HHC00441 "%1d:%04X CKD file %s: updating cyl %d head %d record %d dl %d"
-#define HHC00442 "%1d:%04X CKD file %s: set file mask %02X"
-//efine HHC00443 (available)
+// LOGDEVTR...
+#define HHC00423 "Thread "TIDPAT" %1d:%04X CKD file %s: search key %s"
+#define HHC00424 "Thread "TIDPAT" %1d:%04X CKD file %s: read trk %d cur trk %d"
+#define HHC00425 "Thread "TIDPAT" %1d:%04X CKD file %s: read track updating track %d"
+#define HHC00426 "Thread "TIDPAT" %1d:%04X CKD file %s: read trk %d cache hit, using cache[%d]"
+#define HHC00427 "Thread "TIDPAT" %1d:%04X CKD file %s: read trk %d no available cache entry, waiting"
+#define HHC00428 "Thread "TIDPAT" %1d:%04X CKD file %s: read trk %d cache miss, using cache[%d]"
+#define HHC00429 "Thread "TIDPAT" %1d:%04X CKD file %s: read trk %d reading file %d offset %"PRId64" len %d"
+#define HHC00430 "Thread "TIDPAT" %1d:%04X CKD file %s: read trk %d trkhdr %02X %02X%02X %02X%02X"
+#define HHC00431 "Thread "TIDPAT" %1d:%04X CKD file %s: seeking to cyl %d head %d"
+#define HHC00432 "Thread "TIDPAT" %1d:%04X CKD file %s: error: MT advance: locate record %d file mask %02X"
+#define HHC00433 "Thread "TIDPAT" %1d:%04X CKD file %s: MT advance to cyl(%d) head(%d)"
+#define HHC00434 "Thread "TIDPAT" %1d:%04X CKD file %s: read count orientation %s"
+#define HHC00435 "Thread "TIDPAT" %1d:%04X CKD file %s: cyl %d head %d record %d kl %d dl %d of %d"
+#define HHC00436 "Thread "TIDPAT" %1d:%04X CKD file %s: read key %d bytes"
+#define HHC00437 "Thread "TIDPAT" %1d:%04X CKD file %s: read data %d bytes"
+#define HHC00438 "Thread "TIDPAT" %1d:%04X CKD file %s: writing cyl %d head %d record %d kl %d dl %d"
+#define HHC00439 "Thread "TIDPAT" %1d:%04X CKD file %s: setting track overflow flag for cyl %d head %d record %d"
+#define HHC00440 "Thread "TIDPAT" %1d:%04X CKD file %s: updating cyl %d head %d record %d kl %d dl %d"
+#define HHC00441 "Thread "TIDPAT" %1d:%04X CKD file %s: updating cyl %d head %d record %d dl %d"
+#define HHC00442 "Thread "TIDPAT" %1d:%04X CKD file %s: set file mask %02X"
+#define HHC00443 "%1d:%04X CKD file: 'fakewrite' invalid without 'readonly'"
 //efine HHC00444 (available)
 #define HHC00445 "%1d:%04X CKD file %s: updating cyl %d head %d"
 #define HHC00446 "%1d:%04X CKD file %s: write track error: stat %2.2X"
@@ -558,7 +568,7 @@ LOGM_DLL_IMPORT int  panel_command_capture( char* cmd, char** resp, bool quiet )
 #define HHC00466 "Maximum of %u %s in %u 2GB file(s) is supported"
 #define HHC00467 "Maximum %s supported is %u"
 #define HHC00468 "For larger capacity DASD volumes, use %s"
-//efine HHC00469 (available)
+#define HHC00469 "%1d:%04X %s file %s: shadow files not supported for %s dasd"
 #define HHC00470 "%1d:%04X %s file %s: model %s cyls %d heads %d tracks %d trklen %d"
 #define HHC00471 "%1d:%04X CKD64 file %s: %u %s successfully written"
 #define HHC00472 "%1d:%04X CKD64 file %s: creating %4.4X volume %s: %u cyls, %u trks/cyl, %u bytes/track"
@@ -585,11 +595,12 @@ LOGM_DLL_IMPORT int  panel_command_capture( char* cmd, char** resp, bool quiet )
 #define HHC00513 "%1d:%04X FBA file %s: FBA origin mismatch: %d, expected %d,"
 #define HHC00514 "%1d:%04X FBA file %s: FBA numblk mismatch: %d, expected %d,"
 #define HHC00515 "%1d:%04X FBA file %s: FBA blksiz mismatch: %d, expected %d,"
-#define HHC00516 "%1d:%04X FBA file %s: read blkgrp %d cache hit, using cache[%d]"
-#define HHC00517 "%1d:%04X FBA file %s: read blkgrp %d no available cache entry, waiting"
-#define HHC00518 "%1d:%04X FBA file %s: read blkgrp %d cache miss, using cache[%d]"
-#define HHC00519 "%1d:%04X FBA file %s: read blkgrp %d offset %"PRId64" len %d"
-#define HHC00520 "%1d:%04X FBA file %s: positioning to 0x%"PRIX64" %"PRId64
+// LOGDEVTR...
+#define HHC00516 "Thread "TIDPAT" %1d:%04X FBA file %s: read blkgrp %d cache hit, using cache[%d]"
+#define HHC00517 "Thread "TIDPAT" %1d:%04X FBA file %s: read blkgrp %d no available cache entry, waiting"
+#define HHC00518 "Thread "TIDPAT" %1d:%04X FBA file %s: read blkgrp %d cache miss, using cache[%d]"
+#define HHC00519 "Thread "TIDPAT" %1d:%04X FBA file %s: read blkgrp %d offset %"PRId64" len %d"
+#define HHC00520 "Thread "TIDPAT" %1d:%04X FBA file %s: positioning to 0x%"PRIX64" %"PRId64
 #define HHC00521 "Maximum of %u %s in a 2GB file"
 //efine HHC00522 - HHC00599 (available)
 
@@ -672,7 +683,8 @@ LOGM_DLL_IMPORT int  panel_command_capture( char* cmd, char** resp, bool quiet )
 #define HHC00742 "Shared: OPTION_SHARED_DEVICES not defined"
 #define HHC00743 "Shared:  %s" // (trace message)
 #define HHC00744 "Shared: Server already active"
-//efine HHC00745 - HHC00799 (available)
+#define HHC00745 "%1d:%04X Shared: CKD file: 'fakewrite' invalid without 'readonly'"
+//efine HHC00746 - HHC00799 (available)
 
 // reserve 008xx for processor related messages
 #define HHC00800 "Processor %s%02X: loaded wait state PSW %s"
@@ -701,11 +713,12 @@ LOGM_DLL_IMPORT int  panel_command_capture( char* cmd, char** resp, bool quiet )
 #define HHC00823 "You have %d seconds to attach a debugger before crash dump will be taken!"
 #define HHC00824 "Debugger attached! NOT crashing!"
 #define HHC00825 "TIME'S UP! (or debugger has been detached!) - Forcing crash dump!"
-//efine HHC00826 (available)
+#define HHC00826 "Processor %s%02X: processor %sstopped due to disabled wait"
 #define HHC00827 "Processor %s%02X: engine %02X type %1d set: %s"
-#define HHC00828 "Processor %s%02X: ipl failed: %s"
-//efine HHC00830 (available)
-//efine HHC00831 (available)
+#define HHC00828 "Processor %s%02X: ipl failed: %s" // (IPL I/O error)
+#define HHC00829 "Command cannot be issued once system has been IPLed"
+#define HHC00830 "System cannot be IPLed once shadow file commands have been issued"
+#define HHC00831 "Hercules needs to be restarted before proceeding"
 //efine HHC00832 (available)
 //efine HHC00833 (available)
 #define HHC00834 "Processor %s%02X: %s"
@@ -713,7 +726,7 @@ LOGM_DLL_IMPORT int  panel_command_capture( char* cmd, char** resp, bool quiet )
 //efine HHC00836 (available)
 //efine HHC00837 (available)
 //efine HHC00838 (available)
-#define HHC00839 "Processor %s%02X: ipl failed: %s"
+#define HHC00839 "Processor %s%02X: ipl failed: %s" // (bad IPL PSW)
 #define HHC00840 "Processor %s%02X: External interrupt: interrupt key"
 #define HHC00841 "Processor %s%02X: External interrupt: clock comparator"
 #define HHC00842 "Processor %s%02X: External interrupt: CPU timer=%16.16"PRIX64
@@ -808,7 +821,7 @@ LOGM_DLL_IMPORT int  panel_command_capture( char* cmd, char** resp, bool quiet )
 #define HHC00938 "CTC: lcs device port %2.2X: %s Large Send Offload enabled"
 #define HHC00939 "%1d:%04X CTC: lcs startup: frame buffer size 0x%4.4X %s compiled size 0x%4.4X: ignored"
 #define HHC00940 "CTC: error in function %s: %s"
-#define HHC00941 "CTC: ioctl %s failed for device %s: %s"
+#define HHC00941 "CTC: ioctl %s failed for device %s: %s; ... ignoring and continuing"
 #define HHC00942 "CTC: lcs interface %s using mac %2.2X:%2.2X:%2.2X:%2.2X:%2.2X:%2.2X"
 #define HHC00943 "CTC: lcs interface %s not using mac %2.2X:%2.2X:%2.2X:%2.2X:%2.2X:%2.2X"
 #define HHC00944 "CTC: lcs interface %s read error from port %2.2X: %s"
@@ -943,7 +956,7 @@ LOGM_DLL_IMPORT int  panel_command_capture( char* cmd, char** resp, bool quiet )
 #define HHC01083 "%1d:%04X COMM: cthread - socket write available"
 #define HHC01084 "%1d:%04X COMM: set mode %s"
 #define HHC01085 "%1d:%04X COMM: default command prefixes exhausted"
-#define HHC01086 "%1d:%04X COMM: device %1d:%04X already using prefix %s"
+#define HHC01086 "%1d:%04X COMM: device %1d:%04X already using prefix '%s'"
 //efine HHC01087 (available)
 //efine HHC01088 (available)
 //efine HHC01089 (available)
@@ -1771,7 +1784,7 @@ LOGM_DLL_IMPORT int  panel_command_capture( char* cmd, char** resp, bool quiet )
 #define HHC02472 "Dataset is not RECFM %s; utility ends"
 #define HHC02473 "Dataset is not DSORG %s; utility ends"
 #define HHC02474 "Error processing %s"
-#define HHC02475 "Records written to %s: %d"
+#define HHC02475 "Records %s %s: %d"
 #define HHC02476 "Dataset %s not found"
 #define HHC02477 "In %s: function %s rc %d%s"
 #define HHC02478 "Length invalid for KEY %d or DATA %d%s"
@@ -2062,7 +2075,8 @@ LOGM_DLL_IMPORT int  panel_command_capture( char* cmd, char** resp, bool quiet )
 #define HHC02693 "search_key_equal rc %d"
 #define HHC02694 "writing %s"
 #define HHC02695 "Closed output file %s"
-//efine HHC02696 - HHC02699 (available)
+#define HHC02696 "Data set format is %s"
+//efine HHC02697 - HHC02699 (available)
 
 #define HHC02700 "SCSI tapes are not supported with this build"
 #define HHC02701 "Abnormal termination"
@@ -2203,7 +2217,8 @@ LOGM_DLL_IMPORT int  panel_command_capture( char* cmd, char** resp, bool quiet )
 #define HHC02781 "Invalid %s parameter: %s"
 #define HHC02782 "LRECL %i and BLOCK %i exceeds maximum AWS blocksize of %i"
 #define HHC02783 "Parameter %s ignored due to NLTAPE option"
-//efine HHC02784 - HHC02799 (available)
+#define HHC02784 "Error reading from file' %s': %s"
+//efine HHC02785 - HHC02799 (available)
 
 // mt_cmd
 #define HHC02800 "%1d:%04X %s complete"
@@ -2281,7 +2296,7 @@ LOGM_DLL_IMPORT int  panel_command_capture( char* cmd, char** resp, bool quiet )
 #define HHC03002 "Missing input-file specification"
 #define HHC03003 "Extraneous parameter: %s"
 #define HHC03004 "Unsupported dasd image file format"
-#define HHC03005 "Device type %4.4X not found in dasd table"
+#define HHC03005 "Device type '%2.2X' not found in dasd table"
 #define HHC03006 "%s error: %s"
 #define HHC03007 "File size:      (%s bytes)"
 #define HHC03008 "Compressed device header inconsistency(s) found! code: %4.4X"
@@ -2400,7 +2415,7 @@ LOGM_DLL_IMPORT int  panel_command_capture( char* cmd, char** resp, bool quiet )
 #define HHC03208 "Format-%c trace file created by: %s"
 #define HHC03209 "Trace %s: %s"
 #define HHC03210 "Incompatible MAX_CPU_ENGS"
-#define HHC03211 "Trace count: ins=%s records, dev=%s records"
+#define HHC03211 "Trace count: instruction=%s records, device=%s records"
 #define HHC03212 "File does not start with TFSYS record; aborting"
 #define HHC03213 "Unsupported Trace File format: %%TF%c"
 #define HHC03214 "Unsupported Trace File record: msgnum %"PRIu16
@@ -2412,7 +2427,8 @@ LOGM_DLL_IMPORT int  panel_command_capture( char* cmd, char** resp, bool quiet )
 #define HHC03220 "--date range is required when --time range specified"
 #define HHC03221 "Endianness of %s = %s"
 #define HHC03222 "WARNING: possible performance impact due to endianness!"
-//efine HHC03223 - HHC03249 (available)
+#define HHC03223 "Thread Id "TIDPAT" is %s"
+//efine HHC03224 - HHC03249 (available)
 
 // tfswap
 #define HHC03250 "Usage:  tfswap  infile  outfile\n"
@@ -2810,7 +2826,7 @@ LOGM_DLL_IMPORT int  panel_command_capture( char* cmd, char** resp, bool quiet )
 //efine HHC91900 - HHC91998 (available)
 //efine HHC91999  (dbgtrace.h)
 
-//efine HHC92000 - HHC91998 (available)
+//efine HHC92000 - HHC92699 (available)
 
 //efine HHC92700 (available)
 //efine HHC92701 (available)

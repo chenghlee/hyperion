@@ -168,7 +168,7 @@ BYTE    c;                              /* Character work area       */
             hbuf[++j] = 0;
         }
         c = guest_to_host(c);
-        if (!isprint(c)) c = '.';
+        if (!isprint((unsigned char)c)) c = '.';
         cbuf[i] = c;
         if ((aaddr & PAGEFRAME_BYTEMASK) == 0x000) break;
     } /* end for(i) */
@@ -357,7 +357,7 @@ char    buf[512];                       /* MSGBUF work buffer        */
 
     /* Parse optional address-space prefix */
     opnd = argv[0];
-    type = toupper( *opnd );
+    type = toupper( (unsigned char)*opnd );
 
     if (0
         || type == 'R'
@@ -469,27 +469,64 @@ RADR    raddr;                          /* Real storage address      */
 RADR    aaddr;                          /* Absolute storage address  */
 size_t  totamt;                         /* Total amount to be dumped */
 int     len;                            /* Number of bytes to alter  */
-int     i;                              /* Loop counter              */
+int     i, n;                           /* Loop counters             */
+int     opidx;                          /* cmdline index to operands */
 BYTE    newval[32];                     /* Storage alteration value  */
 char    buf[64];                        /* MSGBUF work buffer        */
-char    absorr[8];                      /* Uppercase command         */
+char    cmd;
 
-    UNREFERENCED(argc);
-    UNREFERENCED(cmdline);
+    UNREFERENCED( argc );
 
-    /* We require only one operand */
-    if (argc != 2)
+    /* Ensure a minimum length command */
+    if (0
+        || !cmdline
+        || strlen( cmdline ) < 3
+    )
     {
         // "Missing or invalid argument(s)"
         WRMSG( HHC17000, "E" );
         return;
     }
 
-    /* Convert command to uppercase */
-    for (i = 0; argv[0][i]; i++)
-        absorr[i] = toupper(argv[0][i]);
-    absorr[i] = 0;
-    opnd = argv[1];
+    /* Remove intervening blanks from command's operand(s),
+       being careful to stop at the '#' comment if present.
+       (Skip this logic if operand is a quoted string!)
+    */
+    i = n = opidx = str_caseless_eq( argv[0], "abs" ) ? 4 : 2;
+
+    /* Is operand a quoted string? */
+    if (1
+        && (opnd = strchr( cmdline, '=' ))
+        && ((++opnd)[0] == '\"')
+    )
+    {
+        /* Null terminate command following ending quote */
+        for (++opnd; opnd[0] && opnd[0] != '\"'; ++opnd);
+        opnd[0] = 0;
+    }
+    else // (NOT quoted string; remove intervening blanks)
+    {
+        /* Convert entire command line to uppercase */
+        string_to_upper( cmdline );
+
+        while (cmdline[n])
+        {
+            // Skip past blanks until next non-blank
+            while (cmdline[n] && cmdline[n] == ' ') ++n;
+
+            if (!cmdline[n] || cmdline[n] == '#')
+                break; // (STOP!)
+
+            // Copy chars until next blank or end of string
+            while (cmdline[n] && cmdline[n] != ' ')
+                cmdline[i++] = cmdline[n++];
+        }
+
+        cmdline[i] = 0; /* (terminate the [maybe] modified string) */
+    }
+
+    cmd  = cmdline[0];
+    opnd = &cmdline[ opidx ];
 
     /* Set limit for address range */
   #if defined(FEATURE_001_ZARCH_INSTALLED_FACILITY)
@@ -505,7 +542,7 @@ char    absorr[8];                      /* Uppercase command         */
     if (regs->mainlim == 0)
     {
         // "%c:"F_RADR"  Storage address is not valid"
-        WRMSG( HHC02327, "E", absorr[0], saddr );
+        WRMSG( HHC02327, "E", cmd, saddr );
         return;
     }
 
@@ -518,7 +555,7 @@ char    absorr[8];                      /* Uppercase command         */
             raddr = saddr + i;
 
             /* Convert real address to absolute address */
-            if ('R' == absorr[0])
+            if ('R' == cmd)
                 aaddr = APPLY_PREFIXING (raddr, regs->PX);
             else
                 aaddr = raddr; /* (is already absolute) */
@@ -560,7 +597,7 @@ char    absorr[8];                      /* Uppercase command         */
                 pageamt = totamt;
 
             /* Convert real address to absolute address */
-            if ('R' == absorr[0])
+            if ('R' == cmd)
                 aaddr = APPLY_PREFIXING( raddr, regs->PX );
             else
                 aaddr = raddr; /* (is already absolute) */
@@ -583,7 +620,7 @@ char    absorr[8];                      /* Uppercase command         */
 
             /* Now hexdump that absolute page */
             VERIFY( ARCH_DEP( dump_abs_page )( regs, aaddr, raddr,
-                pageoff, pageamt, absorr[0], addrwid ) == 0);
+                pageoff, pageamt, cmd, addrwid ) == 0);
 
             /* Check if we're done */
             if (!(totamt -= pageamt))
@@ -632,7 +669,7 @@ RADR    raddr;                          /* Real storage address      */
 RADR    aaddr;                          /* Absolute storage address  */
 int     stid;                           /* Segment table indication  */
 int     len;                            /* Number of bytes to alter  */
-int     i;                              /* Loop counter              */
+int     i, n;                           /* Loop counters             */
 int     arn = 0;                        /* Access register number    */
 U16     xcode;                          /* Exception code            */
 char    trans[16];                      /* Address translation mode  */
@@ -641,19 +678,44 @@ char    buf[96];                        /* Message buffer            */
 char    type;                           /* optional addr-space type  */
 size_t  totamt;                         /* Total amount to be dumped */
 
-    UNREFERENCED(cmdline);
+    UNREFERENCED( argc );
+    UNREFERENCED( argv );
 
-    /* We require only one operand */
-    if (argc != 1)
+    /* Ensure a minimum length command */
+    if (0
+        || !cmdline
+        || strlen( cmdline ) < 3
+    )
     {
         // "Missing or invalid argument(s)"
         WRMSG( HHC17000, "E" );
         return;
     }
 
+    /* Convert entire command line to uppercase */
+    string_to_upper( cmdline );
+
+    /* Remove intervening blanks from command's operand(s),
+       being careful to stop at the '#' comment if present.
+    */
+    i = n = 2;
+    while (cmdline[n])
+    {
+        // Skip past blanks until next non-blank
+        while (cmdline[n] && cmdline[n] == ' ') ++n;
+
+        if (!cmdline[n] || cmdline[n] == '#')
+            break; // (STOP!)
+
+        // Copy chars until next blank or end of string
+        while (cmdline[n] && cmdline[n] != ' ')
+            cmdline[i++] = cmdline[n++];
+    }
+    cmdline[i] = 0; /* (terminate the [maybe] modified string) */
+
     /* Parse optional address-space prefix */
-    opnd = argv[0];
-    type = toupper( *opnd );
+    opnd = &cmdline[2];
+    type = *opnd;
 
     if (1
         && type != 'P'
@@ -1400,20 +1462,45 @@ static void cancel_wait_for_guest_quiesce()
 /*  completely exited beforehand.                                    */
 /*                                                                   */
 /*-------------------------------------------------------------------*/
+/*  Shutdown initialation steps:                                     */
+/*     1. set shutbegin=TRUE to notify logger to synchronize it's    */
+/*        shutdown steps and set system shutdown request             */
+/*     2. short spin-wait for logger to set system shutdown request  */
+/*     3  ensure system shutdown requested                           */
+/*-------------------------------------------------------------------*/
 
 static void do_shutdown_now()
 {
+    int     spincount = 16;           // spin-wait count for logger-thread
+    bool    loggersetshutdown = TRUE; // assume logger sets system shutdown
+
+    ASSERT( !sysblk.shutfini );   // (sanity check)
+    ASSERT( !sysblk.shutdown );   // (sanity check)
+    sysblk.shutfini = FALSE;      // (shutdown NOT finished yet)
+    sysblk.shutdown = FALSE;      // (system shutdown NOT initiated yet)
+    sysblk.shutbegin = TRUE;      // (begin system shutdown)
+
     // "Begin Hercules shutdown"
     WRMSG( HHC01420, "I" );
 
     // (hack to prevent minor message glitch during shutdown)
     fflush( stdout );
     fflush( stderr );
-    usleep( 10000 );
 
-    ASSERT( !sysblk.shutfini );   // (sanity check)
-    sysblk.shutfini = FALSE;      // (shutdown NOT finished yet)
-    sysblk.shutdown = TRUE;       // (system shutdown initiated)
+    // spin-wait for logger to initiate system shutdown
+    while ( !sysblk.shutdown && spincount-- )
+    {
+        log_wakeup( NULL );
+        USLEEP( 5000 );
+        //LOGMSG("hsmisc.c: shutdown spin-wait on logger: count: %d, shutdown: %d\n", spincount, (int) sysblk.shutdown);
+    }
+
+    // safety measure: ensure system shutdown requested
+    if ( !sysblk.shutdown )
+    {
+        sysblk.shutdown = TRUE;       // (system shutdown initiated)
+        loggersetshutdown = FALSE;    // logger didn't set system shutdown
+    }
 
     /* Wakeup I/O subsystem to start I/O subsystem shutdown */
     {
@@ -1421,7 +1508,7 @@ static void do_shutdown_now()
         for (n=0; sysblk.devtnbr && n < 100; ++n)
         {
             signal_condition( &sysblk.ioqcond );
-            usleep( 10000 );
+            USLEEP( 10000 );
         }
     }
 
@@ -1431,11 +1518,17 @@ static void do_shutdown_now()
     // (hack to prevent minor message glitch during shutdown)
     fflush( stdout );
     fflush( stderr );
-    usleep( 10000 );
+    USLEEP( 10000 );
+
+    // if logger didn't set shutdown, handle unredirect
+    if ( !loggersetshutdown )
+    {
 
 #if !defined( _MSVC_ )
-    logger_unredirect();
+                logger_unredirect();
 #endif
+
+    }
 
     hdl_atexit();
 
@@ -2130,7 +2223,7 @@ BYTE    c;                              /* Character work area       */
             h1 = *(++s);
             if (h1 == '\0'  || h1 == '#' ) break;
             if (h1 == SPACE || h1 == '\t') continue;
-            h1 = toupper(h1);
+            h1 = toupper((unsigned char)h1);
             h1 = (h1 >= '0' && h1 <= '9') ? h1 - '0' :
                  (h1 >= 'A' && h1 <= 'F') ? h1 - 'A' + 10 : -1;
             if (h1 < 0)
@@ -2139,7 +2232,7 @@ BYTE    c;                              /* Character work area       */
                 return -1;
             }
             h2 = *(++s);
-            h2 = toupper(h2);
+            h2 = toupper((unsigned char)h2);
             h2 = (h2 >= '0' && h2 <= '9') ? h2 - '0' :
                  (h2 >= 'A' && h2 <= 'F') ? h2 - 'A' + 10 : -1;
             if (h2 < 0)
@@ -2206,16 +2299,16 @@ void get_connected_client (DEVBLK* dev, char** pclientip, char** pclientname)
     *pclientip   = NULL;
     *pclientname = NULL;
 
-    obtain_lock (&dev->lock);
-
-    if (dev->bs             /* if device is a socket device,   */
-        && dev->fd != -1)   /* and a client is connected to it */
+    OBTAIN_DEVLOCK( dev );
     {
-        *pclientip   = strdup(dev->bs->clientip);
-        *pclientname = strdup(dev->bs->clientname);
+        if (dev->bs             /* if device is a socket device,   */
+            && dev->fd != -1)   /* and a client is connected to it */
+        {
+            *pclientip   = strdup( dev->bs->clientip );
+            *pclientname = strdup( dev->bs->clientname );
+        }
     }
-
-    release_lock (&dev->lock);
+    RELEASE_DEVLOCK( dev );
 }
 
 /*-------------------------------------------------------------------*/

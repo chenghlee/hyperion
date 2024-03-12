@@ -1095,8 +1095,10 @@ int  LCS_Close( DEVBLK* pDEVBLK )
             release_lock( &pLCSPORT->PortEventLock );
             PTT_DEBUG( "join_thread       ", 000, pDEVBLK->devnum, pLCSPORT->bPort );
             join_thread( tid, NULL );
+#if defined( OPTION_FTHREADS) 
             PTT_DEBUG( "detach_thread     ", 000, pDEVBLK->devnum, pLCSPORT->bPort );
-            detach_thread( tid );
+            detach_thread( tid );   // only needed for Fish threads
+#endif
         }
 
         if (pLCSDEV->pDEVBLK[ LCS_READ_SUBCHANN  ] && pLCSDEV->pDEVBLK[LCS_READ_SUBCHANN]->fd >= 0)
@@ -1691,7 +1693,7 @@ static void  UpdatePortStarted( int bStarted, DEVBLK* pDEVBLK, PLCSPORT pLCSPORT
     release_lock( &pLCSPORT->PortEventLock );
 
     PTT_DEBUG( "UPDTPORT pause 150", 000, pDEVBLK->devnum, pLCSPORT->bPort );
-    usleep( 150*1000 );
+    USLEEP( 150*1000 );
 }
 
 // ====================================================================
@@ -2073,8 +2075,8 @@ static  void  LCS_DoMulticast( int ioctlcode, PLCSDEV pLCSDEV, PLCSCMDHDR pCmdFr
 
         if (badrc)
         {
-            // "CTC: ioctl %s failed for device %s: %s"
-            WRMSG( HHC00941, "E", what, pLCSPORT->szNetIfName, strerror( errnum ));
+            // "CTC: ioctl %s failed for device %s: %s; ... ignoring and continuing"
+            WRMSG( HHC00941, "W", what, pLCSPORT->szNetIfName, strerror( errnum ));
             STORE_HW( pLCSIPMFRM->bLCSCmdHdr.hwReturnCode, 0xFFFF );
         }
 #endif // defined( SIOCGIFHWADDR )
@@ -2191,7 +2193,7 @@ static void LCS_EnqueueReplyFrame( PLCSDEV pLCSDEV, PLCSCMDHDR pReply, size_t iS
         // Wait for LCS_Read to empty the buffer...
 
         ASSERT( ENOBUFS == errno );
-        usleep( CTC_DELAY_USECS );
+        USLEEP( CTC_DELAY_USECS );
     }
     PTT_TIMING( "af repNQ", 0, iSize, 0 );
     PTT_DEBUG( "ENQ RepFrame EXIT ", pReply->bCmdCode, pDEVBLK->devnum, bPort );
@@ -2798,7 +2800,7 @@ static void LCS_EnqueueEthFrame( PLCSPORT pLCSPORT, PLCSDEV pLCSDEV, BYTE* pData
         // Wait for LCS_Read to empty the buffer...
 
         ASSERT( ENOBUFS == errno );
-        usleep( CTC_DELAY_USECS );
+        USLEEP( CTC_DELAY_USECS );
     }
     PTT_TIMING( "af enqueue", 0, iSize, 0 );
     PTT_DEBUG( "ENQ EthFrame EXIT ", 000, pDEVBLK->devnum, bPort );
@@ -3217,9 +3219,9 @@ void    GetIfMACAddress( PLCSPORT pLCSPORT )
 
         if (rc != 0)
         {
-            // "CTC: ioctl %s failed for device %s: %s"
+            // "CTC: ioctl %s failed for device %s: %s; ... ignoring and continuing"
             rc = HSO_errno;
-            WRMSG( HHC00941, "E", "SIOCGIFHWADDR", pLCSPORT->szNetIfName, strerror( rc ));
+            WRMSG( HHC00941, "W", "SIOCGIFHWADDR", pLCSPORT->szNetIfName, strerror( rc ));
             return;
         }
 
@@ -4150,7 +4152,7 @@ static void*  LCS_AttnThread( void* arg)
                 {
 
                     // Wait a small (but increasing) amount of time.
-                    usleep(interval);
+                    USLEEP(interval);
 
 //??                // is there still something in our frame buffer?
 //??                if (!pLCSDEV->fDataPending && !pLCSDEV->fReplyPending)

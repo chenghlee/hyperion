@@ -465,7 +465,7 @@ DLL_EXPORT char *resolve_symbol_string(const char *text)
             if (c == '\0' ) break;
 
             /* Check if it is a white space and no other character yet */
-            if(!lstarted && isspace(c)) continue;
+            if(!lstarted && isspace((unsigned char)c)) continue;
             lstarted=1;
 
             /* Check that statement does not overflow buffer */
@@ -602,6 +602,58 @@ DLL_EXPORT void list_all_symbols()
         if ((tok = symbols[i]) != NULL)
             // "Symbol %-12s %s"
             WRMSG( HHC02199, "I", tok->var, tok->val ? tok->val : "" );
+}
+
+/* Hercules microsecond sleep */
+DLL_EXPORT int herc_usleep( useconds_t usecs, const char* file, int line )
+{
+    int  rc, save_errno = 0, eintr_retrys = 0;
+
+    struct timespec usecs_left;
+    usecs_left.tv_nsec = usecs * 1000L;
+    usecs_left.tv_sec  = usecs_left.tv_nsec / ONE_BILLION;
+    usecs_left.tv_nsec %=                     ONE_BILLION;
+
+    while (1
+        && (rc = nanosleep( &usecs_left, &usecs_left ) != 0)
+        && (save_errno = errno) == EINTR
+        && (0
+            || usecs_left.tv_sec != 0
+            || usecs_left.tv_nsec > (USLEEP_MIN * 1000)
+           )
+    )
+        ++eintr_retrys; // (keep retrying until done or min reached)
+
+    if (0
+        || rc != 0
+        || eintr_retrys > NANOSLEEP_EINTR_RETRY_WARNING_TRESHOLD
+    )
+    {
+        char fnc[128], msg[128];
+
+        MSGBUF( fnc, "USLEEP() at %s(%d)",
+            TRIMLOC( file ), line );
+
+        if (save_errno != EINTR)
+        {
+            MSGBUF( msg, "rc=%d, errno=%d: %s",
+                rc, save_errno, strerror( save_errno ));
+
+            // "Error in function %s: %s"
+            WRMSG( HHC00075, "E", fnc, msg );
+            errno = save_errno;
+        }
+
+        if (eintr_retrys > NANOSLEEP_EINTR_RETRY_WARNING_TRESHOLD)
+        {
+            MSGBUF( msg, "rc=%d, EINTR retrys count=%d",
+                rc, eintr_retrys );
+
+            // "Warning in function %s: %s"
+            WRMSG( HHC00092, "W", fnc, msg );
+        }
+    }
+    return rc;
 }
 
 /* Subtract 'beg_timeval' from 'end_timeval' yielding 'dif_timeval' */
@@ -789,11 +841,15 @@ int set_socket_keepalive( int sfd,
     struct protoent * tcpproto;
 
     /* Retrieve TCP protocol value (mostly for FreeBSD portability) */
-    tcpproto = getprotobyname("TCP");
+    tcpproto = getprotobyname("tcp");
     if (!tcpproto)
     {
-        WRMSG( HHC02219, "E", "getprotobyname(\"TCP\")", strerror( HSO_errno ));
-        return -1;
+        tcpproto = getprotobyname("TCP");
+        if (!tcpproto)
+        {
+            WRMSG( HHC02219, "E", "getprotobyname(\"tcp\")", strerror( HSO_errno ));
+            return -1;
+        }
     }
     l_tcp = tcpproto->p_proto;
 
@@ -897,11 +953,15 @@ int get_socket_keepalive( int sfd, int* idle_time, int* probe_interval,
     socklen_t  optlen = sizeof( optval );
 
     /* Retrieve TCP protocol value (mostly for FreeBSD portability) */
-    tcpproto = getprotobyname("TCP");
+    tcpproto = getprotobyname("tcp");
     if (!tcpproto)
     {
-        WRMSG( HHC02219, "E", "getprotobyname(\"TCP\")", strerror( HSO_errno ));
-        return -1;
+        tcpproto = getprotobyname("TCP");
+        if (!tcpproto)
+        {
+            WRMSG( HHC02219, "E", "getprotobyname(\"tcp\")", strerror( HSO_errno ));
+            return -1;
+        }
     }
     l_tcp = tcpproto->p_proto;
 #else
@@ -1703,7 +1763,7 @@ DLL_EXPORT int parse_args( char* p, int maxargc, char** pargv, int* pargc )
 
     while (*p && *pargc < maxargc)
     {
-        while (*p && isspace(*p))
+        while (*p && isspace((unsigned char)*p))
         {
             p++;
         }
@@ -1721,7 +1781,7 @@ DLL_EXPORT int parse_args( char* p, int maxargc, char** pargv, int* pargc )
         *pargv = p;
         ++*pargc;
 
-        while (*p && !isspace(*p) && *p != '\"' && *p != '\'')
+        while (*p && !isspace((unsigned char)*p) && *p != '\"' && *p != '\'')
         {
             p++;
         }
@@ -1800,13 +1860,13 @@ DLL_EXPORT void string_to_upper( char* source )
 {
     int  i;
     for (i=0; source[i]; i++)
-        source[i] = toupper( source[i] );
+        source[i] = toupper( (unsigned char)source[i] );
 }
 DLL_EXPORT void string_to_lower( char* source )
 {
     int  i;
     for (i=0; source[i]; i++)
-        source[i] = tolower( source[i] );
+        source[i] = tolower( (unsigned char)source[i] );
 }
 
 /*-------------------------------------------------------------------*/
@@ -2293,12 +2353,12 @@ static const char *ordername[] =
 DLL_EXPORT const char* perc2name( BYTE perc, char* buf, size_t bufsiz )
 {   /*
            Hex    Bit   PER Event
-            80     0    Successful-branching 
+            80     0    Successful-branching
             40     1    Instruction-fetching
             20     2    Storage-alteration
             10     3    Storage-key-alteration
-            08     4    Store-using-real-address 
-            04     5    Zero-address-detection 
+            08     4    Store-using-real-address
+            04     5    Zero-address-detection
             02     6    Transaction-end
             01     7    Instruction-fetching nullification (PER-3) */
 
@@ -2728,6 +2788,7 @@ static bool tf_write( REGS* regs, void* rec, U16 curr, U16 msgnum )
     TFHDR*   hdr;
     size_t   written;
     TIMEVAL  tod;
+    TID      tid;
     bool     nostop;
     bool     auto_closed = false; // (true when MAX= reached)
     bool     ret = true;
@@ -2772,6 +2833,9 @@ static bool tf_write( REGS* regs, void* rec, U16 curr, U16 msgnum )
         hdr->msgnum    = msgnum;
         hdr->arch_mode = regs ? regs->arch_mode : 0xFF;
         hdr->tod       = tod;
+        tid             = hthread_self();
+        hdr->tidnum     = TID_CAST( tid );
+        get_thread_name( tid, hdr->thrdname );
 
         /* Update the TFSYS record's end time too */
         memcpy( &tfsys.end_tod, &tod, sizeof( tfsys.end_tod ));
@@ -3298,6 +3362,7 @@ DLL_EXPORT bool tf_0804( REGS* regs, BYTE* csw, U16 ioid, BYTE lcss )
 
 //---------------------------------------------------------------------
 //                    I/O Interrupt
+//            (handles both HHC00805 and HHC00806)
 //---------------------------------------------------------------------
 DLL_EXPORT bool tf_0806( REGS* regs, U32 ioid, U32 ioparm, U32 iointid )
 {
@@ -3447,6 +3512,7 @@ DLL_EXPORT bool tf_1301( const DEVBLK* dev, const U64 addr, const U16 count,
     rec.count = count;
     rec.type  = type;
     rec.mflag = flag;
+    rec.code  = dev->code;
     memcpy( rec.data, data, amt );
     return tf_write( NULL, &rec, sizeof( TF01301 ), 1301 );
 }
@@ -3996,7 +4062,7 @@ DLL_EXPORT size_t  tf_MAX_RECSIZE()
     if (max_recsize < sizeof( TF00804 ))
         max_recsize = sizeof( TF00804 );
 
-    if (max_recsize < sizeof( TF00806 ))
+    if (max_recsize < sizeof( TF00806 )) // (handles both HHC00805 and HHC00806)
         max_recsize = sizeof( TF00806 );
 
     if (max_recsize < sizeof( TF00807 ))
@@ -4084,7 +4150,7 @@ DLL_EXPORT size_t  tf_MAX_RECSIZE()
 
     if (max_recsize < sizeof( TF01321 ))
         max_recsize = sizeof( TF01321 );
-    
+
     if (max_recsize < sizeof( TF01329 ))
         max_recsize = sizeof( TF01329 );
 
@@ -4150,7 +4216,7 @@ DLL_EXPORT void tf_swap_sys( TFSYS* sys )
 /*-------------------------------------------------------------------*/
 /*        Do unconditional Endian swap of TFHDR record header        */
 /*-------------------------------------------------------------------*/
-DLL_EXPORT void tf_swap_hdr( TFHDR* hdr )
+DLL_EXPORT void tf_swap_hdr( BYTE sys_ffmt, TFHDR* hdr )
 {
     hdr->prev        = SWAP16( hdr->prev        );
     hdr->curr        = SWAP16( hdr->curr        );
@@ -4159,10 +4225,27 @@ DLL_EXPORT void tf_swap_hdr( TFHDR* hdr )
     hdr->devnum      = SWAP16( hdr->devnum      );
     hdr->tod.tv_sec  = SWAP32( hdr->tod.tv_sec  );
     hdr->tod.tv_usec = SWAP32( hdr->tod.tv_usec );
+
+    // Format-2...
+
+    if (sys_ffmt >= TF_FMT2)
+        hdr->tidnum  = SWAP64( hdr->tidnum      );
 }
 
 /*-------------------------------------------------------------------*/
 /*     Do unconditional Endian swap of Trace File record fields      */
+/*-------------------------------------------------------------------*/
+/*                                                                   */
+/* PROGRAMMING NOTE: the TFHDR* passed to us by TFPRINT, from our    */
+/* point of view, appears to point to a "new" (current) format trace */
+/* record with both the header fields as well as the rec fields all  */
+/* properly aligned.                                                 */
+/*                                                                   */
+/* When TFSWAP calls us however, it passes an adjusted TFHDR pointer */
+/* wherein only the actual rec fields are aligned properly. This is  */
+/* safe to do since we don't ever access any of the header fields    */
+/* anyway. We only mess with the actual rec fields.                  */
+/*                                                                   */
 /*-------------------------------------------------------------------*/
 DLL_EXPORT void tf_swap_rec( TFHDR* hdr, U16 msgnum )
 {
@@ -4412,7 +4495,7 @@ DLL_EXPORT void tf_swap_rec( TFHDR* hdr, U16 msgnum )
         }
         break;
 
-        case  806:
+        case  806: // (handles both HHC00805 and HHC00806)
         {
             TF00806* rec = (TF00806*) hdr;
             rec->ioid    = SWAP32( rec->ioid    );

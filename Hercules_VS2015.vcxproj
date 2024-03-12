@@ -692,6 +692,7 @@
     <None Include="readme\README.CCKD64.md" />
     <None Include="readme\README.CMPSC.md" />
     <None Include="readme\README.COMMADPT.md" />
+    <None Include="readme\README.DAEMON.md" />
     <None Include="readme\README.DYNMOD.md" />
     <None Include="readme\README.ECPSVM.md" />
     <None Include="readme\README.EXTPKG.md" />
@@ -718,6 +719,7 @@
     <None Include="readme\README.TAPE.md" />
     <None Include="readme\README.TCPIP.md" />
     <None Include="readme\README.TCPNJE.md" />
+    <None Include="readme\README.TRACEFILE.md" />
     <None Include="readme\README.VMFPLC2.md" />
     <None Include="readme\README.WIN64.md" />
     <None Include="RELEASE.NOTES" />
@@ -750,6 +752,9 @@
     <None Include="tests\agf.listing" />
     <None Include="tests\agf.tst" />
     <None Include="tests\awsbsf.aws" />
+    <None Include="tests\3330.cckd64" />
+    <None Include="tests\3380.cckd64" />
+    <None Include="tests\3390.cckd64" />
     <None Include="tests\awsbsf.tst" />
     <None Include="tests\bc-ilc.asm" />
     <None Include="tests\bc-ilc.core" />
@@ -883,6 +888,7 @@
     <None Include="tests\CBUC.tst" />
     <None Include="tests\CCW-ILS.asm" />
     <None Include="tests\CCWILS.3390-1.comp-z" />
+    <None Include="tests\datetime.rexx" />
     <None Include="tests\CCW-ILS.core" />
     <None Include="tests\CCW-ILS.list" />
     <None Include="tests\CCW-ILS.pdf" />
@@ -938,16 +944,41 @@
     <None Include="tests\cmd-rv-4K-64.subxxx" />
     <None Include="tests\cmd-rv.xxx" />
     <None Include="tests\cr.tst" />
+    <None Include="tests\CU12-01-xpage.asm" />
+    <None Include="tests\CU12-01-xpage.core" />
+    <None Include="tests\CU12-01-xpage.list" />
+    <None Include="tests\CU12-01-xpage.pdf" />
+    <None Include="tests\CU12-01-xpage.tst" />
+    <None Include="tests\CU12-02-performance.asm" />
+    <None Include="tests\CU12-02-performance.core" />
+    <None Include="tests\CU12-02-performance.list" />
+    <None Include="tests\CU12-02-performance.pdf" />
+    <None Include="tests\CU12-02-performance.tst" />
+    <None Include="tests\CU14-01-xpage.asm" />
+    <None Include="tests\CU14-01-xpage.core" />
+    <None Include="tests\CU14-01-xpage.list" />
+    <None Include="tests\CU14-01-xpage.pdf" />
+    <None Include="tests\CU14-01-xpage.tst" />
+    <None Include="tests\CU14-02-performance.asm" />
+    <None Include="tests\CU14-02-performance.core" />
+    <None Include="tests\CU14-02-performance.list" />
+    <None Include="tests\CU14-02-performance.pdf" />
+    <None Include="tests\CU14-02-performance.tst" />
     <None Include="tests\CUSE-01-basic.asm" />
-    <None Include="tests\CUSE-02-performance.asm" />
     <None Include="tests\CUSE-01-basic.core" />
-    <None Include="tests\CUSE-02-performance.core" />
     <None Include="tests\CUSE-01-basic.list" />
-    <None Include="tests\CUSE-02-performance.list" />
     <None Include="tests\CUSE-01-basic.pdf" />
-    <None Include="tests\CUSE-02-performance.pdf" />
     <None Include="tests\CUSE-01-basic.tst" />
+    <None Include="tests\CUSE-02-performance.asm" />
+    <None Include="tests\CUSE-02-performance.core" />
+    <None Include="tests\CUSE-02-performance.list" />
+    <None Include="tests\CUSE-02-performance.pdf" />
     <None Include="tests\CUSE-02-performance.tst" />
+    <None Include="tests\E7Prefix.asm" />
+    <None Include="tests\E7Prefix.core" />
+    <None Include="tests\E7Prefix.list" />
+    <None Include="tests\E7Prefix.pdf" />
+    <None Include="tests\E7Prefix.tst" />
     <None Include="tests\dotest" />
     <None Include="tests\dfp-080-from-packed.asm" />
     <None Include="tests\dfp-080-from-packed.core" />
@@ -977,6 +1008,11 @@
     <None Include="tests\float.list" />
     <None Include="tests\float.tst" />
     <None Include="tests\float.pdf" />
+    <None Include="tests\GH615.asm" />
+    <None Include="tests\GH615.core" />
+    <None Include="tests\GH615.list" />
+    <None Include="tests\GH615.pdf" />
+    <None Include="tests\GH615.tst" />
     <None Include="tests\csxtr.assemble" />
     <None Include="tests\csxtr.listing" />
     <None Include="tests\csxtr.tst" />
@@ -1358,6 +1394,7 @@
     <Text Include="tests\diag8.txt" />
     <Text Include="tests\dxtr.txt" />
     <Text Include="tests\epsw.txt" />
+    <Text Include="tests\ex.txt" />
     <Text Include="tests\exrl.txt" />
     <Text Include="tests\fiebr.txt" />
     <Text Include="tests\fixtr.txt" />
@@ -1572,6 +1609,7 @@
     <Image Include="html\images\waitoffu.gif" />
     <Image Include="html\images\waitonu.gif" />
     <Image Include="readme\images\herclogo.jpg" />
+    <Image Include="readme\images\httpsrvr.jpg" />
     <Image Include="readme\images\image_header_herculeshyperionSDL.png" />
   </ItemGroup>
   <ItemGroup>

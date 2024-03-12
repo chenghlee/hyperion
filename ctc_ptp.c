@@ -859,10 +859,10 @@ int  ptp_close( DEVBLK* pDEVBLK )
 
         TID tid = pPTPBLK->tid;
         pPTPBLK->fCloseInProgress = 1;  // (ask read thread to exit)
-#if defined(_MSVC_)
         join_thread( tid, NULL );       // (wait for thread to end)
-#endif
+#if defined( OPTION_FTHREADS )
         detach_thread( tid );           // (wait for thread to end)
+#endif
     }
 
     pDEVBLK->fd = -1;           // indicate we're now closed
@@ -2263,7 +2263,7 @@ void*  ptp_read_thread( void* arg )
                 // Don't use schedyield() here; use an actual non-dispatchable
                 // delay instead so as to allow another [possibly lower priority]
                 // thread to 'read' (remove) the packet(s) from the read buffer.
-                usleep( PTP_DELAY_USECS );  // (wait a bit before retrying...)
+                USLEEP( PTP_DELAY_USECS );  // (wait a bit before retrying...)
 
                 continue;
 
@@ -2966,7 +2966,7 @@ int  parse_conf_stmt( DEVBLK* pDEVBLK, PTPBLK* pPTPBLK,
          */
         char* s = pPTPBLK->szTUNIfName + strlen( pPTPBLK->szTUNIfName );
 
-        while (isdigit( s[-1] ))
+        while (isdigit( (unsigned char)s[-1] ))
             s--;
 
         STRLCAT( pPTPBLK->szTUNCharDevName, s );

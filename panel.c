@@ -1367,7 +1367,7 @@ static void NP_update(REGS *regs)
 
         online = (dev->console && dev->connected) || strlen(dev->filename) > 0;
         busy   = dev->busy != 0 || IOPENDING(dev) != 0;
-        open   = dev->fd > 2;
+        open   = dev->fd >= 0;
 
         /* device identifier */
         if (!NPdevices_valid || online != NPonline[i])
@@ -1424,7 +1424,7 @@ static void NP_update(REGS *regs)
                 l = (int)strlen(devnam);
                 for ( p = 0; p < l; p++ )
                 {
-                    if ( !isprint(devnam[p]) )
+                    if ( !isprint((unsigned char)devnam[p]) )
                     {
                         devnam[p] = '\0';
                         break;
@@ -1618,12 +1618,16 @@ DLL_EXPORT void set_panel_colors()
         sysblk.pan_color[ PANC_E_IDX ][ PANC_FG_IDX ] = COLOR_DEFAULT_FG;
         sysblk.pan_color[ PANC_W_IDX ][ PANC_FG_IDX ] = COLOR_DEFAULT_FG;
         sysblk.pan_color[ PANC_D_IDX ][ PANC_FG_IDX ] = COLOR_DEFAULT_FG;
+        sysblk.pan_color[ PANC_S_IDX ][ PANC_FG_IDX ] = COLOR_DEFAULT_FG;
+        sysblk.pan_color[ PANC_A_IDX ][ PANC_FG_IDX ] = COLOR_DEFAULT_FG;
 
         sysblk.pan_color[ PANC_X_IDX ][ PANC_BG_IDX ] = COLOR_DEFAULT_BG;
         sysblk.pan_color[ PANC_I_IDX ][ PANC_BG_IDX ] = COLOR_DEFAULT_BG;
         sysblk.pan_color[ PANC_E_IDX ][ PANC_BG_IDX ] = COLOR_DEFAULT_BG;
         sysblk.pan_color[ PANC_W_IDX ][ PANC_BG_IDX ] = COLOR_DEFAULT_BG;
         sysblk.pan_color[ PANC_D_IDX ][ PANC_BG_IDX ] = COLOR_DEFAULT_BG;
+        sysblk.pan_color[ PANC_S_IDX ][ PANC_BG_IDX ] = COLOR_DEFAULT_BG;
+        sysblk.pan_color[ PANC_A_IDX ][ PANC_BG_IDX ] = COLOR_DEFAULT_BG;
 
         break;
 
@@ -1644,6 +1648,12 @@ DLL_EXPORT void set_panel_colors()
         sysblk.pan_color[ PANC_D_IDX ][ PANC_FG_IDX ] = COLOR_LIGHT_GREY;
         sysblk.pan_color[ PANC_D_IDX ][ PANC_BG_IDX ] = COLOR_BLUE;
 
+        sysblk.pan_color[ PANC_S_IDX ][ PANC_FG_IDX ] = COLOR_WHITE;
+        sysblk.pan_color[ PANC_S_IDX ][ PANC_BG_IDX ] = COLOR_LIGHT_RED;
+
+        sysblk.pan_color[ PANC_A_IDX ][ PANC_FG_IDX ] = COLOR_WHITE;
+        sysblk.pan_color[ PANC_A_IDX ][ PANC_BG_IDX ] = COLOR_DEFAULT_BG;
+
         break;
 
     case PANC_LIGHT:  // Light scheme: dark text on light background
@@ -1663,6 +1673,12 @@ DLL_EXPORT void set_panel_colors()
         sysblk.pan_color[ PANC_D_IDX ][ PANC_FG_IDX ] = COLOR_LIGHT_GREY;
         sysblk.pan_color[ PANC_D_IDX ][ PANC_BG_IDX ] = COLOR_BLUE;
 
+        sysblk.pan_color[ PANC_S_IDX ][ PANC_FG_IDX ] = COLOR_WHITE;
+        sysblk.pan_color[ PANC_S_IDX ][ PANC_BG_IDX ] = COLOR_LIGHT_RED;
+
+        sysblk.pan_color[ PANC_A_IDX ][ PANC_FG_IDX ] = COLOR_DARK_GREY;
+        sysblk.pan_color[ PANC_A_IDX ][ PANC_BG_IDX ] = COLOR_DEFAULT_BG;
+
         break;
     }
 }
@@ -1676,7 +1692,9 @@ static int msgcolor( int sev, int fgbg )
     case 'I': return sysblk.pan_color[ PANC_I_IDX ][ fgbg ];
     case 'E': return sysblk.pan_color[ PANC_E_IDX ][ fgbg ];
     case 'W': return sysblk.pan_color[ PANC_W_IDX ][ fgbg ];
-    case 'D': return sysblk.pan_color[ PANC_D_IDX ][ fgbg ]; default: break; }
+    case 'D': return sysblk.pan_color[ PANC_D_IDX ][ fgbg ];
+    case 'S': return sysblk.pan_color[ PANC_S_IDX ][ fgbg ];
+    case 'A': return sysblk.pan_color[ PANC_A_IDX ][ fgbg ]; default: break; }
               return sysblk.pan_color[ PANC_X_IDX ][ fgbg ];
 }
 static int fg_msgcolor( int sev ) { return msgcolor( sev, PANC_FG_IDX ); }
@@ -2066,7 +2084,7 @@ size_t  loopcount;                      /* Number of iterations done */
                         case 1:                     /* IPL - 2nd part */
                             if (!sysblk.hicpu)
                               break;
-                            i = toupper(NPdevice) - 'A';
+                            i = toupper((unsigned char)NPdevice) - 'A';
                             if (i < 0 || i > NPlastdev) {
                                 memset(NPprompt2,0,sizeof(NPprompt2));
                                 redraw_status = 1;
@@ -2087,7 +2105,7 @@ size_t  loopcount;                      /* Number of iterations done */
                         case 2:                     /* Device int: part 2 */
                             if (!sysblk.hicpu)
                               break;
-                            i = toupper(NPdevice) - 'A';
+                            i = toupper((unsigned char)NPdevice) - 'A';
                             if (i < 0 || i > NPlastdev) {
                                 memset(NPprompt2,0,sizeof(NPprompt2));
                                 redraw_status = 1;
@@ -2106,7 +2124,7 @@ size_t  loopcount;                      /* Number of iterations done */
                             redraw_status = 1;
                             break;
                         case 3:                     /* Device asgn: part 2 */
-                            i = toupper(NPdevice) - 'A';
+                            i = toupper((unsigned char)NPdevice) - 'A';
                             if (i < 0 || i > NPlastdev) {
                                 memset(NPprompt2,0,sizeof(NPprompt2));
                                 redraw_status = 1;
@@ -2311,7 +2329,7 @@ size_t  loopcount;                      /* Number of iterations done */
 
                             while (*p && ncmd_tok < 10 )
                             {
-                                while (*p && isspace(*p))
+                                while (*p && isspace((unsigned char)*p))
                                 {
                                     p++;
                                 }
@@ -2325,7 +2343,7 @@ size_t  loopcount;                      /* Number of iterations done */
                                 cmd_tok[ncmd_tok] = p; ++ncmd_tok; // count new arg
 
                                 while ( *p
-                                        && !isspace(*p)
+                                        && !isspace((unsigned char)*p)
                                         && *p != '\"'
                                         && *p != '\'' )
                                 {
@@ -2410,7 +2428,7 @@ size_t  loopcount;                      /* Number of iterations done */
                                             }
                                         }
                                     }
-                                    else if ( !isdigit( pt1[idx+1] ) && ( pt1[idx+1] != '$' ) )
+                                    else if ( !isdigit( (unsigned char)pt1[idx+1] ) && ( pt1[idx+1] != '$' ) )
                                     {
                                         psz_cmdline[odx++] = pt1[idx];
                                     }
@@ -2786,7 +2804,7 @@ size_t  loopcount;                      /* Number of iterations done */
                 } /* end if (kbbuf[i] == '\n') */
 
                 /* Ignore non-printable characters */
-                if (!isprint(kbbuf[i])) {
+                if (!isprint((unsigned char)kbbuf[i])) {
                     beep();
                     i++;
                     continue;
@@ -2953,7 +2971,7 @@ FinishShutdown:
         {
             if ( sysblk.shutfini ) break;
             /* wait for system to finish shutting down */
-            usleep(10000);
+            USLEEP(10000);
             lmsmax = INT_MAX;
             goto FinishShutdown;
         }

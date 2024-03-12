@@ -622,6 +622,10 @@ enum OPERATION_MODE
     om_emif  = 2    /*  lparmode = 1; cpuidfmt = 1; partitions 0-255 */
 };
 
+/* We use the below in sysblk, but it's not defined except on Apple. */
+#if !defined( BUILD_APPLE_M1 )
+    typedef unsigned qos_class_t;
+#endif
 
 /*-------------------------------------------------------------------*/
 /* System configuration block                                        */
@@ -892,13 +896,15 @@ atomic_update64( &sysblk.txf_stats[ contran ? 1 : 0 ].txf_ ## ctr, +1 )
 #define PANC_DARK   1                   /* Dark background scheme    */
 #define PANC_LIGHT  2                   /* Light/white background    */
 
-        int pan_color[5][2];            /* Panel message colors:     */
+        int pan_color[7][2];            /* Panel message colors:     */
 
 #define PANC_X_IDX      0               /*  (default)                */
 #define PANC_I_IDX      1               /*  'I'nformational          */
 #define PANC_E_IDX      2               /*  'E'rror                  */
 #define PANC_W_IDX      3               /*  'W'arning                */
 #define PANC_D_IDX      4               /*  'D'ebug                  */
+#define PANC_S_IDX      5               /*  'S'evere                 */
+#define PANC_A_IDX      6               /*  'A'ction                 */
 
 #define PANC_FG_IDX     0               /*  Foreground               */
 #define PANC_BG_IDX     1               /*  Background               */
@@ -936,6 +942,10 @@ atomic_update64( &sysblk.txf_stats[ contran ? 1 : 0 ].txf_ ## ctr, +1 )
         CHPBLK *firstchp;               /* -> First channel path     */
         LOCK    dasdcache_lock;         /* Global DASD caching lock  */
 
+        int     num_pfxs;               /* Number  command prefixes  */
+        char*   cmd_pfxs;               /* Default command prefixes  */
+        char*   used_pfxs;              /* Used    command prefixes  */
+
         /*-----------------------------------------------------------*/
         /*      I/O Management                                       */
         /*-----------------------------------------------------------*/
@@ -971,6 +981,7 @@ atomic_update64( &sysblk.txf_stats[ contran ? 1 : 0 ].txf_ ## ctr, +1 )
         unsigned int                    /* Flags                     */
                 sys_reset:1,            /* 1 = system in reset state */
                 ipled:1,                /* 1 = guest has been IPL'ed */
+                sfcmd:1,                /* 1 = 'sf' command issued   */
                 daemon_mode:1,          /* Daemon mode active        */
                 panel_init:1,           /* Panel display initialized */
                 npquiet:1,              /* New Panel quiet indicator */
@@ -982,6 +993,7 @@ atomic_update64( &sysblk.txf_stats[ contran ? 1 : 0 ].txf_ ## ctr, +1 )
                 insttrace:1,            /* 1 = Inst trace enabled    */
                 tfnostop:1,             /* 1 = tf continue tracing   */
                 instbreak:1,            /* 1 = Inst break enabled    */
+                shutbegin:1,            /* 1 = shutdown begin req    */
                 shutdown:1,             /* 1 = shutdown requested    */
                 shutfini:1,             /* 1 = shutdown complete     */
                 shutimmed:1,            /* 1 = shutdown req immed    */
@@ -1043,6 +1055,13 @@ atomic_update64( &sysblk.txf_stats[ contran ? 1 : 0 ].txf_ ## ctr, +1 )
         int     srvprio;                /* Listeners thread priority */
         TID     httptid;                /* HTTP listener thread id   */
 
+     /* Classes of service for macOS's scheduler on Apple Silicon.   */
+        qos_class_t qos_user_interactive;
+        qos_class_t qos_user_initiated;
+        qos_class_t qos_default;
+        qos_class_t qos_utility;
+        qos_class_t qos_background;
+
      /* Fields used by SYNCHRONIZE_CPUS */
         bool    syncing;                /* 1=Sync in progress        */
         CPU_BITMAP sync_mask;           /* CPU mask for syncing CPUs */
@@ -1071,56 +1090,58 @@ atomic_update64( &sysblk.txf_stats[ contran ? 1 : 0 ].txf_ ## ctr, +1 )
         gid_t   rgid, egid, sgid;
 #endif /*!defined(NO_SETUID)*/
 
-#if defined( OPTION_INSTRUCTION_COUNTING )
+#if defined( OPTION_INSTR_COUNT_AND_TIME )
 
         bool    icount;                 /* true = enabled, else not. */
+        struct timeval start_time;      /* OPCODE start time         */
 
-#define IMAP_FIRST      sysblk.imap01
+        struct IMAPS {
+            U64 imap01[256];
+            U64 imapa4[256];
+            U64 imapa5[16];
+            U64 imapa6[256];
+            U64 imapa7[16];
+            U64 imapb2[256];
+            U64 imapb3[256];
+            U64 imapb9[256];
+            U64 imapc0[16];
+            U64 imapc2[16];
+            U64 imapc4[16];
+            U64 imapc6[16];
+            U64 imapc8[16];
+            U64 imape3[256];
+            U64 imape4[256];
+            U64 imape5[256];
+            U64 imape7[256];
+            U64 imapeb[256];
+            U64 imapec[256];
+            U64 imaped[256];
+            U64 imapxx[256];
 
-        U64 imap01[256];
-        U64 imapa4[256];
-        U64 imapa5[ 16];
-        U64 imapa6[256];
-        U64 imapa7[ 16];
-        U64 imapb2[256];
-        U64 imapb3[256];
-        U64 imapb9[256];
-        U64 imapc0[ 16];
-        U64 imapc2[ 16];
-        U64 imapc4[ 16];
-        U64 imapc6[ 16];
-        U64 imapc8[ 16];
-        U64 imape3[256];
-        U64 imape4[256];
-        U64 imape5[256];
-        U64 imapeb[256];
-        U64 imapec[256];
-        U64 imaped[256];
-        U64 imapxx[256];
+            U64 imap01T[256];
+            U64 imapa4T[256];
+            U64 imapa5T[16];
+            U64 imapa6T[256];
+            U64 imapa7T[16];
+            U64 imapb2T[256];
+            U64 imapb3T[256];
+            U64 imapb9T[256];
+            U64 imapc0T[16];
+            U64 imapc2T[16];
+            U64 imapc4T[16];
+            U64 imapc6T[16];
+            U64 imapc8T[16];
+            U64 imape3T[256];
+            U64 imape4T[256];
+            U64 imape5T[256];
+            U64 imape7T[256];
+            U64 imapebT[256];
+            U64 imapecT[256];
+            U64 imapedT[256];
+            U64 imapxxT[256];
+        } imaps;
 
-#define IMAP_SIZE \
-            ( sizeof(sysblk.imap01) \
-            + sizeof(sysblk.imapa4) \
-            + sizeof(sysblk.imapa5) \
-            + sizeof(sysblk.imapa6) \
-            + sizeof(sysblk.imapa7) \
-            + sizeof(sysblk.imapb2) \
-            + sizeof(sysblk.imapb3) \
-            + sizeof(sysblk.imapb9) \
-            + sizeof(sysblk.imapc0) \
-            + sizeof(sysblk.imapc2) /*@Z9*/ \
-            + sizeof(sysblk.imapc4) /*208*/ \
-            + sizeof(sysblk.imapc6) /*208*/ \
-            + sizeof(sysblk.imapc8) \
-            + sizeof(sysblk.imape3) \
-            + sizeof(sysblk.imape4) \
-            + sizeof(sysblk.imape5) \
-            + sizeof(sysblk.imapeb) \
-            + sizeof(sysblk.imapec) \
-            + sizeof(sysblk.imaped) \
-            + sizeof(sysblk.imapxx) )
-
-#endif // defined( OPTION_INSTRUCTION_COUNTING )
+#endif // defined( OPTION_INSTR_COUNT_AND_TIME )
 
         char    *cnslport;              /* console port string       */
         char    *sysgport;              /* SYSG console port string  */
@@ -1242,7 +1263,7 @@ typedef enum
 {
    PF_NO_IDAW = 0,
    PF_IDAW1   = 1,      // Format-1 IDAW
-   PF_IDAW2   = 2,      // Format-1 IDAW
+   PF_IDAW2   = 2,      // Format-2 IDAW
    PF_MIDAW   = 3       // Modified-IDAW
 }
 PF_IDATYPE;
@@ -1458,6 +1479,7 @@ struct DEVBLK {                         /* Device configuration block*/
                 oslinux:1,              /* 1=Linux                   */
                 orbtrace:1,             /* 1=ORB trace               */
                 ccwtrace:1,             /* 1=CCW trace               */
+                ccwopstrace:1,          /* 1=trace CCW opcodes       */
                 cdwmerge:1,             /* 1=Channel will merge data
                                              chained write CCWs      */
                 debug:1,                /* 1=generic debug flag      */
@@ -1900,6 +1922,27 @@ struct DEVBLK {                         /* Device configuration block*/
 #define QTYPE_READ   1
 #define QTYPE_WRITE  2
 #define QTYPE_DATA   3
+
+// E7 Prefix CCW support...
+
+        BYTE    ckdformat;              /* Prefix CCW Format byte    */
+        BYTE    ckdvalid;               /* Prefix CCW Validity byte  */
+        BYTE    ckdauxiliary;           /* Prefix CCW auxiliary byte */
+
+// Format byte
+#define PFX_F_DX            0x00        /* Define Extent             */
+#define PFX_F_DX_LRE        0x01        /* DX+Locate Record Extended */
+#define PFX_F_DX_PSF        0x02        /* DX+Perform Subsys. Func.  */
+
+// Validity byte
+#define PFX_V_DX_VALID      0x80        /* Define Extent bytes valid */
+#define PFX_V_TS_VALID      0x40        /* DX Time Stamp field valid */
+
+// Auxiliary byte
+#define PFX_A_SMR           0x80        /* Suspend Multipath Reconn. */
+#define PFX_A_VALID         0x08        /* All DX+LRE parms valid    */
+
+        BYTE    ccwops[256];            /* CCW opcodes to trace      */
 
         BLOCK_TRAILER;                  /* eye-end                   */
 };

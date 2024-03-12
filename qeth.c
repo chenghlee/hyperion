@@ -128,7 +128,7 @@ DISABLE_GCC_UNUSED_FUNCTION_WARNING;
 /* QETH Debugging                                                    */
 /*-------------------------------------------------------------------*/
 
-#define ENABLE_QETH_DEBUG   1   // 1:enable, 0:disable, #undef:default
+//#define ENABLE_QETH_DEBUG   1   // 1:enable, 0:disable, #undef:default
 #define QETH_PTT_TRACING        // #define to enable PTT debug tracing
 #define QETH_DUMP_DATA          // #undef to suppress i/o buffers dump
 
@@ -2522,7 +2522,7 @@ static void raise_adapter_interrupt( DEVBLK* dev )
         if (TRY_OBTAIN_INTLOCK( NULL ) == 0)
         {
             /* Interrupt lock obtained; queue the interrupt */
-            obtain_lock( &dev->lock );
+            OBTAIN_DEVLOCK( dev );
             {
                 if (grp->debugmask & DBGQETHINTRUPT)
                     DBGTRC( dev, "Adapter Interrupt" );
@@ -2531,14 +2531,14 @@ static void raise_adapter_interrupt( DEVBLK* dev )
                 dev->pciscsw.flag3 |= SCSW3_SC_INTER | SCSW3_SC_PEND;
                 dev->pciscsw.chanstat = CSW_PCI;
 
-                obtain_lock( &sysblk.iointqlk );
+                OBTAIN_IOINTQLK();
                 {
                     QUEUE_IO_INTERRUPT_QLOCKED( &dev->pciioint, FALSE );
                     UPDATE_IC_IOPENDING_QLOCKED();
                 }
-                release_lock( &sysblk.iointqlk );
+                RELEASE_IOINTQLK();
             }
-            release_lock( &dev->lock );
+            RELEASE_DEVLOCK( dev );
 
             RELEASE_INTLOCK( NULL );
             return;
@@ -4289,7 +4289,7 @@ U32 mask4;
         {
             // Check whether a numeric prefix in the range 1 to 128 has been specified.
             work_rc = 0;
-            for (p = grp->ttpfxlen6; isdigit(*p); p++) { }
+            for (p = grp->ttpfxlen6; isdigit((unsigned char)*p); p++) { }
             if (*p != '\0' || !strlen(grp->ttpfxlen6))
                 work_rc = -1;
             pfxlen = atoi(grp->ttpfxlen6);
@@ -4443,7 +4443,7 @@ OSA_GRP *grp = (OSA_GRP*)(group ? group->grp_data : NULL);
             else if (QTYPE_DATA == group->memdev[i]->qtype)
                 qeth_halt_data_device( group->memdev[i], grp );
         }
-        usleep( OSA_TIMEOUTUS ); /* give it time to exit */
+        USLEEP( OSA_TIMEOUTUS ); /* give it time to exit */
         PTT_QETH_TRACE( "af clos halt", 0,0,0 );
 
         PTT_QETH_TRACE( "b4 clos ttfd", 0,0,0 );
@@ -6535,7 +6535,7 @@ static int  prefix2netmask( char* ttpfxlen, char** ttnetmask )
     char* p;
     int pfxlen;
     /* make sure it's a number from 0 to 32 */
-    for (p = ttpfxlen; isdigit(*p); p++) { }
+    for (p = ttpfxlen; isdigit((unsigned char)*p); p++) { }
     if (*p || !ttpfxlen[0] || (pfxlen = atoi(ttpfxlen)) > 32)
         return -1;
     addr4.s_addr = ~makepfxmask4( ttpfxlen );

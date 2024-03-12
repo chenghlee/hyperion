@@ -179,7 +179,7 @@ static void logdump(char *txt, DEVBLK *dev, BYTE *bfr, size_t sz)
         for(j = 0; (j < 16) && ((i + j) < sz); j++)
         {
             character = guest_to_host(bfr[i + j]);
-            if (!isprint(character)) character = '.';
+            if (!isprint((unsigned char)character)) character = '.';
             logmsg("%c", character);
         }
         logmsg("\n");
@@ -202,7 +202,7 @@ static char *guest_to_host_string(char *string, size_t length, const BYTE *ebcdi
 
         if (string[i] == ' ')
             string[i] = '\0';
-        else if (!isprint(string[i]))
+        else if (!isprint((unsigned char)string[i]))
             string[i] = '.';
     }
 
@@ -500,7 +500,7 @@ static int tcpnje_connout(struct TCPNJE *tn)
         DBGMSG(256, "HHCTN033I %4.4X:TCPNJE - delaying link %s - %s active open for %d attempt(s)\n",
                      tn->dev->devnum, guest_to_host_string(lnodestring, sizeof(lnodestring), tn->lnode),
                                  guest_to_host_string(rnodestring, sizeof(rnodestring), tn->rnode), tn->activeopendelay);
-        if (tn->activeopendelay > 3) usleep(1000);
+        if (tn->activeopendelay > 3) USLEEP(1000);
         tn->activeopendelay--;
 
         /* Pretend we failed to connect */
@@ -1456,8 +1456,9 @@ static void *tcpnje_thread(void *vtn)
     init_signaled = 0;
 
     DBGMSG(1, "HHCTN002I %4.4X:TCPNJE - networking thread "TIDPAT" started for link %s - %s\n",
-            devnum, thread_id(), guest_to_host_string(lnodestring, sizeof(lnodestring), tn->lnode),
-                                 guest_to_host_string(rnodestring, sizeof(rnodestring), tn->rnode));
+            devnum, TID_CAST(thread_id()),
+            guest_to_host_string(lnodestring, sizeof(lnodestring), tn->lnode),
+            guest_to_host_string(rnodestring, sizeof(rnodestring), tn->rnode));
 
     if (!init_signaled)
     {
@@ -1845,7 +1846,7 @@ static void *tcpnje_thread(void *vtn)
         if (selectcount == 0)
         {
             DBGMSG(512, "HHCTN127D %4.4X:TCPNJE - select() timeout after %ld seconds %ld microseconds\n",
-                        devnum, tvcopy.tv_sec, tvcopy.tv_usec);
+                        devnum, tvcopy.tv_sec, (long int)tvcopy.tv_usec);
 
             /* Reset Call issued flag */
             tn->callissued = 0;
@@ -2584,7 +2585,7 @@ static int tcpnje_init_handler(DEVBLK *dev, int argc, char *argv[])
                     }
                     for(j = 0; j < strlen(res.text); j++)
                     {
-                        tn->lnode[j] = host_to_guest(toupper(res.text[j]));
+                        tn->lnode[j] = host_to_guest(toupper((unsigned char)res.text[j]));
                     }
                     break;
                 case TCPNJE_KW_RNODE:
@@ -2596,7 +2597,7 @@ static int tcpnje_init_handler(DEVBLK *dev, int argc, char *argv[])
                     }
                     for(j = 0; j < strlen(res.text); j++)
                     {
-                        tn->rnode[j] = host_to_guest(toupper(res.text[j]));
+                        tn->rnode[j] = host_to_guest(toupper((unsigned char)res.text[j]));
                     }
                     break;
                 case TCPNJE_KW_DEBUG:

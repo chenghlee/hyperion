@@ -94,6 +94,17 @@
   "to the console (such as when entering a password), simply prefix the\n"      \
   "reply with a '\\' backslash.\n"
 
+#define iconpfxs_cmd_desc       "Default integrated console prefix characters"
+#define iconpfxs_cmd_help       \
+                                \
+  "Format: \"ICONPFXS [string | *]\" where 'string' is the new list of\n"       \
+  "prefix characters you wish to use as the defaults for integrated console\n"  \
+  "devices. Refer to documentation for 1052-C and 3215-C devices for what\n"    \
+  "prefix characters are used for. Each character in the list must be unique.\n"\
+  "The default list is \""DEF_CMDPREFIXES"\". Enter the command with\n"         \
+  "no arguments to display the current list. Use '*' to reset the list to\n"   \
+  "its original default value.\n"
+
 #define hash_cmd_desc           "Silent comment"
 #define star_cmd_desc           "Loud comment"
 
@@ -527,7 +538,7 @@
   "Format: \"ecpsvm\". This command invokes ECPS:VM Subcommands.\n"              \
   "Type \"ecpsvm help\" to see a list of available commands\n"
 
-#define engines_cmd_desc        "Set engines parameter"
+#define engines_cmd_desc        "Set or display ENGINES parameter"
 #define evm_cmd_desc            "Command deprecated - Use \"ECPSVM\""
 #define evm_cmd_help            \
                                 \
@@ -1817,7 +1828,8 @@
   "When the z/Arch Transactional-Execution Facility *is* installed and\n"       \
   "enabled the minimum and default intervals are 200 and 400 microseconds.\n"   \
   "\n"                                                                          \
-  "The maximum allowed interval is 1000000 microseconds (one second).\n"        \
+  "The maximum allowed interval is "QSTR( MAX_TOD_UPDATE_USECS )" microseconds (one microsecond\n" \
+  "less than one second).\n"                                        \
   "\n"                                                                          \
   "Also note that due to host system limitations and/or design, some\n"         \
   "hosts may round up and/or coalesce short microsecond intervals to a\n"       \
@@ -2108,6 +2120,7 @@ COMMAND( "evm",                     ecpsvm_cmd,             SYSCMDNOPER,        
 COMMAND( "!message",                g_cmd,                  SYSCMD,             bangmsg_cmd_desc,       bangmsg_cmd_help    )
 COMMAND( ".reply",                  g_cmd,                  SYSCMD,             reply_cmd_desc,         reply_cmd_help      )
 COMMAND( "\\reply",                 g_cmd,                  SYSCMD,             supp_reply_cmd_desc,    supp_reply_cmd_help )
+COMMAND( "iconpfxs",                iconpfxs_cmd,           SYSCMD,             iconpfxs_cmd_desc,      iconpfxs_cmd_help   )
 COMMAND( "scpecho",                 scpecho_cmd,            SYSCMD,             scpecho_cmd_desc,       scpecho_cmd_help    )
 COMMAND( "scpimply",                scpimply_cmd,           SYSCMD,             scpimply_cmd_desc,      scpimply_cmd_help   )
 COMMAND( "ssd",                     ssd_cmd,                SYSCMD,             ssd_cmd_desc,           ssd_cmd_help        )
@@ -2168,7 +2181,7 @@ COMMAND( "rmmod",                   rmmod_cmd,              SYSCMDNOPER,        
 COMMAND( "hao",                     hao_cmd,                SYSPROGDEVEL,       hao_cmd_desc,           hao_cmd_help        )
 #endif
 COMMAND( "http",                    http_cmd,               SYSCONFIG,          http_cmd_desc,          http_cmd_help       )
-#if defined( OPTION_INSTRUCTION_COUNTING )
+#if defined( OPTION_INSTR_COUNT_AND_TIME )
 COMMAND( "icount",                  icount_cmd,             SYSCMDNOPER,        icount_cmd_desc,        icount_cmd_help     )
 #endif
 #if defined( OPTION_IODELAY_KLUDGE )

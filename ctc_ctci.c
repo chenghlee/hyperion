@@ -607,10 +607,10 @@ int  CTCI_Close( DEVBLK* pDEVBLK )
 
         TID tid = pCTCBLK->tid;
         pCTCBLK->fCloseInProgress = 1;  // (ask read thread to exit)
-#if defined(_MSVC_)
         join_thread( tid, NULL );       // (wait for thread to end)
+#if defined( OPTION_FTHREADS )
+        detach_thread( tid );           // only needed for Fish threads
 #endif
-        detach_thread( tid );           // (wait for thread to end)
     }
 
     pDEVBLK->fd = -1;           // indicate we're now closed
@@ -1092,7 +1092,7 @@ static void*  CTCI_ReadThread( void* arg )
             // Don't use sched_yield() here; use an actual non-dispatchable
             // delay instead so as to allow another [possibly lower priority]
             // thread to 'read' (remove) some packet(s) from our frame buffer.
-            usleep( CTC_DELAY_USECS );  // (wait a bit before retrying...)
+            USLEEP( CTC_DELAY_USECS );  // (wait a bit before retrying...)
         }
     }
 
@@ -1536,7 +1536,7 @@ static int  ParseArgs( DEVBLK* pDEVBLK, PCTCBLK pCTCBLK,
 
             char * s = pCTCBLK->szTUNIfName + strlen(pCTCBLK->szTUNIfName);
 
-            while(isdigit(s[- 1])) s--;
+            while(isdigit((unsigned char)s[- 1])) s--;
             STRLCAT( pCTCBLK->szTUNCharDevName, s );
         }
 #endif

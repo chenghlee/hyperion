@@ -154,6 +154,11 @@ strlcat(char *dst, const char *src, size_t siz);
 #define STRLCPY( dst, src )     strlcpy( (dst), (src), sizeof(dst) )
 #define STRLCAT( dst, src )     strlcat( (dst), (src), sizeof(dst) )
 
+#define USLEEP( _u ) herc_usleep( _u, __FILE__, __LINE__ )
+HUT_DLL_IMPORT int herc_usleep( useconds_t usecs, const char* file, int line );
+#define USLEEP_MIN 1
+#define NANOSLEEP_EINTR_RETRY_WARNING_TRESHOLD 256
+
 /* Subtract/add gettimeofday struct timeval */
 HUT_DLL_IMPORT int timeval_subtract (struct timeval *beg_timeval, struct timeval *end_timeval, struct timeval *dif_timeval);
 HUT_DLL_IMPORT int timeval_add      (struct timeval *dif_timeval, struct timeval *accum_timeval);
@@ -412,7 +417,11 @@ HUT_DLL_IMPORT bool are_big_endian();
 /*********************************************************************/
 /*********************************************************************/
 
-#define TF_FMT  '0'         // TraceFile file format number (0-9)
+#define TF_FMT0   '0'       // Format 0 = original release
+#define TF_FMT1   '1'       // Format 1 = 64 bytes of E7 CCW data
+#define TF_FMT2   '2'       // Format 2 = TFHDR thread id/name
+
+#define TF_FMT  TF_FMT2     // Current TraceFile file-format
 
 #undef ATTRIBUTE_PACKED
 #if defined(_MSVC_)
@@ -459,6 +468,11 @@ struct TFHDR
     BYTE    lcss;           // LCSS (0-7)
     U16     devnum;         // Device number
     BYTE    pad [ 4 ];      // (padding/alignment/unused)
+
+    // Format-2...
+
+    U64     tidnum;         // Thread-Id number (not 'TID'!)
+    char    thrdname[16];   // Thread name
 }
 ATTRIBUTE_PACKED; typedef struct TFHDR TFHDR;
 CASSERT( sizeof( TFHDR ) % 8 == 0, hscutl_h );
@@ -884,6 +898,7 @@ CASSERT( sizeof( TF00804 ) % 8 == 0, hscutl_h );
 
 //---------------------------------------------------------------------
 //       TraceFile TF00806 I/O Interrupt Record
+//        (handles both HHC00805 and HHC00806)
 //---------------------------------------------------------------------
 struct TF00806
 {
@@ -1045,8 +1060,17 @@ struct TF01301
     BYTE    amt;            // Data amount
     BYTE    type;           // IDA type (IDAW1/IDAW2/MIDAW)
     BYTE    mflag;          // MIDAW flag
-    BYTE    pad [ 3 ];      // (padding/alignment/unused)
-    BYTE    data[16];       // IDAW/MIDAW data
+
+    // Format-0...
+
+//  BYTE    pad [ 3 ];      // (padding/alignment/unused)
+//  BYTE    data[16];       // IDAW/MIDAW data (amt <= 16)
+
+    // Format-1...
+
+    BYTE    code;           // CCW opcode (if E7, amt = 64)
+    BYTE    pad [ 2 ];      // (padding/alignment/unused)
+    BYTE    data[64];       // IDAW/MIDAW data (amt <= 64)
 }
 ATTRIBUTE_PACKED; typedef struct TF01301 TF01301;
 CASSERT( sizeof( TF01301 ) % 8 == 0, hscutl_h );
@@ -1170,7 +1194,14 @@ struct TF01315
     BYTE    amt;            // Data amount
     BYTE    pad [ 1 ];      // (padding/alignment/unused)
     BYTE    ccw[8];         // CCW
-    BYTE    data[16];       // CCW data
+
+    // Format-0...
+
+//  BYTE    data[16];       // CCW data (amt <= 16)
+
+    // Format-1...
+
+    BYTE    data[64];       // CCW data (amt <= 64)
 }
 ATTRIBUTE_PACKED; typedef struct TF01315 TF01315;
 CASSERT( sizeof( TF01315 ) % 8 == 0, hscutl_h );
@@ -1527,7 +1558,7 @@ HUT_DLL_IMPORT bool tf_0804( REGS* regs,               // I/O Interrupt (S/370)
                              U16   ioid,
                              BYTE  lcss );
 
-HUT_DLL_IMPORT bool tf_0806( REGS* regs,               // I/O Interrupt
+HUT_DLL_IMPORT bool tf_0806( REGS* regs,               // I/O Interrupt (handles both HHC00805 and HHC00806)
                              U32   ioid,
                              U32   ioparm,
                              U32   iointid );
@@ -1655,7 +1686,7 @@ HUT_DLL_IMPORT bool tf_2324( REGS* regs,               // Primary Instruction Tr
                              BYTE* inst );
 
 HUT_DLL_IMPORT bool tf_2326( REGS*    regs,            // Instruction Storage
-                             TF02326* tf2326, 
+                             TF02326* tf2326,
                              BYTE     opcode1,
                              BYTE     opcode2,
                              int      b1,
@@ -1669,7 +1700,7 @@ HUT_DLL_IMPORT bool tf_autostop();                     // Automatically stop all
 
 HUT_DLL_IMPORT bool tf_are_swaps_needed( TFSYS* sys );
 HUT_DLL_IMPORT void tf_swap_sys( TFSYS* sys );
-HUT_DLL_IMPORT void tf_swap_hdr( TFHDR* hdr );
+HUT_DLL_IMPORT void tf_swap_hdr( BYTE sys_ffmt, TFHDR* hdr );
 HUT_DLL_IMPORT void tf_swap_rec( TFHDR* hdr, U16 msgnum );
 
 #endif /* __HSCUTL_H__ */
