@@ -221,6 +221,8 @@
   "  comp=n        Override compression                  (-1,0,1,2)\n"          \
   "  compparm=n    Override compression parm             (-1 ... 9)\n"          \
   "  debug=n       Enable CCW tracing debug messages       (0 or 1)\n"          \
+  "  dhint=n       Set Dasd Hardener interval (sec)     (0 ... 999)\n"          \
+  "  dhstart=n     Start Dasd Hardener                     (0 or 1)\n"          \
   "  dtax=n        Dump trace table at exit                (0 or 1)\n"          \
   "  freepend=n    Set free pending cycles               (-1 ... 4)\n"          \
   "  fsync=n       Enable fsync                            (0 or 1)\n"          \
@@ -630,6 +632,14 @@
   "digits for 64-bit registers). Enter \"gpr\" by itself to display the\n"      \
   "register values without altering them.\n"
 
+#define vr_cmd_desc            "Display or alter vector registers"
+#define vr_cmd_help            \
+                               \
+  "Format: \"vr [nn=xxxxxxxxxxxxxxxx.xxxxxxxxxxxxxxxx]\" where 'nn' is the vector\n" \
+  "number (0 to 31) and 'xxxxxxxxxxxxxxxx.xxxxxxxxxxxxxxxx' is the register value\n" \
+  "in hexadecimal (1-32 hex digits for 128-bit). Enter \"vr\" by itself to display\n" \
+  "the register values without altering them.\n"
+
 #define hao_cmd_desc            "Hercules Automatic Operator"
 #define hao_cmd_help            \
                                 \
@@ -986,6 +996,7 @@
 #define msglvl_cmd_desc         "Alias for msglevel"
 #define msgnoh_cmd_desc         "Similar to \"message\" but no header"
 #define mt_cmd_desc             "Control magnetic tape operation"
+#define mtc_cmd_desc            "Alias for mt command"
 #define mt_cmd_help             \
                                 \
   "Format:     \"mt device operation [ 1-9999 ]\".\n"                           \
@@ -1956,6 +1967,7 @@ COMMAND( "loadparm",                loadparm_cmd,           SYSCMD,             
 COMMAND( "log",                     log_cmd,                SYSCMD,             log_cmd_desc,           log_cmd_help        )
 COMMAND( "logopt",                  logopt_cmd,             SYSCMD,             logopt_cmd_desc,        logopt_cmd_help     )
 COMMAND( "mt",                      mt_cmd,                 SYSCMD,             mt_cmd_desc,            mt_cmd_help         )
+COMMAND( "mtc",                     mt_cmd,                 SYSCMD,             mtc_cmd_desc,           NULL                )
 COMMAND( "panopt",                  panopt_cmd,             SYSCMD,             panopt_cmd_desc,        panopt_cmd_help     )
 COMMAND( "panrate",                 panrate_cmd,            SYSCMD,             panrate_cmd_desc,       NULL                )
 COMMAND( "pantitle",                pantitle_cmd,           SYSCMD,             pantitle_cmd_desc,      NULL                )
@@ -2043,6 +2055,7 @@ COMMAND( "toddrag",                 toddrag_cmd,            SYSCMDNOPER,        
 COMMAND( "traceopt",                traceopt_cmd,           SYSCMDNOPER,        traceopt_cmd_desc,      traceopt_cmd_help   )
 COMMAND( "u",                       u_cmd,                  SYSCMDNOPER,        u_cmd_desc,             u_cmd_help          )
 COMMAND( "v",                       v_cmd,                  SYSCMDNOPER,        v_cmd_desc,             v_cmd_help          )
+COMMAND( "vr",                      vr_cmd,                 SYSCMDNOPER,        vr_cmd_desc,            vr_cmd_help         )
 
 COMMAND( "i",                       i_cmd,                  SYSCMDNDIAG8,       i_cmd_desc,             NULL                )
 COMMAND( "ipl",                     ipl_cmd,                SYSCMDNDIAG8,       ipl_cmd_desc,           ipl_cmd_help        )

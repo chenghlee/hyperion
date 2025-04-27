@@ -53,7 +53,7 @@
 				ReBuildCommandLine="makefile.bat DEBUG-X64 makefile.msvc 64 -a"
 				CleanCommandLine="makefile.bat DEBUG-X64 makefile.msvc 64 clean"
 				Output="$(OutDir)"
-				PreprocessorDefinitions="FEATURE_VM_BLOCKIO;_FEATURE_SYSTEM_CONSOLE;FEATURE_TRACING;FEATURE_044_PFPO_FACILITY;OPTION_TXF_PPA_SUPPORT;FEATURE_ACCESS_REGISTERS;FEATURE_049_PROCESSOR_ASSIST_FACILITY;FEATURE_050_CONSTR_TRANSACT_FACILITY;FEATURE_073_TRANSACT_EXEC_FACILITY;_FEATURE_073_TRANSACT_EXEC_FACILITY;OPTION_WATCHDOG;_DAT_C;_DEBUG;_FEATURE_SIE;_MSVC_;_WIN64;CPU=AMD64;DEBUG;ENABLE_IPV6;FEATURE_001_ZARCH_INSTALLED_FACILITY;FEATURE_011_CONFIG_TOPOLOGY_FACILITY;FEATURE_CANCEL_IO_FACILITY;FEATURE_CHANNEL_SUBSYSTEM;FEATURE_CHSC;FEATURE_CMPSC;FEATURE_EMULATE_VM;FEATURE_EXTENDED_STORAGE_KEYS;FEATURE_SIE;FEATURE_PROGRAM_DIRECTED_REIPL;FEATURE_QDIO_THININT;FEATURE_QUEUED_DIRECT_IO;FEATURE_S370_CHANNEL;FEATURE_SERVICE_PROCESSOR;FEATURE_STORE_SYSTEM_INFORMATION;FEATURE_VIRTUAL_ARCHITECTURE_LEVEL;HAVE_OBJECT_REXX;HOST_ARCH=AMD64;OPTION_CMDTGT;OPTION_CMPSC_2012;OPTION_FTHREADS;OPTION_HAO;OPTION_HTTP_SERVER;OPTION_MIPS_COUNTING;OPTION_PTTRACE;WIN32"
+				PreprocessorDefinitions="OPTION_SHARED_DEVICES;FEATURE_VM_BLOCKIO;_FEATURE_SYSTEM_CONSOLE;FEATURE_TRACING;FEATURE_044_PFPO_FACILITY;OPTION_TXF_PPA_SUPPORT;FEATURE_ACCESS_REGISTERS;FEATURE_049_PROCESSOR_ASSIST_FACILITY;FEATURE_050_CONSTR_TRANSACT_FACILITY;FEATURE_073_TRANSACT_EXEC_FACILITY;_FEATURE_073_TRANSACT_EXEC_FACILITY;OPTION_WATCHDOG;_DAT_C;_DEBUG;_FEATURE_SIE;_MSVC_;_WIN64;CPU=AMD64;DEBUG;ENABLE_IPV6;FEATURE_001_ZARCH_INSTALLED_FACILITY;FEATURE_011_CONFIG_TOPOLOGY_FACILITY;FEATURE_CANCEL_IO_FACILITY;FEATURE_CHANNEL_SUBSYSTEM;FEATURE_CHSC;FEATURE_CMPSC;FEATURE_EMULATE_VM;FEATURE_EXTENDED_STORAGE_KEYS;FEATURE_SIE;FEATURE_PROGRAM_DIRECTED_REIPL;FEATURE_QDIO_THININT;FEATURE_QUEUED_DIRECT_IO;FEATURE_S370_CHANNEL;FEATURE_SERVICE_PROCESSOR;FEATURE_STORE_SYSTEM_INFORMATION;FEATURE_VIRTUAL_ARCHITECTURE_LEVEL;HAVE_OBJECT_REXX;HOST_ARCH=AMD64;OPTION_CMDTGT;OPTION_CMPSC_2012;OPTION_FTHREADS;OPTION_HAO;OPTION_HTTP_SERVER;OPTION_MIPS_COUNTING;OPTION_PTTRACE;WIN32"
 				IncludeSearchPath="crypto;decNumber\include;SoftFloat\include;&quot;$(ProjectDir)&quot;"
 				ForcedIncludes=""
 				AssemblySearchPath=""
@@ -95,7 +95,7 @@
 				ReBuildCommandLine="makefile.bat RETAIL-X64 makefile.msvc 64 -a"
 				CleanCommandLine="makefile.bat RETAIL-X64 makefile.msvc 64 clean"
 				Output="$(OutDir)"
-				PreprocessorDefinitions="FEATURE_VM_BLOCKIO;_FEATURE_SYSTEM_CONSOLE;FEATURE_TRACING;FEATURE_044_PFPO_FACILITY;FEATURE_ACCESS_REGISTERS;FEATURE_049_PROCESSOR_ASSIST_FACILITY;FEATURE_050_CONSTR_TRANSACT_FACILITY;_FEATURE_073_TRANSACT_EXEC_FACILITY;FEATURE_073_TRANSACT_EXEC_FACILITY;OPTION_WATCHDOG;_DAT_C;_DEBUG;_FEATURE_INTEGRATED_3270_CONSOLE;_FEATURE_SIE;_MSVC_;_WIN64;CPU=AMD64;DEBUG;ENABLE_IPV6;FEATURE_001_ZARCH_INSTALLED_FACILITY;FEATURE_011_CONFIG_TOPOLOGY_FACILITY;FEATURE_017_MSA_FACILITY;FEATURE_076_MSA_EXTENSION_FACILITY_3;FEATURE_077_MSA_EXTENSION_FACILITY_4;FEATURE_BINARY_FLOATING_POINT;FEATURE_CANCEL_IO_FACILITY;FEATURE_CHANNEL_SUBSYSTEM;FEATURE_CHSC;FEATURE_CMPSC;FEATURE_ECPSVM;FEATURE_EMULATE_VM;FEATURE_EXTENDED_STORAGE_KEYS;FEATURE_HERCULES_DIAGCALLS;FEATURE_SIE;FEATURE_MSA_EXTENSION_FACILITY_1;FEATURE_MSA_EXTENSION_FACILITY_2;FEATURE_PROGRAM_DIRECTED_REIPL;FEATURE_QDIO_THININT;FEATURE_QUEUED_DIRECT_IO;FEATURE_S370_CHANNEL;FEATURE_SERVICE_PROCESSOR;FEATURE_STORE_SYSTEM_INFORMATION;FEATURE_VIRTUAL_ARCHITECTURE_LEVEL;HAVE_OBJECT_REXX;HAVE_REGINA_REXX;HAVE_REGINA_REXXSAA_H;HOST_ARCH=AMD64;OPTION_CMDTGT;OPTION_CMPSC_2012;OPTION_FTHREADS;OPTION_HAO;OPTION_HTTP_SERVER;OPTION_MIPS_COUNTING;OPTION_PTTRACE;OPTION_SHARED_DEVICES;WIN32"
+				PreprocessorDefinitions="OPTION_SHARED_DEVICES;FEATURE_VM_BLOCKIO;_FEATURE_SYSTEM_CONSOLE;FEATURE_TRACING;FEATURE_044_PFPO_FACILITY;FEATURE_ACCESS_REGISTERS;FEATURE_049_PROCESSOR_ASSIST_FACILITY;FEATURE_050_CONSTR_TRANSACT_FACILITY;_FEATURE_073_TRANSACT_EXEC_FACILITY;FEATURE_073_TRANSACT_EXEC_FACILITY;OPTION_WATCHDOG;_DAT_C;_DEBUG;_FEATURE_INTEGRATED_3270_CONSOLE;_FEATURE_SIE;_MSVC_;_WIN64;CPU=AMD64;DEBUG;ENABLE_IPV6;FEATURE_001_ZARCH_INSTALLED_FACILITY;FEATURE_011_CONFIG_TOPOLOGY_FACILITY;FEATURE_017_MSA_FACILITY;FEATURE_076_MSA_EXTENSION_FACILITY_3;FEATURE_077_MSA_EXTENSION_FACILITY_4;FEATURE_BINARY_FLOATING_POINT;FEATURE_CANCEL_IO_FACILITY;FEATURE_CHANNEL_SUBSYSTEM;FEATURE_CHSC;FEATURE_CMPSC;FEATURE_ECPSVM;FEATURE_EMULATE_VM;FEATURE_EXTENDED_STORAGE_KEYS;FEATURE_HERCULES_DIAGCALLS;FEATURE_SIE;FEATURE_MSA_EXTENSION_FACILITY_1;FEATURE_MSA_EXTENSION_FACILITY_2;FEATURE_PROGRAM_DIRECTED_REIPL;FEATURE_QDIO_THININT;FEATURE_QUEUED_DIRECT_IO;FEATURE_S370_CHANNEL;FEATURE_SERVICE_PROCESSOR;FEATURE_STORE_SYSTEM_INFORMATION;FEATURE_VIRTUAL_ARCHITECTURE_LEVEL;HAVE_OBJECT_REXX;HAVE_REGINA_REXX;HAVE_REGINA_REXXSAA_H;HOST_ARCH=AMD64;OPTION_CMDTGT;OPTION_CMPSC_2012;OPTION_FTHREADS;OPTION_HAO;OPTION_HTTP_SERVER;OPTION_MIPS_COUNTING;OPTION_PTTRACE;WIN32"
 				IncludeSearchPath="crypto;decNumber\include;SoftFloat\include;&quot;$(ProjectDir)&quot;"
 				ForcedIncludes=""
 				AssemblySearchPath=""
@@ -389,6 +389,10 @@
 					Name="other"
 					>
 					<File
+						RelativePath=".\card2txt.c"
+						>
+					</File>
+					<File
 						RelativePath=".\conspawn.c"
 						>
 					</File>
@@ -536,6 +540,10 @@
 							</File>
 							<File
 								RelativePath=".\hercifc.c"
+								>
+							</File>
+							<File
+								RelativePath=".\him.c"
 								>
 							</File>
 							<File
@@ -1108,6 +1116,10 @@
 							>
 						</File>
 						<File
+							RelativePath=".\nnpa.c"
+							>
+						</File>
+						<File
 							RelativePath=".\opcode.c"
 							>
 						</File>
@@ -1221,6 +1233,14 @@
 						</File>
 						<File
 							RelativePath=".\xstore.c"
+							>
+						</File>
+						<File
+							RelativePath=".\zvector.c"
+							>
+						</File>
+						<File
+							RelativePath=".\zvector2.c"
 							>
 						</File>
 					</Filter>
@@ -2534,6 +2554,18 @@
 							>
 						</File>
 						<File
+							RelativePath=".\html\images\herc-panel.jpg"
+							>
+						</File>
+						<File
+							RelativePath=".\html\images\herc-panel2.jpg"
+							>
+						</File>
+						<File
+							RelativePath=".\html\images\herclin.jpg"
+							>
+						</File>
+						<File
 							RelativePath=".\html\images\hercpic-rblk-256.gif"
 							>
 						</File>
@@ -3220,7 +3252,7 @@
 					>
 				</File>
 				<File
-					RelativePath=".\util\cckddump-cckdload.zip"
+					RelativePath=".\util\CCKD.JCL.Jan2025.XMI.Updated.zip"
 					>
 				</File>
 				<File
@@ -3567,11 +3599,19 @@
 						>
 					</File>
 					<File
+						RelativePath=".\tests\prno.core"
+						>
+					</File>
+					<File
 						RelativePath=".\tests\problem.core"
 						>
 					</File>
 					<File
 						RelativePath=".\tests\semipriv.core"
+						>
+					</File>
+					<File
+						RelativePath=".\tests\ShiftLeft.core"
 						>
 					</File>
 					<File
@@ -3644,6 +3684,122 @@
 					</File>
 					<File
 						RelativePath=".\tests\TXFPER.core"
+						>
+					</File>
+					<File
+						RelativePath=".\tests\zvector-e6-01-loads.core"
+						>
+					</File>
+					<File
+						RelativePath=".\tests\zvector-e6-02-stores.core"
+						>
+					</File>
+					<File
+						RelativePath=".\tests\zvector-e6-03-pack.core"
+						>
+					</File>
+					<File
+						RelativePath=".\tests\zvector-e6-04-unpack.core"
+						>
+					</File>
+					<File
+						RelativePath=".\tests\zvector-e6-05-packarith.core"
+						>
+					</File>
+					<File
+						RelativePath=".\tests\zvector-e6-06-VPKZR.core"
+						>
+					</File>
+					<File
+						RelativePath=".\tests\zvector-e6-07-VSRPR.core"
+						>
+					</File>
+					<File
+						RelativePath=".\tests\zvector-e6-08-VLRLR.core"
+						>
+					</File>
+					<File
+						RelativePath=".\tests\zvector-e6-09-VSTRLR.core"
+						>
+					</File>
+					<File
+						RelativePath=".\tests\zvector-e6-10-VLIP.core"
+						>
+					</File>
+					<File
+						RelativePath=".\tests\zvector-e6-11-convertbinary.core"
+						>
+					</File>
+					<File
+						RelativePath=".\tests\zvector-e6-12-countzonedhighlow.core"
+						>
+					</File>
+					<File
+						RelativePath=".\tests\zvector-e6-13-converttodecimal.core"
+						>
+					</File>
+					<File
+						RelativePath=".\tests\zvector-e6-14-testdecimal.core"
+						>
+					</File>
+					<File
+						RelativePath=".\tests\zvector-e6-15-comparedecimal.core"
+						>
+					</File>
+					<File
+						RelativePath=".\tests\zvector-e6-16-VSRP-VPSOP.core"
+						>
+					</File>
+					<File
+						RelativePath=".\tests\zvector-e6-17-VSCHP.core"
+						>
+					</File>
+					<File
+						RelativePath=".\tests\zvector-e6-18-VSCSHP.core"
+						>
+					</File>
+					<File
+						RelativePath=".\tests\zvector-e6-19-VCSPH.core"
+						>
+					</File>
+					<File
+						RelativePath=".\tests\zvector-e6-20-NNPconvert.core"
+						>
+					</File>
+					<File
+						RelativePath=".\tests\zvector-e6-21-VCRNF.core"
+						>
+					</File>
+					<File
+						RelativePath=".\tests\zvector-e7-01-MinMaxAvg.core"
+						>
+					</File>
+					<File
+						RelativePath=".\tests\zvector-e7-02-VGFM.core"
+						>
+					</File>
+					<File
+						RelativePath=".\tests\zvector-e7-03-VGFMA.core"
+						>
+					</File>
+					<File
+						RelativePath=".\tests\zvector-e7-04-BitCount.core"
+						>
+					</File>
+					<File
+						RelativePath=".\tests\zvector-e7-05-VTM.core"
+						>
+					</File>
+					<File
+						RelativePath=".\tests\zvector-e7-06-Find.core"
+						>
+					</File>
+					<File
+						RelativePath=".\tests\zvector-e7-07-VGBM.core"
+						>
+					</File>
+					<File
+						RelativePath=".\tests\zvector-e7-08-VISTR.core"
 						>
 					</File>
 				</Filter>
@@ -4726,6 +4882,10 @@
 							>
 						</File>
 						<File
+							RelativePath=".\tests\prno.tst"
+							>
+						</File>
+						<File
 							RelativePath=".\tests\problem.tst"
 							>
 						</File>
@@ -4739,6 +4899,10 @@
 						</File>
 						<File
 							RelativePath=".\tests\semipriv.tst"
+							>
+						</File>
+						<File
+							RelativePath=".\tests\ShiftLeft.tst"
 							>
 						</File>
 						<File
@@ -4847,6 +5011,122 @@
 						</File>
 						<File
 							RelativePath=".\tests\zeos.tst"
+							>
+						</File>
+						<File
+							RelativePath=".\tests\zvector-e6-01-loads.tst"
+							>
+						</File>
+						<File
+							RelativePath=".\tests\zvector-e6-02-stores.tst"
+							>
+						</File>
+						<File
+							RelativePath=".\tests\zvector-e6-03-pack.tst"
+							>
+						</File>
+						<File
+							RelativePath=".\tests\zvector-e6-04-unpack.tst"
+							>
+						</File>
+						<File
+							RelativePath=".\tests\zvector-e6-05-packarith.tst"
+							>
+						</File>
+						<File
+							RelativePath=".\tests\zvector-e6-06-VPKZR.tst"
+							>
+						</File>
+						<File
+							RelativePath=".\tests\zvector-e6-07-VSRPR.tst"
+							>
+						</File>
+						<File
+							RelativePath=".\tests\zvector-e6-08-VLRLR.tst"
+							>
+						</File>
+						<File
+							RelativePath=".\tests\zvector-e6-09-VSTRLR.tst"
+							>
+						</File>
+						<File
+							RelativePath=".\tests\zvector-e6-10-VLIP.tst"
+							>
+						</File>
+						<File
+							RelativePath=".\tests\zvector-e6-11-convertbinary.tst"
+							>
+						</File>
+						<File
+							RelativePath=".\tests\zvector-e6-12-countzonedhighlow.tst"
+							>
+						</File>
+						<File
+							RelativePath=".\tests\zvector-e6-13-converttodecimal.tst"
+							>
+						</File>
+						<File
+							RelativePath=".\tests\zvector-e6-14-testdecimal.tst"
+							>
+						</File>
+						<File
+							RelativePath=".\tests\zvector-e6-15-comparedecimal.tst"
+							>
+						</File>
+						<File
+							RelativePath=".\tests\zvector-e6-16-VSRP-VPSOP.tst"
+							>
+						</File>
+						<File
+							RelativePath=".\tests\zvector-e6-17-VSCHP.tst"
+							>
+						</File>
+						<File
+							RelativePath=".\tests\zvector-e6-18-VSCSHP.tst"
+							>
+						</File>
+						<File
+							RelativePath=".\tests\zvector-e6-19-VCSPH.tst"
+							>
+						</File>
+						<File
+							RelativePath=".\tests\zvector-e6-20-NNPconvert.tst"
+							>
+						</File>
+						<File
+							RelativePath=".\tests\zvector-e6-21-VCRNF.tst"
+							>
+						</File>
+						<File
+							RelativePath=".\tests\zvector-e7-01-MinMaxAvg.tst"
+							>
+						</File>
+						<File
+							RelativePath=".\tests\zvector-e7-02-VGFM.tst"
+							>
+						</File>
+						<File
+							RelativePath=".\tests\zvector-e7-03-VGFMA.tst"
+							>
+						</File>
+						<File
+							RelativePath=".\tests\zvector-e7-04-BitCount.tst"
+							>
+						</File>
+						<File
+							RelativePath=".\tests\zvector-e7-05-VTM.tst"
+							>
+						</File>
+						<File
+							RelativePath=".\tests\zvector-e7-06-Find.tst"
+							>
+						</File>
+						<File
+							RelativePath=".\tests\zvector-e7-07-VGBM.tst"
+							>
+						</File>
+						<File
+							RelativePath=".\tests\zvector-e7-08-VISTR.tst"
 							>
 						</File>
 						<Filter
@@ -5134,11 +5414,19 @@
 							>
 						</File>
 						<File
+							RelativePath=".\tests\prno.asm"
+							>
+						</File>
+						<File
 							RelativePath=".\tests\problem.asm"
 							>
 						</File>
 						<File
 							RelativePath=".\tests\semipriv.asm"
+							>
+						</File>
+						<File
+							RelativePath=".\tests\ShiftLeft.asm"
 							>
 						</File>
 						<File
@@ -5207,6 +5495,122 @@
 						</File>
 						<File
 							RelativePath=".\tests\TXFPER.asm"
+							>
+						</File>
+						<File
+							RelativePath=".\tests\zvector-e6-01-loads.asm"
+							>
+						</File>
+						<File
+							RelativePath=".\tests\zvector-e6-02-stores.asm"
+							>
+						</File>
+						<File
+							RelativePath=".\tests\zvector-e6-03-pack.asm"
+							>
+						</File>
+						<File
+							RelativePath=".\tests\zvector-e6-04-unpack.asm"
+							>
+						</File>
+						<File
+							RelativePath=".\tests\zvector-e6-05-packarith.asm"
+							>
+						</File>
+						<File
+							RelativePath=".\tests\zvector-e6-06-VPKZR.asm"
+							>
+						</File>
+						<File
+							RelativePath=".\tests\zvector-e6-07-VSRPR.asm"
+							>
+						</File>
+						<File
+							RelativePath=".\tests\zvector-e6-08-VLRLR.asm"
+							>
+						</File>
+						<File
+							RelativePath=".\tests\zvector-e6-09-VSTRLR.asm"
+							>
+						</File>
+						<File
+							RelativePath=".\tests\zvector-e6-10-VLIP.asm"
+							>
+						</File>
+						<File
+							RelativePath=".\tests\zvector-e6-11-convertbinary.asm"
+							>
+						</File>
+						<File
+							RelativePath=".\tests\zvector-e6-12-countzonedhighlow.asm"
+							>
+						</File>
+						<File
+							RelativePath=".\tests\zvector-e6-13-converttodecimal.asm"
+							>
+						</File>
+						<File
+							RelativePath=".\tests\zvector-e6-14-testdecimal.asm"
+							>
+						</File>
+						<File
+							RelativePath=".\tests\zvector-e6-15-comparedecimal.asm"
+							>
+						</File>
+						<File
+							RelativePath=".\tests\zvector-e6-16-VSRP-VPSOP.asm"
+							>
+						</File>
+						<File
+							RelativePath=".\tests\zvector-e6-17-VSCHP.asm"
+							>
+						</File>
+						<File
+							RelativePath=".\tests\zvector-e6-18-VSCSHP.asm"
+							>
+						</File>
+						<File
+							RelativePath=".\tests\zvector-e6-19-VCSPH.asm"
+							>
+						</File>
+						<File
+							RelativePath=".\tests\zvector-e6-20-NNPconvert.asm"
+							>
+						</File>
+						<File
+							RelativePath=".\tests\zvector-e6-21-VCRNF.asm"
+							>
+						</File>
+						<File
+							RelativePath=".\tests\zvector-e7-01-MinMaxAvg.asm"
+							>
+						</File>
+						<File
+							RelativePath=".\tests\zvector-e7-02-VGFM.asm"
+							>
+						</File>
+						<File
+							RelativePath=".\tests\zvector-e7-03-VGFMA.asm"
+							>
+						</File>
+						<File
+							RelativePath=".\tests\zvector-e7-04-BitCount.asm"
+							>
+						</File>
+						<File
+							RelativePath=".\tests\zvector-e7-05-VTM.asm"
+							>
+						</File>
+						<File
+							RelativePath=".\tests\zvector-e7-06-Find.asm"
+							>
+						</File>
+						<File
+							RelativePath=".\tests\zvector-e7-07-VGBM.asm"
+							>
+						</File>
+						<File
+							RelativePath=".\tests\zvector-e7-08-VISTR.asm"
 							>
 						</File>
 						<Filter
@@ -5633,11 +6037,27 @@
 								>
 							</File>
 							<File
+								RelativePath=".\tests\prno.list"
+								>
+							</File>
+							<File
+								RelativePath=".\tests\prno.pdf"
+								>
+							</File>
+							<File
 								RelativePath=".\tests\problem.list"
 								>
 							</File>
 							<File
 								RelativePath=".\tests\semipriv.list"
+								>
+							</File>
+							<File
+								RelativePath=".\tests\ShiftLeft.list"
+								>
+							</File>
+							<File
+								RelativePath=".\tests\ShiftLeft.pdf"
 								>
 							</File>
 							<File
@@ -5774,6 +6194,238 @@
 							</File>
 							<File
 								RelativePath=".\tests\TXFPER.pdf"
+								>
+							</File>
+							<File
+								RelativePath=".\tests\zvector-e6-01-loads.list"
+								>
+							</File>
+							<File
+								RelativePath=".\tests\zvector-e6-01-loads.pdf"
+								>
+							</File>
+							<File
+								RelativePath=".\tests\zvector-e6-02-stores.list"
+								>
+							</File>
+							<File
+								RelativePath=".\tests\zvector-e6-02-stores.pdf"
+								>
+							</File>
+							<File
+								RelativePath=".\tests\zvector-e6-03-pack.list"
+								>
+							</File>
+							<File
+								RelativePath=".\tests\zvector-e6-03-pack.pdf"
+								>
+							</File>
+							<File
+								RelativePath=".\tests\zvector-e6-04-unpack.list"
+								>
+							</File>
+							<File
+								RelativePath=".\tests\zvector-e6-04-unpack.pdf"
+								>
+							</File>
+							<File
+								RelativePath=".\tests\zvector-e6-05-packarith.list"
+								>
+							</File>
+							<File
+								RelativePath=".\tests\zvector-e6-05-packarith.pdf"
+								>
+							</File>
+							<File
+								RelativePath=".\tests\zvector-e6-06-VPKZR.list"
+								>
+							</File>
+							<File
+								RelativePath=".\tests\zvector-e6-06-VPKZR.pdf"
+								>
+							</File>
+							<File
+								RelativePath=".\tests\zvector-e6-07-VSRPR.list"
+								>
+							</File>
+							<File
+								RelativePath=".\tests\zvector-e6-07-VSRPR.pdf"
+								>
+							</File>
+							<File
+								RelativePath=".\tests\zvector-e6-08-VLRLR.list"
+								>
+							</File>
+							<File
+								RelativePath=".\tests\zvector-e6-08-VLRLR.pdf"
+								>
+							</File>
+							<File
+								RelativePath=".\tests\zvector-e6-09-VSTRLR.list"
+								>
+							</File>
+							<File
+								RelativePath=".\tests\zvector-e6-09-VSTRLR.pdf"
+								>
+							</File>
+							<File
+								RelativePath=".\tests\zvector-e6-10-VLIP.list"
+								>
+							</File>
+							<File
+								RelativePath=".\tests\zvector-e6-10-VLIP.pdf"
+								>
+							</File>
+							<File
+								RelativePath=".\tests\zvector-e6-11-convertbinary.list"
+								>
+							</File>
+							<File
+								RelativePath=".\tests\zvector-e6-11-convertbinary.pdf"
+								>
+							</File>
+							<File
+								RelativePath=".\tests\zvector-e6-12-countzonedhighlow.list"
+								>
+							</File>
+							<File
+								RelativePath=".\tests\zvector-e6-12-countzonedhighlow.pdf"
+								>
+							</File>
+							<File
+								RelativePath=".\tests\zvector-e6-13-converttodecimal.list"
+								>
+							</File>
+							<File
+								RelativePath=".\tests\zvector-e6-13-converttodecimal.pdf"
+								>
+							</File>
+							<File
+								RelativePath=".\tests\zvector-e6-14-testdecimal.list"
+								>
+							</File>
+							<File
+								RelativePath=".\tests\zvector-e6-14-testdecimal.pdf"
+								>
+							</File>
+							<File
+								RelativePath=".\tests\zvector-e6-15-comparedecimal.list"
+								>
+							</File>
+							<File
+								RelativePath=".\tests\zvector-e6-15-comparedecimal.pdf"
+								>
+							</File>
+							<File
+								RelativePath=".\tests\zvector-e6-16-VSRP-VPSOP.list"
+								>
+							</File>
+							<File
+								RelativePath=".\tests\zvector-e6-16-VSRP-VPSOP.pdf"
+								>
+							</File>
+							<File
+								RelativePath=".\tests\zvector-e6-17-VSCHP.list"
+								>
+							</File>
+							<File
+								RelativePath=".\tests\zvector-e6-17-VSCHP.pdf"
+								>
+							</File>
+							<File
+								RelativePath=".\tests\zvector-e6-18-VSCSHP.list"
+								>
+							</File>
+							<File
+								RelativePath=".\tests\zvector-e6-18-VSCSHP.pdf"
+								>
+							</File>
+							<File
+								RelativePath=".\tests\zvector-e6-19-VCSPH.list"
+								>
+							</File>
+							<File
+								RelativePath=".\tests\zvector-e6-19-VCSPH.pdf"
+								>
+							</File>
+							<File
+								RelativePath=".\tests\zvector-e6-20-NNPconvert.list"
+								>
+							</File>
+							<File
+								RelativePath=".\tests\zvector-e6-20-NNPconvert.pdf"
+								>
+							</File>
+							<File
+								RelativePath=".\tests\zvector-e6-21-VCRNF.list"
+								>
+							</File>
+							<File
+								RelativePath=".\tests\zvector-e6-21-VCRNF.pdf"
+								>
+							</File>
+							<File
+								RelativePath=".\tests\zvector-e7-01-MinMaxAvg.list"
+								>
+							</File>
+							<File
+								RelativePath=".\tests\zvector-e7-01-MinMaxAvg.pdf"
+								>
+							</File>
+							<File
+								RelativePath=".\tests\zvector-e7-02-VGFM.list"
+								>
+							</File>
+							<File
+								RelativePath=".\tests\zvector-e7-02-VGFM.pdf"
+								>
+							</File>
+							<File
+								RelativePath=".\tests\zvector-e7-03-VGFMA.list"
+								>
+							</File>
+							<File
+								RelativePath=".\tests\zvector-e7-03-VGFMA.pdf"
+								>
+							</File>
+							<File
+								RelativePath=".\tests\zvector-e7-04-BitCount.list"
+								>
+							</File>
+							<File
+								RelativePath=".\tests\zvector-e7-04-BitCount.pdf"
+								>
+							</File>
+							<File
+								RelativePath=".\tests\zvector-e7-05-VTM.list"
+								>
+							</File>
+							<File
+								RelativePath=".\tests\zvector-e7-05-VTM.pdf"
+								>
+							</File>
+							<File
+								RelativePath=".\tests\zvector-e7-06-Find.list"
+								>
+							</File>
+							<File
+								RelativePath=".\tests\zvector-e7-06-Find.pdf"
+								>
+							</File>
+							<File
+								RelativePath=".\tests\zvector-e7-07-VGBM.list"
+								>
+							</File>
+							<File
+								RelativePath=".\tests\zvector-e7-07-VGBM.pdf"
+								>
+							</File>
+							<File
+								RelativePath=".\tests\zvector-e7-08-VISTR.list"
+								>
+							</File>
+							<File
+								RelativePath=".\tests\zvector-e7-08-VISTR.pdf"
 								>
 							</File>
 						</Filter>

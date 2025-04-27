@@ -652,6 +652,10 @@
  #define    _FEATURE_TCPIP_EXTENSION
 #endif
 
+#if defined( FEATURE_V128_SSE )
+ #define    _FEATURE_V128_SSE
+#endif
+
 #if defined( FEATURE_ZVM_ESSA )
  #define    _FEATURE_ZVM_ESSA
 #endif
@@ -981,6 +985,10 @@
 
 #if defined( FEATURE_077_MSA_EXTENSION_FACILITY_4 ) && !defined( FEATURE_076_MSA_EXTENSION_FACILITY_3 )
  #error You cannot have "Message Security Assist extension 4" without having "Message Security Assist extension 3"
+#endif
+
+#if defined( FEATURE_057_MSA_EXTENSION_FACILITY_5 ) && !defined( FEATURE_077_MSA_EXTENSION_FACILITY_4 )
+ #error You cannot have "Message Security Assist extension 5" without having "Message Security Assist extension 4"
 #endif
 
 #if defined( FEATURE_078_ENHANCED_DAT_FACILITY_2 ) && !defined( FEATURE_008_ENHANCED_DAT_FACILITY_1 )

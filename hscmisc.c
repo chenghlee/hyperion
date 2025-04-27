@@ -1,6 +1,6 @@
 /* HSCMISC.C    (C) Copyright Roger Bowler, 1999-2012                */
 /*              (C) Copyright Jan Jaeger, 1999-2012                  */
-/*              (C) and others 2013-2023                             */
+/*              (C) and others 2013-2024                             */
 /*              Miscellaneous System Command Routines                */
 /*                                                                   */
 /*   Released under "The Q Public License Version 1"                 */
@@ -876,6 +876,7 @@ QWORD   qword;                          /* Doubleword work area      */
 BYTE    opcode;                         /* Instruction operation code*/
 int     ilc;                            /* Instruction length        */
 int     b1=-1, b2=-1, x1;               /* Register numbers          */
+int     v2, m3;                         /* zVector numbers           */
 U16     xcode = 0;                      /* Exception code            */
 VADR    addr1 = 0, addr2 = 0;           /* Operand addresses         */
 char    buf[2048];                      /* Message buffer            */
@@ -889,8 +890,9 @@ bool    trace2file;
 char    psw_inst_msg[160]   = {0};
 char    op1_stor_msg[128]   = {0};
 char    op2_stor_msg[128]   = {0};
-char    regs_msg_buf[4*512] = {0};
+char    regs_msg_buf[8*512] = {0};
 
+    PTT_PGM( "dinst", inst, 0, pgmint );
     PTT_PGM( "dinst", inst, 0, pgmint );
 
     OBTAIN_TRACEFILE_LOCK();
@@ -1016,21 +1018,55 @@ char    regs_msg_buf[4*512] = {0};
         && opcode != 0xEC   // RIE-x
     )
     {
-        /* Calculate the effective address of the first operand */
-        b1 = inst[2] >> 4;
-        addr1 = ((inst[2] & 0x0F) << 8) | inst[3];
-        if (b1 != 0)
+        if (0
+            || ( opcode != 0xE7 && opcode != 0xE6 )
+            || ( opcode == 0xE7 && (    inst[5] <= 0x0B                        // VRX    (VLEB VLEH VLEG VLEF VLLEZ VLREP VL VLEB VSTEB VSTEH VSTEG VSTEF)
+                                    ||  inst[5] == 0x0E                        // VRX    (VST)
+                                    ||  inst[5] == 0x12                        // VRV    (VGEG)
+                                    ||  inst[5] == 0x13                        // VRV    (VGEF)
+                                    ||  inst[5] == 0x1A                        // VRV    (VSCEG)
+                                    ||  inst[5] == 0x1B                        // VRV    (VSCEF)
+                                    ||  inst[5] == 0x30                        // VRS-a  (VESL)
+                                    ||  inst[5] == 0x36                        // VRS-a  (VLM)
+                                    ||  inst[5] == 0x37                        // VRS-b  (VLL)
+                                    ||  inst[5] == 0x3E                        // VRS-a  (VSTM)
+                                    ||  inst[5] == 0x3F                        // VRS-b  (VSTL)
+                                   ) )
+            || ( opcode == 0xE6 && (   (inst[5] >= 0x01 && inst[5] <= 0x07)    // VRX    (VLEBRH VLEBRG VLEBRF VLLEBRZ VLBRREP VLBR VLER)
+                                    || (inst[5] >= 0x09 && inst[5] <= 0x0B)    // VRX    (VSTEBRH VSTEBRG VSTEBRF)
+                                    ||  inst[5] == 0x0E                        // VRX    (VSTBR)
+                                    ||  inst[5] == 0x0F                        // VRX    (VSTER)
+                                    ||  inst[5] == 0x34                        // VSI    (VPKZ)
+                                    ||  inst[5] == 0x35                        // VSI    (VLRL)
+                                    ||  inst[5] == 0x3C                        // VSI    (VUPKZ)
+                                    ||  inst[5] == 0x3D                        // VSI    (VSTRL)
+                                   ) )
+        )
         {
-            addr1 += regs->GR( b1 );
-            addr1 &= ADDRESS_MAXWRAP( regs );
+            /* Calculate the effective address of the first operand */
+            b1 = inst[2] >> 4;
+            addr1 = ((inst[2] & 0x0F) << 8) | inst[3];
+            if (b1 != 0)
+            {
+                addr1 += regs->GR( b1 );
+                addr1 &= ADDRESS_MAXWRAP( regs );
+            }
         }
 
-        /* Apply indexing for RX/RXE/RXF instructions */
+        /* Apply indexing for RX/RXE/RXF/VRX instructions */
         if (0
-            || (opcode >= 0x40 && opcode <= 0x7F)
-            ||  opcode == 0xB1   // LRA
-            ||  opcode == 0xE3   // RXY-x
-            ||  opcode == 0xED   // RXE-x, RXF-x, RXY-x, RSL-x
+            || ( opcode >= 0x40 && opcode <= 0x7F )
+            ||   opcode == 0xB1   // LRA
+            ||   opcode == 0xE3   // RXY-x
+            ||   opcode == 0xED   // RXE-x, RXF-x, RXY-x, RSL-x
+            || ( opcode == 0xE7 && (    inst[5] <= 0x0B                        // VRX    (VLEB VLEH VLEG VLEF VLLEZ VLREP VL VLEB VSTEB VSTEH VSTEG VSTEF)
+                                    ||  inst[5] == 0x0E                        // VRX    (VST)
+                                   ) )
+            || ( opcode == 0xE6 && (   (inst[5] >= 0x01 && inst[5] <= 0x07)    // VRX    (VLEBRH VLEBRG VLEBRF VLLEBRZ VLBRREP VLBR VLER)
+                                    || (inst[5] >= 0x09 && inst[5] <= 0x0B)    // VRX    (VSTEBRH VSTEBRG VSTEBRF)
+                                    ||  inst[5] == 0x0E                        // VRX    (VSTBR)
+                                    ||  inst[5] == 0x0F                        // VRX    (VSTER)
+                                   ) )
         )
         {
             x1 = inst[1] & 0x0F;
@@ -1039,6 +1075,28 @@ char    regs_msg_buf[4*512] = {0};
                 addr1 += regs->GR( x1 );
                 addr1 &= ADDRESS_MAXWRAP( regs );
             }
+        }
+
+        /* Apply indexing for VRV instructions */
+        if (0
+            || ( opcode == 0xE7 && (    inst[5] == 0x12                        // VRV    (VGEG)
+                                    ||  inst[5] == 0x13                        // VRV    (VGEF)
+                                    ||  inst[5] == 0x1A                        // VRV    (VSCEG)
+                                    ||  inst[5] == 0x1B                        // VRV    (VSCEF)
+                                   ) )
+        )
+        {
+            v2 = inst[1] & 0x0F;                           // zVector register number
+            m3 = ( inst[4] >> 4 ) & 0x0F;                  // zVector element number
+            if (inst[5] == 0x12 || inst[5] == 0x1A)
+            {
+                 addr1 += regs->VR_D( v2, m3 );
+            }
+            else
+            {
+                 addr1 += regs->VR_F( v2, m3 );
+            }
+            addr1 &= ADDRESS_MAXWRAP( regs );
         }
     }
 
@@ -1049,6 +1107,8 @@ char    regs_msg_buf[4*512] = {0};
         && opcode != 0xC4   // RIL-x    (relative)
         && opcode != 0xC6   // RIL-x    (relative)
         && opcode != 0xE3   // RXY-x
+        && opcode != 0xE6   // zVector
+        && opcode != 0xE7   // zVector
         && opcode != 0xEB   // RSY-x, SIY-x
         && opcode != 0xEC   // RIE-x
         && opcode != 0xED   // RXE-x, RXF-x, RXY-x, RSL-x
@@ -1265,6 +1325,8 @@ int ARCH_DEP( display_fregs )( REGS* regs, char* buf, int buflen, char* hdr )
 {
 char cpustr[32] = "";
 
+#define REG64FMT  "%16.16"PRIX64
+
     if (sysblk.cpus>1)
         MSGBUF( cpustr, "%s%s%02X: ", hdr, PTYPSTR( regs->cpuad ), regs->cpuad );
     else
@@ -1274,38 +1336,38 @@ char cpustr[32] = "";
     {
         return snprintf( buf, buflen,
 
-            "%sFP00=%8.8X%8.8X FP08=%8.8X%8.8X\n"
-            "%sFP01=%8.8X%8.8X FP09=%8.8X%8.8X\n"
-            "%sFP02=%8.8X%8.8X FP10=%8.8X%8.8X\n"
-            "%sFP03=%8.8X%8.8X FP11=%8.8X%8.8X\n"
-            "%sFP04=%8.8X%8.8X FP12=%8.8X%8.8X\n"
-            "%sFP05=%8.8X%8.8X FP13=%8.8X%8.8X\n"
-            "%sFP06=%8.8X%8.8X FP14=%8.8X%8.8X\n"
-            "%sFP07=%8.8X%8.8X FP15=%8.8X%8.8X\n"
+            "%sFP00="REG64FMT" FP01="REG64FMT"\n"
+            "%sFP02="REG64FMT" FP03="REG64FMT"\n"
+            "%sFP04="REG64FMT" FP05="REG64FMT"\n"
+            "%sFP06="REG64FMT" FP07="REG64FMT"\n"
+            "%sFP08="REG64FMT" FP09="REG64FMT"\n"
+            "%sFP10="REG64FMT" FP11="REG64FMT"\n"
+            "%sFP12="REG64FMT" FP13="REG64FMT"\n"
+            "%sFP14="REG64FMT" FP15="REG64FMT"\n"
 
-            ,cpustr, regs->fpr[FPR2I(0)], regs->fpr[FPR2I(0)+1], regs->fpr[FPR2I( 8)], regs->fpr[FPR2I( 8)+1]
-            ,cpustr, regs->fpr[FPR2I(1)], regs->fpr[FPR2I(1)+1], regs->fpr[FPR2I( 9)], regs->fpr[FPR2I( 9)+1]
-            ,cpustr, regs->fpr[FPR2I(2)], regs->fpr[FPR2I(2)+1], regs->fpr[FPR2I(10)], regs->fpr[FPR2I(10)+1]
-            ,cpustr, regs->fpr[FPR2I(3)], regs->fpr[FPR2I(3)+1], regs->fpr[FPR2I(11)], regs->fpr[FPR2I(11)+1]
-            ,cpustr, regs->fpr[FPR2I(4)], regs->fpr[FPR2I(4)+1], regs->fpr[FPR2I(12)], regs->fpr[FPR2I(12)+1]
-            ,cpustr, regs->fpr[FPR2I(5)], regs->fpr[FPR2I(5)+1], regs->fpr[FPR2I(13)], regs->fpr[FPR2I(13)+1]
-            ,cpustr, regs->fpr[FPR2I(6)], regs->fpr[FPR2I(6)+1], regs->fpr[FPR2I(14)], regs->fpr[FPR2I(14)+1]
-            ,cpustr, regs->fpr[FPR2I(7)], regs->fpr[FPR2I(7)+1], regs->fpr[FPR2I(15)], regs->fpr[FPR2I(15)+1]
+            ,cpustr, regs->FPR_L(0),  regs->FPR_L(1)
+            ,cpustr, regs->FPR_L(2),  regs->FPR_L(3)
+            ,cpustr, regs->FPR_L(4),  regs->FPR_L(5)
+            ,cpustr, regs->FPR_L(6),  regs->FPR_L(7)
+            ,cpustr, regs->FPR_L(8),  regs->FPR_L(9)
+            ,cpustr, regs->FPR_L(10), regs->FPR_L(11)
+            ,cpustr, regs->FPR_L(12), regs->FPR_L(13)
+            ,cpustr, regs->FPR_L(14), regs->FPR_L(15)
         );
     }
     else
     {
         return snprintf( buf, buflen,
 
-            "%sFP00=%8.8X%8.8X\n"
-            "%sFP02=%8.8X%8.8X\n"
-            "%sFP04=%8.8X%8.8X\n"
-            "%sFP06=%8.8X%8.8X\n"
+            "%sFP00="REG64FMT"\n"
+            "%sFP02="REG64FMT"\n"
+            "%sFP04="REG64FMT"\n"
+            "%sFP06="REG64FMT"\n"
 
-            ,cpustr, regs->fpr[FPR2I(0)], regs->fpr[FPR2I(0)+1]
-            ,cpustr, regs->fpr[FPR2I(2)], regs->fpr[FPR2I(2)+1]
-            ,cpustr, regs->fpr[FPR2I(4)], regs->fpr[FPR2I(4)+1]
-            ,cpustr, regs->fpr[FPR2I(6)], regs->fpr[FPR2I(6)+1]
+            ,cpustr, regs->FPR_L(0)
+            ,cpustr, regs->FPR_L(2)
+            ,cpustr, regs->FPR_L(4)
+            ,cpustr, regs->FPR_L(6)
         );
     }
 
@@ -1473,25 +1535,45 @@ static void do_shutdown_now()
 {
     int     spincount = 16;           // spin-wait count for logger-thread
     bool    loggersetshutdown = TRUE; // assume logger sets system shutdown
+    bool    wasPanelActive = TRUE;    // panel state
 
     ASSERT( !sysblk.shutfini );   // (sanity check)
     ASSERT( !sysblk.shutdown );   // (sanity check)
     sysblk.shutfini = FALSE;      // (shutdown NOT finished yet)
     sysblk.shutdown = FALSE;      // (system shutdown NOT initiated yet)
-    sysblk.shutbegin = TRUE;      // (begin system shutdown)
+
+    // save panel state and start shutdown
+    wasPanelActive = (bool) sysblk.panel_init;
+    sysblk.shutbegin = TRUE;
 
     // "Begin Hercules shutdown"
     WRMSG( HHC01420, "I" );
 
-    // (hack to prevent minor message glitch during shutdown)
-    fflush( stdout );
-    fflush( stderr );
+    // spin-wait for panel to do its cleanup
+
+    spincount = 32;
+    while ( sysblk.panel_init && spincount-- )
+    {
+        log_wakeup( NULL );
+        USLEEP( (sysblk.panrate * 1000)  / 8);
+        //LOGMSG("hsmisc.c: shutdown spin-wait on panel count: %d, sysblk.panel_init: %d\n", spincount, (int) sysblk.panel_init);
+    }
+
+    // was panel thread active and has complete cleanup
+    if ( wasPanelActive && !sysblk.panel_init )
+    {
+        // Programmer note: If the panel was active and has completed cleanup,
+        // a message needs to be issued in order to pump a logger processing cycle
+        // to recognize shutdown has started.
+        WRMSG( HHC01421, "I" , "Panel cleanup complete");
+    }
 
     // spin-wait for logger to initiate system shutdown
+    spincount = 16;
     while ( !sysblk.shutdown && spincount-- )
     {
         log_wakeup( NULL );
-        USLEEP( 5000 );
+        USLEEP( (5000) );
         //LOGMSG("hsmisc.c: shutdown spin-wait on logger: count: %d, shutdown: %d\n", spincount, (int) sysblk.shutdown);
     }
 
@@ -1500,6 +1582,8 @@ static void do_shutdown_now()
     {
         sysblk.shutdown = TRUE;       // (system shutdown initiated)
         loggersetshutdown = FALSE;    // logger didn't set system shutdown
+        if (!sysblk.herclin)          // herclin doesn't set shutdown flag
+            WRMSG( HHC01421, "E" , "Failsafe shutdown actioned");
     }
 
     /* Wakeup I/O subsystem to start I/O subsystem shutdown */
@@ -1514,11 +1598,6 @@ static void do_shutdown_now()
 
     // "Calling termination routines"
     WRMSG( HHC01423, "I" );
-
-    // (hack to prevent minor message glitch during shutdown)
-    fflush( stdout );
-    fflush( stderr );
-    USLEEP( 10000 );
 
     // if logger didn't set shutdown, handle unredirect
     if ( !loggersetshutdown )
@@ -1828,6 +1907,15 @@ int display_inst_regs( bool trace2file, REGS *regs, BYTE *inst, BYTE opcode, cha
             len += display_fregs (regs, buf + len, buflen - len - 1, "HHC02270I ");
     }
 
+    /* Display vector registers if appropriate */
+    if (opcode == 0xE7 || ( opcode == 0xE6 && (regs->arch_mode == ARCH_900_IDX) ) )
+    {
+        if (trace2file)
+            tf_2266( regs );
+        else
+            len += display_vregs( regs, buf + len, buflen - len - 1, "HHC02266I ");
+    }
+
     if (len && sysblk.showregsfirst)
         len += idx_snprintf( len, buf, buflen, "\n" );
 
@@ -1947,7 +2035,31 @@ int display_fregs( REGS* regs, char* buf, int buflen, char* hdr )
     return rc;
 }
 
+/*-------------------------------------------------------------------*/
+/*               Display vector registers                            */
+/*-------------------------------------------------------------------*/
+int display_vregs( REGS* regs, char* buf, int buflen, char* hdr )
+{
+    char cpustr[32] = "";
+    int i, bufl = 0;
 
+    if (sysblk.cpus > 1)
+        MSGBUF( cpustr, "%s%s%02X: ", hdr, PTYPSTR(regs->cpuad), regs->cpuad );
+    else
+        MSGBUF( cpustr, "%s", hdr );
+
+    for (i = 0; i < 32; i += 2) {
+        bufl += idx_snprintf(bufl, buf, buflen,
+            "%sVR%02d=%016" PRIX64 ".%016" PRIX64" VR%02d=%016" PRIX64 ".%016" PRIX64 "\n",
+            cpustr,
+            i,   regs->VR_D( i,   0),
+                 regs->VR_D( i,   1),
+            i+1, regs->VR_D( i+1, 0),
+                 regs->VR_D( i+1, 1)
+            );
+    }
+    return bufl;
+}
 /*-------------------------------------------------------------------*/
 /*                     Display subchannel                            */
 /*-------------------------------------------------------------------*/
@@ -2322,7 +2434,7 @@ DLL_EXPORT REGS* copy_regs( REGS* regs )
 
     size = (SIE_MODE( regs ) || SIE_ACTIVE( regs )) ? 2 * sizeof( REGS )
                                                     :     sizeof( REGS );
-    if (!(newregs = malloc_aligned( size, 4096 )))
+    if (!(newregs = (REGS*) malloc_aligned( size, 4096 )))
     {
         char buf[64];
         MSGBUF( buf, "malloc(%d)", (int)size );
@@ -3196,7 +3308,7 @@ int herc_system (char* command)
   #define  SHELL_CMD_SHIM_PGM   "conspawn "
 
     int rc = (int)(strlen(SHELL_CMD_SHIM_PGM) + strlen(command) + 1);
-    char* pszNewCommandLine = malloc( rc );
+    char* pszNewCommandLine = (char*) malloc( rc );
     strlcpy( pszNewCommandLine, SHELL_CMD_SHIM_PGM, rc );
     strlcat( pszNewCommandLine, command,            rc );
     rc = w32_poor_mans_fork( pszNewCommandLine, NULL );

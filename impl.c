@@ -480,6 +480,8 @@ static void* watchdog_thread( void* arg )
 
     UNREFERENCED( arg );
 
+    LOG_THREAD_BEGIN( WATCHDOG_THREAD_NAME );
+
     for (cpu=0; cpu < sysblk.maxcpu; cpu++)
         savecount[ cpu ] = -1;
 
@@ -527,10 +529,21 @@ static void* watchdog_thread( void* arg )
         } /* (end for (slept_secs ...) */
 
 #if defined( _MSVC_ )
-        // Disable all watchdog logic while debugger is attached
-        if (IsDebuggerPresent())
-            continue;
+
+        // If watchdog is NOT allowed while debugging (the default),
+        // then disable all watchdog logic while debugger is attached.
+        //
+        // This allows the developer to debug other areas of Hercules
+        // without the watchdog interfering with their debugging.
+        //
+        // Otherwise, if watchdog *IS* allowed while debugging (set
+        // via "$TEST WD YES" command), proceed with normal watchdog
+        // processing...
+
+        if (!sysblk.allow_wd_debugging && IsDebuggerPresent())
+            continue; // (neuter watchdog while they're debugging)
 #endif
+
         /* Check for and report any deadlocks */
         if (hthread_report_deadlocks( deadlock_reported ? NULL : "S" ))
         {
@@ -629,35 +642,65 @@ static void* watchdog_thread( void* arg )
         if (deadlock_reported || hung_cpu_reported)
         {
 #if defined( _MSVC_ )
+
             // Give developer time to attach a debugger before crashing
             // If they do so, then prevent the crash from occurring as
             // long as their debugger is still attached, but once they
             // detach their debugger, then go ahead and allow the crash
 
-            // "You have %d seconds to attach a debugger before crash dump will be taken!"
-            WRMSG( HHC00823, "S", WAIT_FOR_DEBUGGER_SECS );
+            if (!sysblk.allow_wd_debugging)
             {
-                int i;
-                for (i=0; !IsDebuggerPresent() && i < WAIT_FOR_DEBUGGER_SECS; ++i)
-                    SLEEP( 1 );
+                static bool didwait = false;
+
+                if (!didwait)
+                {
+                    // "You have %d seconds to attach a debugger before crash dump will be taken!"
+                    WRMSG( HHC00823, "S", WAIT_FOR_DEBUGGER_SECS );
+
+                    // Wait for them to attach a debugger if desired...
+                    {
+                        int i;
+                        for (i=0; !IsDebuggerPresent() && i < WAIT_FOR_DEBUGGER_SECS; ++i)
+                            SLEEP( 1 );
+                    }
+
+                    didwait = true;
+                }
 
                 // Don't crash if there is now a debugger attached
                 if (IsDebuggerPresent())
                 {
                     // "Debugger attached! NOT crashing!"
                     WRMSG( HHC00824, "S" );
-                    continue;
+                    continue; // (they're still debugging; prevent crashing)
                 }
-
-                // "TIME'S UP! (or debugger has been detached!) - Forcing crash dump!"
-                WRMSG( HHC00825, "S" );
             }
-#endif
+
+            // "Creating crash dump!"
+            WRMSG( HHC00825, "S" );
+
+#endif // defined( _MSVC_ )
+
             /* Display additional debugging information */
+            panel_command( "*" );
+            panel_command( "*" );
+            panel_command( "*" );
             panel_command( "ptt" );
+            panel_command( "*" );
+            panel_command( "*" );
+            panel_command( "*" );
             panel_command( "ipending" );
-            panel_command( "locks held sort tid" );
-            panel_command( "threads waiting sort tid" );
+            panel_command( "*" );
+            panel_command( "*" );
+            panel_command( "*" );
+            panel_command( "threads waiting sort tod" );
+            panel_command( "*" );
+            panel_command( "*" );
+            panel_command( "*" );
+            panel_command( "locks held sort tod" );
+            panel_command( "*" );
+            panel_command( "*" );
+            panel_command( "*" );
 
             /* Display the instruction each hung CPU was executing */
             if (hung_cpus_mask)
@@ -688,6 +731,8 @@ static void* watchdog_thread( void* arg )
         }
     }
     while (!sysblk.shutdown);
+
+    LOG_THREAD_END( WATCHDOG_THREAD_NAME );
 
     return NULL;
 }
@@ -805,6 +850,124 @@ extern BYTE s390_get_storage_key( U64 abs );
 extern BYTE z900_get_storage_key( U64 abs );
 
 /*-------------------------------------------------------------------*/
+/* Check if host "PCLMULQDQ" instruction is available                */
+/*-------------------------------------------------------------------*/
+#if defined( _MSVC_ )
+
+static void is_PCLMULQDQ_available()
+{
+    QW  mm1, mm2, acc;
+    U64 m1 = 1, m2 = 2;
+
+    mm1.v = _mm_setzero_si128();
+    mm1.D.L.D = m1;
+    mm2.v = _mm_setzero_si128();
+    mm2.D.L.D = m2;
+
+    __try
+    {
+        acc.v =  _mm_clmulepi64_si128 ( mm1.v, mm2.v, 0);
+        sysblk.have_PCLMULQDQ = true;
+    }
+    __except( EXCEPTION_EXECUTE_HANDLER )
+    {
+        sysblk.have_PCLMULQDQ = false;
+    }
+}
+
+#else // !defined( _MSVC_ ), i.e. Linux
+
+#if defined( _GCC_SSE2_ ) && defined( HAVE_SIGNAL_HANDLING ) && defined( FEATURE_HW_CLMUL )
+
+static struct sigaction  sa_CRASH   = {0};
+static struct sigaction  sa_SIGILL  = {0};
+static jmp_buf jmpbuff;
+
+static void crash_signal_handler( int signo )
+{
+    UNREFERENCED( signo );
+    sysblk.have_PCLMULQDQ = false;
+    longjmp( jmpbuff, 4 );
+}
+
+/* Disable optimization */
+#if defined( __clang__ )
+  #pragma clang optimize off
+#else
+  #pragma GCC push_options
+  #pragma GCC diagnostic push
+  #pragma GCC optimize ("-O0")
+  #pragma GCC diagnostic ignored "-Wunused-but-set-variable"
+#endif
+
+static void is_PCLMULQDQ_available()
+{
+    /* Install Illegal-Instruction (SIGILL) crash handler */
+    sa_CRASH.sa_handler = &crash_signal_handler;
+    sigaction( SIGILL, &sa_CRASH, &sa_SIGILL );
+
+    /* Try the problematic code... */
+    if (setjmp( jmpbuff ) == 0)
+    {
+        /* PROGRAMMING NOTE! Optimizations MUST be disabled for this
+           section of code in order for it to work correctly! Otherwise
+           the optimizer will elide the intrinsic altogether due to the
+           'acc' variable never being referenced! (causing the 'have'
+           flag to incorrectly be always set to true!)
+        */
+        QW  mm1, mm2, acc;
+        U64 m1 = 1, m2 = 2;
+
+        mm1.v = _mm_setzero_si128();
+        mm1.D.L.D = m1;
+        mm2.v = _mm_setzero_si128();
+        mm2.D.L.D = m2;
+
+        acc.v = _mm_clmulepi64_si128 ( mm1.v, mm2.v, 0);
+        sysblk.have_PCLMULQDQ = true;
+    }
+    else // (only executed if we crashed)
+    {
+        sysblk.have_PCLMULQDQ = false;
+    }
+
+    /* Restore original Illegal-Instruction (SIGILL) crash handler */
+    sigaction( SIGILL, &sa_SIGILL, 0 );
+}
+
+/* Re-enable optimization */
+#if defined( __clang__ )
+  #pragma clang optimize on
+#else
+  #pragma GCC diagnostic pop
+  #pragma GCC pop_options
+#endif
+
+#else // !defined( _GCC_SSE2_ ) || !defined( HAVE_SIGNAL_HANDLING ) || !defined( FEATURE_HW_CLMUL )
+
+/* No way to know without SSE2 and signal handling, so play it safe! */
+static void is_PCLMULQDQ_available()
+{
+    sysblk.have_PCLMULQDQ = false;  /* (safest default) */
+}
+
+#endif // defined( _GCC_SSE2_ ) && defined( HAVE_SIGNAL_HANDLING )
+#endif /* Windows or Linux */
+
+/* Check if various host instructions are available or not */
+static void check_host_instruction_availability()
+{
+    /* Check availability of each individual host instruction first */
+    is_PCLMULQDQ_available();
+//  is_XXXXXXXXX_available();
+
+    /* Then report all of the ones that aren't available */
+    // "WARNING: Host does not support the '%s' instruction"
+    if (!sysblk.have_PCLMULQDQ) WRMSG( HHC00026, "W", "PCLMULQDQ" );
+//  if (!sysblk.have_XXXXXXXXX) WRMSG( HHC00026, "W", "XXXXXXXXX" );
+}
+
+/*-------------------------------------------------------------------*/
 /* IMPL main entry point                                             */
 /*-------------------------------------------------------------------*/
 DLL_EXPORT int impl( int argc, char* argv[] )
@@ -824,12 +987,16 @@ int     rc, maxprio, minprio;
     minprio = sysblk.minprio;
     maxprio = sysblk.maxprio;
 
-    /* Clear the system configuration block */
+    /* Clear the system configuration block (SYSBLK) to zero */
     memset( &sysblk, 0, sizeof( SYSBLK ) );
 
     /* Restore saved minprio/maxprio into SYSBLK */
     sysblk.minprio = minprio;
     sysblk.maxprio = maxprio;
+
+    // Check if, and remember, if debugger is present...
+    // (must be done AFTER sysblk has been set to zero)
+    check_if_debugger_is_present();
 
     /* Lock SYSBLK into memory since it's referenced so frequently.
        Note that the call could fail when the working set is small
@@ -1585,6 +1752,9 @@ int     rc, maxprio, minprio;
         txf_set_timerint( false );
 
 #endif /* defined( _FEATURE_073_TRANSACT_EXEC_FACILITY ) */
+
+    /* Check if various host instructions are available or not */
+    check_host_instruction_availability();
 
     /* Process the .rc file synchronously when in daemon mode. */
     /* Otherwise Start up the RC file processing thread.       */

@@ -1,5 +1,5 @@
 /* HSCUTL.H     (C) Copyright Roger Bowler, 1999-2012                */
-/*              (C) and others 2013-2023                             */
+/*              (C) and others 2013-2024                             */
 /*              Host-specific functions for Hercules                 */
 /*                                                                   */
 /*   Released under "The Q Public License Version 1"                 */
@@ -322,6 +322,11 @@ HUT_DLL_IMPORT void convert_to_ebcdic( BYTE* dest, int len, const char* source )
 HUT_DLL_IMPORT int  make_asciiz (char *dest, int destlen, BYTE *src, int srclen);
 
 /*-------------------------------------------------------------------*/
+/* Subroutine to convert DEVBLK halt or clear type to string         */
+/*-------------------------------------------------------------------*/
+HUT_DLL_IMPORT const char* str_HOC( int hoc );
+
+/*-------------------------------------------------------------------*/
 /*                        idx_snprintf                               */
 /*      Fix for "Potential snprintf buffer overflow" #457            */
 /*-------------------------------------------------------------------*/
@@ -407,7 +412,11 @@ HUT_DLL_IMPORT const char* FormatORB( ORB* orb, char* buf, size_t bufsz );
 /*-------------------------------------------------------------------*/
 HUT_DLL_IMPORT bool are_big_endian();
 
+/*-------------------------------------------------------------------*/
+/*      Determine if running under the control of a debugger         */
+/*-------------------------------------------------------------------*/
 
+HUT_DLL_IMPORT bool check_if_debugger_is_present();
 
 /*********************************************************************/
 /*********************************************************************/
@@ -1338,6 +1347,17 @@ ATTRIBUTE_PACKED; typedef struct TF01336 TF01336;
 CASSERT( sizeof( TF01336 ) % 8 == 0, hscutl_h );
 
 //---------------------------------------------------------------------
+//   TraceFile TF02266 Vector Register Record
+//---------------------------------------------------------------------
+struct TF02266
+{
+    TFHDR   rhdr;           // Record Header
+    QW      vfp[32];        // Vector registers
+}
+ATTRIBUTE_PACKED; typedef struct TF02266 TF02266;
+CASSERT(sizeof(TF02266) % 8 == 0, hscutl_h);
+
+//---------------------------------------------------------------------
 //       TraceFile TF02269 General Purpose Registers Record
 //---------------------------------------------------------------------
 struct TF02269
@@ -1357,7 +1377,7 @@ CASSERT( sizeof( TF02269 ) % 8 == 0, hscutl_h );
 struct TF02270
 {
     TFHDR   rhdr;           // Record Header
-    U32     fpr[32];        // FP registers
+    DW      fpr[16];        // FP registers
     BYTE    afp;            // CR0 AFP enabled
     BYTE    pad [ 7 ];      // (padding/alignment/unused)
 }
@@ -1670,6 +1690,8 @@ HUT_DLL_IMPORT bool tf_1334( DEVBLK* dev,              // ORB
 HUT_DLL_IMPORT bool tf_1336( DEVBLK* dev );            // Startio cc=2
 
 // Instruction tracing ------------------------------------------------------------------------
+
+HUT_DLL_IMPORT bool tf_2266( REGS* regs );             // Vector Registers
 
 HUT_DLL_IMPORT bool tf_2269( REGS* regs,               // General Registers
                              BYTE* inst );

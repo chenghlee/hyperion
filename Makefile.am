@@ -132,6 +132,7 @@ dyndev_SRC =  \
   tapeccws.c  \
   tapedev.c   \
   tuntap.c    \
+  him.c       \
   dummydev.c  \
   zfcp.c
 
@@ -202,6 +203,7 @@ HERCMODS =      \
   hdt3420.la    \
   hdt3505.la    \
   hdt2880.la    \
+  hdttcph.la    \
   hdtdummy.la   \
   hdt3525.la
 
@@ -252,6 +254,7 @@ bin_PROGRAMS = \
   tfprint      \
   tfswap       \
   txt2card     \
+  card2txt     \
   vmfplc2      \
   $(HERCIFC)   \
   $(HERCLIN)
@@ -331,9 +334,13 @@ hdt1052c_la_SOURCES = con1052c.c
 hdt1052c_la_LDFLAGS = $(DYNMOD_LD_FLAGS)
 hdt1052c_la_LIBADD  = $(DYNMOD_LD_ADD)
 
-hdtptp_la_SOURCES   = ctc_ptp.c mpc.c resolve.c tuntap.c
+hdtptp_la_SOURCES   = ctc_ptp.c mpc.c resolve.c tuntap.c netsupp.c
 hdtptp_la_LDFLAGS   = $(DYNMOD_LD_FLAGS)
 hdtptp_la_LIBADD    = $(DYNMOD_LD_ADD)
+
+hdttcph_la_SOURCES  = him.c
+hdttcph_la_LDFLAGS  = $(DYNMOD_LD_FLAGS)
+hdttcph_la_LIBADD   = $(DYNMOD_LD_ADD)
 
 hdtdummy_la_SOURCES = dummydev.c
 hdtdummy_la_LDFLAGS = $(DYNMOD_LD_FLAGS)
@@ -497,6 +504,7 @@ libherc_la_SOURCES = \
   losc.c             \
   machchk.c          \
   machdep.c          \
+  nnpa.c             \
   opcode.c           \
   panel.c            \
   pfpo.c             \
@@ -521,6 +529,8 @@ libherc_la_SOURCES = \
   vstore.c           \
   x75.c              \
   xstore.c           \
+  zvector.c          \
+  zvector2.c          \
   $(DYNSRC)
 
 EXTRA_libherc_la_SOURCES = \
@@ -741,6 +751,10 @@ tfswap_LDFLAGS     = $(tools_LD_FLAGS)
 txt2card_SOURCES   = txt2card.c
 txt2card_LDADD     = $(tools_ADDLIBS)
 txt2card_LDFLAGS   = $(tools_LD_FLAGS)
+
+card2txt_SOURCES   = card2txt.c
+card2txt_LDADD     = $(tools_ADDLIBS)
+card2txt_LDFLAGS   = $(tools_LD_FLAGS)
 
 #------------------------------------------------------------------------------
 # Files that are not 'built' per-se

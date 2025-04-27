@@ -98,7 +98,8 @@
 #define FEATURE_053_LOAD_STORE_ON_COND_FACILITY_2
 #define FEATURE_053_LOAD_ZERO_RIGHTMOST_FACILITY
 //efine FEATURE_054_EE_CMPSC_FACILITY
-//efine FEATURE_057_MSA_EXTENSION_FACILITY_5
+#define FEATURE_057_MSA_EXTENSION_FACILITY_5
+#define DYNINST_057_MSA_EXTENSION_FACILITY_5
 #define FEATURE_058_MISC_INSTR_EXT_FACILITY_2
 #define FEATURE_061_MISC_INSTR_EXT_FACILITY_3
 #define FEATURE_066_RES_REF_BITS_MULT_FACILITY
@@ -114,31 +115,31 @@
 //efine FEATURE_078_ENHANCED_DAT_FACILITY_2
 #define FEATURE_080_DFP_PACK_CONV_FACILITY
 #define FEATURE_081_PPA_IN_ORDER_FACILITY
-//efine FEATURE_129_ZVECTOR_FACILITY
+#define FEATURE_129_ZVECTOR_FACILITY
 //efine FEATURE_130_INSTR_EXEC_PROT_FACILITY
 //efine FEATURE_131_SIDE_EFFECT_ACCESS_FACILITY
 //efine FEATURE_131_ENH_SUPP_ON_PROT_2_FACILITY
 //efine FEATURE_133_GUARDED_STORAGE_FACILITY
-//efine FEATURE_134_ZVECTOR_PACK_DEC_FACILITY
-//efine FEATURE_135_ZVECTOR_ENH_FACILITY_1
+#define FEATURE_134_ZVECTOR_PACK_DEC_FACILITY
+#define FEATURE_135_ZVECTOR_ENH_FACILITY_1
 //efine FEATURE_138_CONFIG_ZARCH_MODE_FACILITY
 //efine FEATURE_139_MULTIPLE_EPOCH_FACILITY
 //efine FEATURE_142_ST_CPU_COUNTER_MULT_FACILITY
 //efine FEATURE_144_TEST_PEND_EXTERNAL_FACILITY
 #define FEATURE_145_INS_REF_BITS_MULT_FACILITY
 //efine FEATURE_146_MSA_EXTENSION_FACILITY_8
-//efine FEATURE_148_VECTOR_ENH_FACILITY_2
+#define FEATURE_148_VECTOR_ENH_FACILITY_2
 //efine FEATURE_149_MOVEPAGE_SETKEY_FACILITY
 //efine FEATURE_150_ENH_SORT_FACILITY
 //efine FEATURE_151_DEFLATE_CONV_FACILITY
-//efine FEATURE_152_VECT_PACKDEC_ENH_FACILITY
+#define FEATURE_152_VECT_PACKDEC_ENH_FACILITY
 //efine FEATURE_155_MSA_EXTENSION_FACILITY_9
 //efine FEATURE_158_ULTRAV_CALL_FACILITY
 //efine FEATURE_161_SEC_EXE_UNPK_FACILITY
-//efine FEATURE_165_NNET_ASSIST_FACILITY
+#define FEATURE_165_NNET_ASSIST_FACILITY
 //efine FEATURE_168_ESA390_COMPAT_MODE_FACILITY
 //efine FEATURE_169_SKEY_REMOVAL_FACILITY
-//efine FEATURE_192_VECT_PACKDEC_ENH_2_FACILITY
+#define FEATURE_192_VECT_PACKDEC_ENH_2_FACILITY
 #define FEATURE_193_BEAR_ENH_FACILITY
 //efine FEATURE_194_RESET_DAT_PROT_FACILITY
 //efine FEATURE_196_PROC_ACT_FACILITY
@@ -234,6 +235,45 @@
 #define FEATURE_TRACING
 #define FEATURE_VIRTUAL_ARCHITECTURE_LEVEL
 #define FEATURE_VM_BLOCKIO
+/* INTEL X64 processor? */
+#if defined( __x86_64__ ) || defined( _M_X64 )
+  /* MSVC on X64: intrinsics are available and should be used for optimization */
+  #if defined( _MSC_VER ) || defined( _MSVC_ )
+    #define FEATURE_V128_SSE  1
+
+    /* For MSC, assume all HW features are recognized  */
+    /* at compile time and runtime hardware checks are */
+    /* used to determine whether or not an instinsic   */
+    /* is executed.                                    */
+
+    /* Compile-time Hardware Feature: Carry-less multiply */
+    #define FEATURE_HW_CLMUL  1
+
+
+  /* gcc/clang on X64: intrinsics are available and should be used for optimization */
+  /*                   Being conservative: require SSE 4.2 to be available to allow */
+  /*                   any SSE intrinsic to be used for optimization.               */
+  #elif defined( __GNUC__ ) && defined( __SSE4_2__ )
+    #define FEATURE_V128_SSE  1
+
+    /* For Gcc/Clang, check for compiler recognized HW features */
+    /* to avoid compile errors                                  */
+
+    /* Compile-time Hardware Feature: Carry-less multiply */
+    #if defined(__PCLMUL__)
+        #define FEATURE_HW_CLMUL  1
+    #endif
+
+  #endif
+  /* compile debug message: are we using intrinsics? */
+  #if 0
+    #if defined( FEATURE_V128_SSE )
+      #pragma message("FEATURE_V128_SSE is defined.  Using intrinsics." )
+    #else
+      #pragma message("No intrinsics are included for optimization; only compiler optimization")
+    #endif
+  #endif
+#endif
 #define FEATURE_WAITSTATE_ASSIST
 #define FEATURE_ZVM_ESSA
 

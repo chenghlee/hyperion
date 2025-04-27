@@ -283,6 +283,12 @@ OPCD_DLL_IMPORT int iprint_router_func( int arch_mode, BYTE inst[], char mnemoni
             case 0xE5:                                              \
                 used = sysblk.imaps.imape5[(_inst)[1]]++;           \
                 break;                                              \
+            case 0xE6:                                              \
+                if (sysblk.arch_mode == ARCH_900_IDX)               \
+                    used = sysblk.imaps.imape6[(_inst)[5]]++;       \
+                else                                                \
+                    used = sysblk.imaps.imape6[(_inst)[1]]++;       \
+                break;                                              \
             case 0xE7:                                              \
                 used = sysblk.imaps.imape7[(_inst)[5]]++;           \
                 break;                                              \
@@ -378,6 +384,9 @@ OPCD_DLL_IMPORT int iprint_router_func( int arch_mode, BYTE inst[], char mnemoni
             case 0xE5:                                              \
                 sysblk.imaps.imape5T[(_inst)[1]]+=elapsed_usecs;    \
                 break;                                              \
+            case 0xE6:                                              \
+                sysblk.imaps.imape6T[(_inst)[5]]+=elapsed_usecs;    \
+                break;                                              \
             case 0xE7:                                              \
                 sysblk.imaps.imape7T[(_inst)[5]]+=elapsed_usecs;    \
                 break;                                              \
@@ -412,6 +421,7 @@ OPCD_DLL_IMPORT int iprint_router_func( int arch_mode, BYTE inst[], char mnemoni
 
 #if defined( _FEATURE_SIE )
 
+  #define SIE_ACTIVE( _regs )       ((_regs)->sie_active)
   #define SIE_MODE( _regs )         ((_regs)->sie_mode)
   #define SIE_STATE( _regs )        ((_regs)->sie_state)
 
@@ -453,6 +463,7 @@ OPCD_DLL_IMPORT int iprint_router_func( int arch_mode, BYTE inst[], char mnemoni
 
 #else // !defined( _FEATURE_SIE )
 
+  #define SIE_ACTIVE(        _regs )                (0)
   #define SIE_MODE(          _regs )                (0)
   #define SIE_STATE(         _regs )                (0)
 
@@ -477,13 +488,6 @@ OPCD_DLL_IMPORT int iprint_router_func( int arch_mode, BYTE inst[], char mnemoni
   #define MULTIPLE_CONTROLLED_DATA_SPACE( _regs )   (0)
 #endif
 
-#if defined( FEATURE_SIE )
-  #undef  SIE_ACTIVE
-  #define SIE_ACTIVE( _regs )     ((_regs)->sie_active)
-#else
-  #undef  SIE_ACTIVE
-  #define SIE_ACTIVE( _regs )     (0)
-#endif
 
 /*-------------------------------------------------------------------*/
 /*                   Instruction "FOOTPRINT"                         */
@@ -798,15 +802,18 @@ do { \
  #define CSWAP16(_x)    (_x)            // (result ALWAYS big endian)
  #define CSWAP32(_x)    (_x)            // (result ALWAYS big endian)
  #define CSWAP64(_x)    (_x)            // (result ALWAYS big endian)
+ #define CSWAP128(_x)   (_x)            // (result ALWAYS big endian)
 #else
  #define CSWAP16(_x)    bswap_16(_x)    // (result ALWAYS big endian)
  #define CSWAP32(_x)    bswap_32(_x)    // (result ALWAYS big endian)
  #define CSWAP64(_x)    bswap_64(_x)    // (result ALWAYS big endian)
+ #define CSWAP128(_x)   bswap_128(_x)   // (result ALWAYS big endian)
 #endif
 
  #define SWAP16(_x)     bswap_16(_x)    // (result OPPOSITE of input)
  #define SWAP32(_x)     bswap_32(_x)    // (result OPPOSITE of input)
  #define SWAP64(_x)     bswap_64(_x)    // (result OPPOSITE of input)
+ #define SWAP128(_x)    bswap_128(_x)   // (result OPPOSITE of input)
 
  #define SWAP_OFF_T(o)  (sizeof(o) <= 4 ? SWAP32((U32)o) : SWAP64(o))
 
@@ -826,11 +833,13 @@ do { \
 #define FETCH_FW( _val, _stor )     (_val) = fetch_fw( _stor )
 #define FETCH_F3( _val, _stor )     (_val) = fetch_f3( _stor )
 #define FETCH_DW( _val, _stor )     (_val) = fetch_dw( _stor )
+#define FETCH_QW( _val, _stor )     (_val) = fetch_qw( _stor )
 
 #define STORE_HW( _stor, _val )     store_hw( _stor, _val )
 #define STORE_FW( _stor, _val )     store_fw( _stor, _val )
 #define STORE_F3( _stor, _val )     store_f3( _stor, _val )
 #define STORE_DW( _stor, _val )     store_dw( _stor, _val )
+#define STORE_QW( _stor, _val )     store_qw( _stor, _val )
 
 /*-------------------------------------------------------------------*/
 /*            CKD/CCKD header field FETCH/STORE macros               */
@@ -2073,51 +2082,6 @@ do {                                                                  \
 /*               (end floating-point helper macros)                  */
 /*-------------------------------------------------------------------*/
 
-/*-------------------------------------------------------------------*/
-/*        Special FPR2I/FPREX handling for HERC_370_EXTENSION        */
-/*-------------------------------------------------------------------*/
-#undef FPR2I
-#undef FPREX
-#if defined( FEATURE_BASIC_FP_EXTENSIONS )
-
-  // 390 or zArch -OR- 370 with the "FEATURE_370_EXTENSION" BUILD
-  // option #defined, which causes the "FEATURE_BASIC_FP_EXTENSIONS"
-  // BUILD to necessarily ALSO be #defined, forcing us to check if
-  // the "HERC_370_EXTENSION" facility is enabled or not.
-  //
-  // PLEASE NOTE that enabling the "HERC_370_EXTENSION" facility
-  // causes nonconformant/incorrect S/370 floating point behavior!
-
-  #define FPR2I(_r)     /* Convert fpr to index */                    \
-  ((0                                                                 \
-      || ARCH_370_IDX != sysblk.arch_mode                             \
-      || FACILITY_ENABLED_ARCH( HERC_370_EXTENSION, ARCH_370_IDX )    \
-  )                                                                   \
-  ? ((_r) << 1) : (_r))
-
-  #define FPREX         /* Offset of extended register */             \
-  ((0                                                                 \
-      || ARCH_370_IDX != sysblk.arch_mode                             \
-      || FACILITY_ENABLED_ARCH( HERC_370_EXTENSION, ARCH_370_IDX )    \
-  )                                                                   \
-  ? 4 : 2 )
-
-#else // !defined( FEATURE_BASIC_FP_EXTENSIONS )
-
-  // S/370 without the "FEATURE_370_EXTENSION" BUILD option defined,
-  // which causes the "FEATURE_BASIC_FP_EXTENSIONS" BUILD option to
-  // NOT be #defined, which provides normal S/370 behavior.
-
-  #define FPR2I(_r)     (_r)        /* Convert fpr to index */
-  #define FPREX           2         /* Offset of extended register */
-
-#endif // defined( FEATURE_BASIC_FP_EXTENSIONS)
-/*-------------------------------------------------------------------*/
-/*     (end special fpr2i/fprex handling for herc_370_extension)     */
-/*-------------------------------------------------------------------*/
-
-
-
 #define TLBIX(_addr) (((VADR_L)(_addr) >> TLB_PAGESHIFT) & TLB_MASK)
 
 #define MAINADDR(_main, _addr) \
@@ -2130,6 +2094,52 @@ do {                                                                  \
 
 #define MAIN_TO_ABS(_main)  ((U64)((BYTE*)(_main) - sysblk.mainstor))
 
+/*-------------------------------------------------------------------*/
+/*              zVector Facility                                     */
+/*-------------------------------------------------------------------*/
+#if defined( _FEATURE_129_ZVECTOR_FACILITY )
+
+    /* Program check if vector instructions are executed when TXF    */
+    /* constraint mode, or if the vector enablement control (bit     */
+    /* 46) and the AFP control (bit 45) in control register zero     */
+    /* are not set to one.                                           */
+
+  #if defined( _FEATURE_SIE )
+
+    #define ZVECTOR_CHECK(_regs)                                               \
+        TXF_INSTR_CHECK(_regs);                                                \
+        if (0                                                                  \
+            || !((_regs)->CR(0) & CR0_VOP)                                     \
+            || !((_regs)->CR(0) & CR0_AFP)                                     \
+            || (SIE_MODE((_regs)) && (0                                        \
+                                      || !(HOST(_regs)->CR(0) & CR0_VOP)       \
+                                      || !(HOST(_regs)->CR(0) & CR0_AFP)))     \
+        )                                                                      \
+        {                                                                      \
+            (_regs)->dxc = DXC_VECTOR_INSTRUCTION;                             \
+            (_regs)->program_interrupt( (_regs), PGM_DATA_EXCEPTION);          \
+        }
+
+  #else /* !defined( _FEATURE_SIE ) */
+
+    #define ZVECTOR_CHECK(_regs)                                               \
+        TXF_INSTR_CHECK(_regs);                                                \
+        if (0                                                                  \
+            || !((_regs)->CR(0) & CR0_VOP)                                     \
+            || !((_regs)->CR(0) & CR0_AFP)                                     \
+        )                                                                      \
+        {                                                                      \
+            (_regs)->dxc = DXC_VECTOR_INSTRUCTION;                             \
+            (_regs)->program_interrupt( (_regs), PGM_DATA_EXCEPTION);          \
+        }
+
+  #endif /* !defined( _FEATURE_SIE ) */
+
+    /* Debug end of vector instruction execution                     */
+
+    #define ZVECTOR_END(_regs)  /* (do nothing) */
+
+#endif /*defined( _FEATURE_129_ZVECTOR_FACILITY )*/
 
 /*-------------------------------------------------------------------*/
 /*        Perform invalidation after storage key update...           */
@@ -2143,6 +2153,7 @@ do {                                                                  \
 /*  tighter than what is provided here.                              */
 /*                                                                   */
 /*-------------------------------------------------------------------*/
+
 #define STORKEY_INVALIDATE_LOCKED( _regs, _n )                          \
                                                                         \
  do                                                                     \
@@ -3472,6 +3483,10 @@ DEF_INST( load_logical_and_zero_rightmost_byte );
 DEF_INST( load_and_zero_rightmost_byte );
 #endif
 
+#if defined( FEATURE_057_MSA_EXTENSION_FACILITY_5 )
+DEF_INST( perform_random_number_operation );
+#endif
+
 #if defined( FEATURE_058_MISC_INSTR_EXT_FACILITY_2 )
 DEF_INST( branch_indirect_on_condition );
 DEF_INST( add_long_halfword );
@@ -3552,8 +3567,228 @@ DEF_INST(convert_dfp_ext_to_packed);
 DEF_INST(convert_dfp_long_to_packed);
 #endif
 
+#if defined( FEATURE_129_ZVECTOR_FACILITY )
+DEF_INST(vector_load_element_8);
+DEF_INST(vector_load_element_16);
+DEF_INST(vector_load_element_64);
+DEF_INST(vector_load_element_32);
+DEF_INST(vector_load_logical_element_and_zero);
+DEF_INST(vector_load_and_replicate);
+DEF_INST(vector_load);
+DEF_INST(vector_load_to_block_boundary);
+DEF_INST(vector_store_element_8);
+DEF_INST(vector_store_element_16);
+DEF_INST(vector_store_element_64);
+DEF_INST(vector_store_element_32);
+DEF_INST(vector_store);
+DEF_INST(vector_gather_element_64);
+DEF_INST(vector_gather_element_32);
+DEF_INST(vector_scatter_element_64);
+DEF_INST(vector_scatter_element_32);
+DEF_INST(vector_load_gr_from_vr_element);
+DEF_INST(vector_load_vr_element_from_gr);
+DEF_INST(load_count_to_block_boundary);
+DEF_INST(vector_element_shift_left);
+DEF_INST(vector_element_rotate_left_logical);
+DEF_INST(vector_load_multiple);
+DEF_INST(vector_load_with_length);
+DEF_INST(vector_element_shift_right_logical);
+DEF_INST(vector_element_shift_right_arithmetic);
+DEF_INST(vector_store_multiple);
+DEF_INST(vector_store_with_length);
+DEF_INST(vector_load_element_immediate_8);
+DEF_INST(vector_load_element_immediate_16);
+DEF_INST(vector_load_element_immediate_64);
+DEF_INST(vector_load_element_immediate_32);
+DEF_INST(vector_generate_byte_mask);
+DEF_INST(vector_replicate_immediate);
+DEF_INST(vector_generate_mask);
+DEF_INST(vector_fp_test_data_class_immediate);
+DEF_INST(vector_replicate);
+DEF_INST(vector_population_count);
+DEF_INST(vector_count_trailing_zeros);
+DEF_INST(vector_count_leading_zeros);
+DEF_INST(vector_load_vector);
+DEF_INST(vector_isolate_string);
+DEF_INST(vector_sign_extend_to_doubleword);
+DEF_INST(vector_merge_low);
+DEF_INST(vector_merge_high);
+DEF_INST(vector_load_vr_from_grs_disjoint);
+DEF_INST(vector_sum_across_word);
+DEF_INST(vector_sum_across_doubleword);
+DEF_INST(vector_checksum);
+DEF_INST(vector_sum_across_quadword);
+DEF_INST(vector_and);
+DEF_INST(vector_and_with_complement);
+DEF_INST(vector_or);
+DEF_INST(vector_nor);
+DEF_INST(vector_exclusive_or);
+DEF_INST(vector_element_rotate_and_insert_under_mask);
+DEF_INST(vector_element_rotate_left_logical_vector);
+DEF_INST(vector_element_shift_left_vector);
+DEF_INST(vector_element_shift_right_arithmetic_vector);
+DEF_INST(vector_element_shift_right_logical_vector);
+DEF_INST(vector_shift_left);
+DEF_INST(vector_shift_left_by_byte);
+DEF_INST(vector_shift_left_double_by_bit);
+DEF_INST(vector_shift_left_double_by_byte);
+DEF_INST(vector_shift_right_arithmetic);
+DEF_INST(vector_shift_right_arithmetic_by_byte);
+DEF_INST(vector_shift_right_double_by_bit);
+DEF_INST(vector_shift_right_logical);
+DEF_INST(vector_shift_right_logical_by_byte);
+DEF_INST(vector_find_element_equal);
+DEF_INST(vector_find_element_not_equal);
+DEF_INST(vector_find_any_element_equal);
+DEF_INST(vector_permute_doubleword_immediate);
+DEF_INST(vector_string_range_compare);
+DEF_INST(vector_string_search);
+DEF_INST(vector_permute);
+DEF_INST(vector_select);
+DEF_INST(vector_fp_multiply_and_subtract);
+DEF_INST(vector_fp_multiply_and_add);
+DEF_INST(vector_pack);
+DEF_INST(vector_pack_logical_saturate);
+DEF_INST(vector_pack_saturate);
+DEF_INST(vector_fp_negative_multiply_and_subtract);
+DEF_INST(vector_fp_negative_multiply_and_add);
+DEF_INST(vector_multiply_logical_high);
+DEF_INST(vector_multiply_low);
+DEF_INST(vector_multiply_high);
+DEF_INST(vector_multiply_logical_even);
+DEF_INST(vector_multiply_logical_odd);
+DEF_INST(vector_multiply_even);
+DEF_INST(vector_multiply_odd);
+DEF_INST(vector_multiply_and_add_logical_high);
+DEF_INST(vector_multiply_and_add_low);
+DEF_INST(vector_multiply_and_add_high);
+DEF_INST(vector_multiply_and_add_logical_even);
+DEF_INST(vector_multiply_and_add_logical_odd);
+DEF_INST(vector_multiply_and_add_even);
+DEF_INST(vector_multiply_and_add_odd);
+DEF_INST(vector_galois_field_multiply_sum);
+DEF_INST(vector_add_with_carry_compute_carry);
+DEF_INST(vector_add_with_carry);
+DEF_INST(vector_galois_field_multiply_sum_and_accumulate);
+DEF_INST(vector_subtract_with_borrow_compute_borrow_indication);
+DEF_INST(vector_subtract_with_borrow_indication);
+DEF_INST(vector_fp_convert_to_logical);
+DEF_INST(vector_fp_convert_from_logical);
+DEF_INST(vector_fp_convert_to_fixed);
+DEF_INST(vector_fp_convert_from_fixed);
+DEF_INST(vector_fp_load_lengthened);
+DEF_INST(vector_fp_load_rounded);
+DEF_INST(vector_load_fp_integer);
+DEF_INST(vector_fp_compare_and_signal_scalar);
+DEF_INST(vector_fp_compare_scalar);
+DEF_INST(vector_fp_perform_sign_operation);
+DEF_INST(vector_fp_square_root);
+DEF_INST(vector_unpack_logical_low);
+DEF_INST(vector_unpack_logical_high);
+DEF_INST(vector_unpack_low);
+DEF_INST(vector_unpack_high);
+DEF_INST(vector_test_under_mask);
+DEF_INST(vector_element_compare_logical);
+DEF_INST(vector_element_compare);
+DEF_INST(vector_load_complement);
+DEF_INST(vector_load_positive);
+DEF_INST(vector_fp_subtract);
+DEF_INST(vector_fp_add);
+DEF_INST(vector_fp_divide);
+DEF_INST(vector_fp_multiply);
+DEF_INST(vector_fp_compare_equal);
+DEF_INST(vector_fp_compare_high_or_equal);
+DEF_INST(vector_fp_compare_high);
+DEF_INST(vector_average_logical);
+DEF_INST(vector_add_compute_carry);
+DEF_INST(vector_average);
+DEF_INST(vector_add);
+DEF_INST(vector_subtract_compute_borrow_indication);
+DEF_INST(vector_subtract);
+DEF_INST(vector_compare_equal);
+DEF_INST(vector_compare_high_logical);
+DEF_INST(vector_compare_high);
+DEF_INST(vector_minimum_logical);
+DEF_INST(vector_maximum_logical);
+DEF_INST(vector_minimum);
+DEF_INST(vector_maximum);
+#endif
+
+#if defined(FEATURE_134_ZVECTOR_PACK_DEC_FACILITY)
+DEF_INST(vector_add_decimal);
+DEF_INST(vector_compare_decimal);
+DEF_INST(vector_convert_to_binary_32);
+DEF_INST(vector_convert_to_binary_64);
+DEF_INST(vector_convert_to_decimal_32);
+DEF_INST(vector_convert_to_decimal_64);
+DEF_INST(vector_divide_decimal);
+DEF_INST(vector_load_immediate_decimal);
+DEF_INST(vector_load_rightmost_with_length);
+DEF_INST(vector_multiply_and_shift_decimal);
+DEF_INST(vector_multiply_decimal);
+DEF_INST(vector_pack_zoned);
+DEF_INST(vector_perform_sign_operation_decimal);
+DEF_INST(vector_remainder_decimal);
+DEF_INST(vector_shift_and_divide_decimal);
+DEF_INST(vector_shift_and_round_decimal);
+DEF_INST(vector_shift_and_round_decimal_register);
+DEF_INST(vector_store_rightmost_with_length);
+DEF_INST(vector_subtract_decimal);
+DEF_INST(vector_test_decimal);
+DEF_INST(vector_unpack_zoned);
+#endif
+
+#if defined( FEATURE_135_ZVECTOR_ENH_FACILITY_1 )
+DEF_INST(vector_bit_permute);
+DEF_INST(vector_multiply_sum_logical);
+DEF_INST(vector_not_exclusive_or);
+DEF_INST(vector_nand);
+DEF_INST(vector_or_with_complement);
+DEF_INST(vector_fp_maximum);
+DEF_INST(vector_fp_minimum);
+#endif
+
 #if defined( FEATURE_145_INS_REF_BITS_MULT_FACILITY )
 DEF_INST( insert_reference_bits_multiple );
+#endif
+
+#if defined( FEATURE_148_VECTOR_ENH_FACILITY_2 )
+DEF_INST(vector_load_byte_reversed_element_16);
+DEF_INST(vector_load_byte_reversed_element_64);
+DEF_INST(vector_load_byte_reversed_element_32);
+DEF_INST(vector_load_byte_reversed_element_and_zero);
+DEF_INST(vector_load_byte_reversed_element_and_replicate);
+DEF_INST(vector_load_byte_reversed_elements);
+DEF_INST(vector_load_elements_reversed);
+DEF_INST(vector_store_byte_reversed_element_16);
+DEF_INST(vector_store_byte_reversed_element_64);
+DEF_INST(vector_store_byte_reversed_element_32);
+DEF_INST(vector_store_byte_reversed_elements);
+DEF_INST(vector_store_elements_reversed);
+#endif
+
+#if defined(FEATURE_152_VECT_PACKDEC_ENH_FACILITY)
+DEF_INST(vector_load_rightmost_with_length_reg);
+DEF_INST(vector_store_rightmost_with_length_reg);
+#endif
+
+#if defined(FEATURE_165_NNET_ASSIST_FACILITY)
+DEF_INST(neural_network_processing_assist);
+DEF_INST(vector_fp_convert_to_nnp);
+DEF_INST(vector_fp_convert_and_lengthen_from_nnp_high);
+DEF_INST(vector_fp_convert_from_nnp);
+DEF_INST(vector_fp_convert_and_lengthen_from_nnp_low);
+DEF_INST(vector_fp_convert_and_round_to_nnp);
+#endif
+
+#if defined(FEATURE_192_VECT_PACKDEC_ENH_2_FACILITY)
+DEF_INST(vector_count_leading_zero_digits);
+DEF_INST(vector_unpack_zoned_high);
+DEF_INST(vector_unpack_zoned_low);
+DEF_INST(vector_pack_zoned_register);
+DEF_INST(decimal_scale_and_convert_to_hfp);
+DEF_INST(decimal_scale_and_convert_and_split_to_hfp);
+DEF_INST(vector_convert_hfp_to_scaled_decimal);
 #endif
 
 #if defined( FEATURE_193_BEAR_ENH_FACILITY )

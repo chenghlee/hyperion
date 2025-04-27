@@ -2,7 +2,7 @@
 /*              (C) Copyright Jan Jaeger, 1999-2012                  */
 /*              (C) Copyright "Fish" (David B. Trout), 2002-2009     */
 /*              (C) Copyright TurboHercules, SAS 2010-2011           */
-/*              (C) and others 2011-2023                             */
+/*              (C) and others 2011-2024                             */
 /*              CE mode functions                                    */
 /*                                                                   */
 /*   Released under "The Q Public License Version 1"                 */
@@ -2125,6 +2125,8 @@ int ipending_cmd(int argc, char *argv[], char *cmdline)
                 curpsw[0], curpsw[1], curpsw[2], curpsw[3],
                 curpsw[4], curpsw[5], curpsw[6], curpsw[7]);
         }
+        // "Processor %s%02X: psw %s"
+        STRLCAT( buf, "\nHHC00869I" );
         WRMSG( HHC00869, "I", PTYPSTR(sysblk.regs[i]->cpuad), sysblk.regs[i]->cpuad, buf );
 
         /*--------------------------*/
@@ -2179,6 +2181,9 @@ int ipending_cmd(int argc, char *argv[], char *cmdline)
                    curpsw[0], curpsw[1], curpsw[2], curpsw[3],
                    curpsw[4], curpsw[5], curpsw[6], curpsw[7]);
             }
+
+            // "Processor %s%02X: psw %s"
+            STRLCAT( buf, "\nHHC00869I" );
             WRMSG(HHC00869, "I", "IE", sysblk.regs[i]->cpuad, buf);
         }
     }
@@ -2504,9 +2509,7 @@ char buf[512];
             return 0;
         }
 
-        if (afp) reg_num <<= 1; /* (double) */
-        regs->fpr[reg_num]   = (U32) (reg_value >> 32);
-        regs->fpr[reg_num+1] = (U32) (reg_value & 0xFFFFFFFFULL);
+        regs->FPR_L(reg_num) = reg_value;
     }
 
     display_fregs( regs, buf, sizeof(buf), "HHC02270I " );
@@ -2622,7 +2625,76 @@ char buf[512];
 
     return 0;
 }
+/*-------------------------------------------------------------------*/
+/* vr command - display vector registers                             */
+/*-------------------------------------------------------------------*/
+int vr_cmd( int argc, char* argv[], char* cmdline )
+{
+    REGS* regs;
+    char  buf[ 1536 ];
 
+    UNREFERENCED( cmdline );
+
+    obtain_lock( &sysblk.cpulock[ sysblk.pcpu ]);
+    {
+        if (!IS_CPU_ONLINE( sysblk.pcpu ))
+        {
+            release_lock( &sysblk.cpulock[ sysblk.pcpu ]);
+            // "Processor %s%02X: processor is not %s"
+            WRMSG( HHC00816, "W", PTYPSTR( sysblk.pcpu ), sysblk.pcpu, "online" );
+            return 0;
+        }
+
+        regs = sysblk.regs[ sysblk.pcpu ];
+
+        if (argc > 1)
+        {
+            struct REC
+            {
+                QW      vfp[1];        // Vector registers
+            }
+            rec;
+
+
+            int   reg_num;
+            BYTE  equal_sign, c;
+
+            if (argc > 2)
+            {
+                release_lock( &sysblk.cpulock[ sysblk.pcpu ]);
+                // "Invalid argument '%s'%s"
+                WRMSG( HHC02205, "E", argv[1], "" );
+                return 0;
+            }
+
+            if (0
+                || sscanf( argv[1], "%d%c%"SCNx64".%"SCNx64"%c",
+                    &reg_num, &equal_sign,
+                    &rec.VR_D(0, 0),
+                    &rec.VR_D(0, 1),
+                    &c) != 4
+                || reg_num < 0
+                || reg_num > 31
+                || '=' != equal_sign
+            )
+            {
+                release_lock( &sysblk.cpulock[ sysblk.pcpu ]);
+                // "Invalid argument '%s'%s"
+                WRMSG( HHC02205, "E", argv[1], "" );
+                return 0;
+            }
+
+            regs->VR_Q( reg_num ) = rec.VR_Q(0);
+        }
+
+        display_vregs( regs, buf, sizeof( buf ), "HHC02266I " );
+        WRMSG( HHC02266, "I", "Vector registers" );
+        LOGMSG( "%s", buf );
+    }
+    release_lock( &sysblk.cpulock[ sysblk.pcpu ]);
+
+    return 0;
+}
 
 /*-------------------------------------------------------------------*/
 /* i command - generate I/O attention interrupt for device           */
@@ -2701,9 +2773,12 @@ typedef struct {
 /*-------------------------------------------------------------------*/
 /* icount command sort callback (Descending by exec count)           */
 /*-------------------------------------------------------------------*/
-static int icount_cmd_sort(const ICOUNT_INSTR *x, const ICOUNT_INSTR *y)
+static int icount_cmd_sort(const void *x, const void *y)
 {
-    return (x->count < y->count) ? +1 : -1;
+    const ICOUNT_INSTR *X = (const ICOUNT_INSTR *) x;
+    const ICOUNT_INSTR *Y = (const ICOUNT_INSTR *) y;
+
+    return (X->count < Y->count) ? +1 : -1;
 }
 
 /*-------------------------------------------------------------------*/
@@ -2825,6 +2900,7 @@ int icount_cmd( int argc, char* argv[], char* cmdline )
             ICOUNT_COLLECT_CASE( 0xE3, imape3, imape3T, 256, 5 )
             ICOUNT_COLLECT_CASE( 0xE4, imape4, imape4T, 256, 1 )
             ICOUNT_COLLECT_CASE( 0xE5, imape5, imape5T, 256, 1 )
+            ICOUNT_COLLECT_CASE( 0xE6, imape6, imape6T, 256, 5 )
             ICOUNT_COLLECT_CASE( 0xE7, imape7, imape7T, 256, 5 )
             ICOUNT_COLLECT_CASE( 0xEB, imapeb, imapebT, 256, 5 )
             ICOUNT_COLLECT_CASE( 0xEC, imapec, imapecT, 256, 5 )
@@ -2890,6 +2966,7 @@ int icount_cmd( int argc, char* argv[], char* cmdline )
             case 0xE3:
             case 0xE4:
             case 0xE5:
+            case 0xE6:
             case 0xE7:
             case 0xEB:
             case 0xEC:

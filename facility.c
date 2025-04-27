@@ -433,7 +433,7 @@ FT( NONE, NONE, NONE, 055_IBM_INTERNAL )
 FT( NONE, NONE, NONE, 056_UNDEFINED )
 
 #if defined(  FEATURE_057_MSA_EXTENSION_FACILITY_5 )
-FT( NONE, NONE, NONE, 057_MSA_EXTENSION_5 )
+FT( Z90X, Z900, NONE, 057_MSA_EXTENSION_5 )
 #endif
 
 #if defined(  FEATURE_058_MISC_INSTR_EXT_FACILITY_2 )
@@ -554,7 +554,7 @@ FT( NONE, NONE, NONE, 127_UNDEFINED )
 FT( NONE, NONE, NONE, 128_IBM_INTERNAL )
 
 #if defined(  FEATURE_129_ZVECTOR_FACILITY )
-FT( NONE, NONE, NONE, 129_ZVECTOR )
+FT( Z900, Z900, NONE, 129_ZVECTOR )
 #endif
 
 #if defined(  FEATURE_130_INSTR_EXEC_PROT_FACILITY )
@@ -576,11 +576,11 @@ FT( NONE, NONE, NONE, 133_GUARDED_STORAGE )
 #endif
 
 #if defined(  FEATURE_134_ZVECTOR_PACK_DEC_FACILITY )
-FT( NONE, NONE, NONE, 134_ZVECTOR_PACK_DEC )
+FT( Z900, Z900, NONE, 134_ZVECTOR_PACK_DEC )
 #endif
 
 #if defined(  FEATURE_135_ZVECTOR_ENH_FACILITY_1 )
-FT( NONE, NONE, NONE, 135_ZVECTOR_ENH_1 )
+FT( Z900, Z900, NONE, 135_ZVECTOR_ENH_1 )
 #endif
 
 FT( NONE, NONE, NONE, 136_UNDEFINED )
@@ -618,7 +618,7 @@ FT( NONE, NONE, NONE, 146_MSA_EXTENSION_8 )
 FT( NONE, NONE, NONE, 147_IBM_RESERVED )
 
 #if defined(  FEATURE_148_VECTOR_ENH_FACILITY_2 )
-FT( NONE, NONE, NONE, 148_VECTOR_ENH_2 )
+FT( Z900, Z900, NONE, 148_VECTOR_ENH_2 )
 #endif
 
 #if defined(  FEATURE_149_MOVEPAGE_SETKEY_FACILITY )
@@ -634,7 +634,7 @@ FT( NONE, NONE, NONE, 151_DEFLATE_CONV )
 #endif
 
 #if defined(  FEATURE_152_VECT_PACKDEC_ENH_FACILITY )
-FT( NONE, NONE, NONE, 152_VECT_PACKDEC_ENH )
+FT( Z900, Z900, NONE, 152_VECT_PACKDEC_ENH )
 #endif
 
 FT( NONE, NONE, NONE, 153_IBM_INTERNAL )
@@ -663,7 +663,7 @@ FT( NONE, NONE, NONE, 163_UNDEFINED )
 FT( NONE, NONE, NONE, 164_UNDEFINED )
 
 #if defined(  FEATURE_165_NNET_ASSIST_FACILITY )
-FT( NONE, NONE, NONE, 165_NNET_ASSIST )
+FT( Z900, Z900, NONE, 165_NNET_ASSIST )
 #endif
 
 FT( NONE, NONE, NONE, 166_UNDEFINED )
@@ -701,7 +701,7 @@ FT( NONE, NONE, NONE, 190_UNDEFINED )
 FT( NONE, NONE, NONE, 191_UNDEFINED )
 
 #if defined(  FEATURE_192_VECT_PACKDEC_ENH_2_FACILITY )
-FT( NONE, NONE, NONE, 192_VECT_PACKDEC_ENH_2 )
+FT( Z900, Z900, NONE, 192_VECT_PACKDEC_ENH_2 )
 #endif
 
 #if defined(  FEATURE_193_BEAR_ENH_FACILITY )
@@ -3966,6 +3966,7 @@ BEG_DIS_FAC_INS_FUNC( instr129 )
     DIS_FAC_INS( E73E, "VSTM    E73E  VECTOR STORE MULTIPLE" );
     DIS_FAC_INS( E73F, "VSTL    E73F  VECTOR STORE WITH LENGTH" );
     DIS_FAC_INS( E78A, "VSTRC   E78A  VECTOR STRING RANGE COMPARE" );
+    DIS_FAC_INS( E78B, "VSTRS   E78B  VECTOR STRING SEARCH" );
     DIS_FAC_INS( E7F7, "VS      E7F7  VECTOR SUBTRACT" );
     DIS_FAC_INS( E7F5, "VSCBI   E7F5  VECTOR SUBTRACT COMPUTE BORROW INDICATION" );
     DIS_FAC_INS( E7BD, "VSBCBI  E7BD  VECTOR SUBTRACT WITH BORROW COMPUTE BORROW INDICATION" );
@@ -4408,6 +4409,7 @@ static void enable_disable_herc37X( bool enable )
         STFL_045_INTERLOCKED_ACCESS_1,
         STFL_045_LOAD_STORE_ON_COND_1,
         STFL_045_POPULATION_COUNT,
+        STFL_057_MSA_EXTENSION_5,
         STFL_076_MSA_EXTENSION_3,
         STFL_077_MSA_EXTENSION_4,
     };
@@ -4585,11 +4587,19 @@ int facility_enable_disable( int argc, char* argv[] )
         /* Then fall through to enable/disable 370X itself */
     }
 
-    /* Enable or disable the requested facility */
+    /* Enable or disable the requested facility in SYSBLK */
     if (enable)
         sysblk.facility_list[ at->num ][ fbyte ] |= fbit;
     else
         sysblk.facility_list[ at->num ][ fbyte ] &= ~fbit;
+
+    /* Refresh each online CPU's facility list with updated list */
+    {
+        int  cpu;
+        for (cpu=0; cpu < sysblk.maxcpu; cpu++)
+            if (IS_CPU_ONLINE( cpu ))
+                init_cpu_facilities( sysblk.regs[ cpu ] );
+    }
 
     /* Update flags */
     enabled  = sysblk.facility_list[ at->num ][ fbyte ] & fbit;

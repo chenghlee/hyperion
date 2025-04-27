@@ -21,6 +21,7 @@
 /*     fetch_hw, fetch_hw_noswap, store_hw, store_hw_noswap          */
 /*     fetch_fw, fetch_fw_noswap, store_fw, store_fw_noswap          */
 /*     fetch_dw, fetch_dw_noswap, store_dw, store_dw_noswap          */
+/*     fetch_qw, fetch_qw_noswap, store_qw, store_qw_noswap          */
 /*                                                                   */
 /*   64-bit architectures would normally not need to specify any     */
 /*   of the fetch_ or store_ variants.                               */
@@ -534,12 +535,16 @@ inline int cmpxchg16_aarch64(U64 *old1, U64 *old2, U64 new1, U64 new2, volatile 
     int result = 1;
     U64 expected1 = *old1;
     U64 expected2 = *old2;
-    __asm __volatile(
-        "ldaxp %[old1], %[old2], [%[ptr]]"
-            : [old1] "+r" (*old1), [old2] "+r" (*old2)
-            : [ptr] "r" (ptr));
-    if ( expected1 == *old1 && expected2 == *old2 )
+    while ( result )
     {
+        __asm __volatile(
+            "ldaxp %[old1], %[old2], [%[ptr]]"
+                : [old1] "+r" (*old1), [old2] "+r" (*old2)
+                : [ptr] "r" (ptr));
+        if ( expected1 != *old1 || expected2 != *old2 )
+        {
+            return 1;
+        }
         __asm __volatile(
             "stlxp %w[result], %[new1], %[new2], [%[ptr]]"
                 : [result] "+r" (result)
@@ -841,6 +846,39 @@ inline void store_dw_e2k_noswap ( volatile void* ptr, U64 value )
   #define store_dw(_p, _v) store_dw_noswap((_p), CSWAP64((_v)))
 #endif
 
+/*-------------------------------------------------------------------
+ * fetch_qw_noswap and fetch_qw
+ *-------------------------------------------------------------------*/
+#if !defined(fetch_qw_noswap)
+  #if defined(fetch_qw)
+    #define fetch_qw_noswap(_p) CSWAP128(fetch_qw((_p)))
+  #else
+    inline QW fetch_qw_noswap(const void *ptr) {
+      QW value;
+      memcpy(&value, (BYTE *)ptr, 16);
+      return value;
+    }
+  #endif
+#endif
+#if !defined(fetch_qw)
+  #define fetch_qw(_p) CSWAP128(fetch_qw_noswap((_p)))
+#endif
+
+/*-------------------------------------------------------------------
+ * store_qw_noswap and store_qw
+ *-------------------------------------------------------------------*/
+#if !defined(store_qw_noswap)
+  #if defined(store_qw)
+    #define store_qw_noswap(_p, _v) store_qw((_p), CSWAP128(_v))
+  #else
+    inline void store_qw_noswap(void *ptr, QW value) {
+      memcpy((BYTE *)ptr, (BYTE *)&value, 16);
+    }
+  #endif
+#endif
+#if !defined(store_qw)
+  #define store_qw(_p, _v) store_qw_noswap((_p), CSWAP128((_v)))
+#endif
 /*-------------------------------------------------------------------
  * cmpxchg1
  *-------------------------------------------------------------------*/

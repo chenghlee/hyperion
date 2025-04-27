@@ -1,6 +1,6 @@
 /*  HSCUTL.C    (C) Copyright Ivan Warren & Others, 2003-2012        */
 /*              (C) Copyright TurboHercules, SAS 2010-2011           */
-/*              (C) and others 2011-2023                             */
+/*              (C) and others 2011-2024                             */
 /*              Hercules Platform Port & Misc Functions              */
 /*                                                                   */
 /*   Released under "The Q Public License Version 1"                 */
@@ -1898,6 +1898,27 @@ DLL_EXPORT int make_asciiz( char* dest, int destlen, BYTE* src, int srclen )
 }
 
 /*-------------------------------------------------------------------*/
+/* Subroutine to convert DEVBLK halt or clear type to string         */
+/*-------------------------------------------------------------------*/
+DLL_EXPORT const char* str_HOC( int hoc )
+{
+    static const char* hoc_str[6] =
+    {
+        // Must match DEVBLK "hoc" value!
+
+        "(none)",
+        "HSCH",
+        "CSCH",
+        "HIO or HDV",
+        "HALT",
+        "Device Reset"
+    };
+    if (hoc >= 0 && hoc < (int) _countof( hoc_str ))
+        return hoc_str[ hoc ];
+    return "???";
+}
+
+/*-------------------------------------------------------------------*/
 /*                        idx_snprintf                               */
 /*      Fix for "Potential snprintf buffer overflow" #457            */
 /*-------------------------------------------------------------------*/
@@ -2563,6 +2584,101 @@ DLL_EXPORT bool are_big_endian()
     }
     test = {0x01020304};
     return (0x01 == test.b[0]);
+}
+
+/*-------------------------------------------------------------------*/
+/*      NON-Windows implementation of "IsDebuggerPresent()"          */
+/*-------------------------------------------------------------------*/
+
+#if !defined( _MSVC_ ) // Linux, etc..
+
+#include <sys/ptrace.h>
+
+#if defined( __APPLE__ )
+  #include <sys/sysctl.h>
+#endif
+
+static bool IsDebuggerPresent()
+{
+#if defined( __APPLE__ )
+
+    // macOS
+
+    int                mib[4];
+    struct kinfo_proc  info;
+    size_t             size = sizeof( info );
+
+    mib[0] = CTL_KERN;
+    mib[1] = KERN_PROC;
+    mib[2] = KERN_PROC_PID;
+    mib[3] = getpid();
+
+    sysctl( mib, 4, &info, &size, NULL, 0 );
+
+    return ((info.kp_proc.p_flag & P_TRACED) != 0);
+
+#elif defined( __FreeBSD__ ) || defined( __OpenBSD__ )
+
+    // BSD
+
+    int                mib[4];
+    struct kinfo_proc  info;
+    size_t             size = sizeof( info );
+
+    mib[0] = CTL_KERN;
+    mib[1] = KERN_PROC;
+    mib[2] = KERN_PROC_PID;
+    mib[3] = getpid();
+
+    sysctl( mib, 4, &info, &size, NULL, 0 );
+
+    return ((info.ki_flag & P_TRACED) != 0);
+
+#elif defined( __linux__ )
+
+    // Linux
+
+    FILE*  f;
+    char   buf[ 256 ];
+    int    tracer_pid;
+    bool   debugger_is_present = false;
+
+    snprintf( buf, sizeof( buf ), "/proc/%d/status", getpid() );
+
+    if ((f = fopen( buf, "r" )))
+    {
+        while (fgets( buf, sizeof( buf ), f ))
+        {
+            if (strncmp( buf, "TracerPid:", 10 ) == 0)
+            {
+                tracer_pid = atoi( &buf[10] );
+
+                if (tracer_pid != 0)
+                {
+                    debugger_is_present = true;
+                    break;
+                }
+            }
+        }
+
+        fclose( f );
+    }
+
+    return debugger_is_present;
+
+#endif
+
+} // IsDebuggerPresent
+
+#endif // !MSVC
+
+/*-------------------------------------------------------------------*/
+/*      Determine if running under the control of a debugger         */
+/*-------------------------------------------------------------------*/
+
+DLL_EXPORT bool check_if_debugger_is_present()
+{
+    return (sysblk.is_debugger_present = IsDebuggerPresent() ? true : false);
 }
 
 /*********************************************************************/
@@ -3816,7 +3932,9 @@ DLL_EXPORT bool tf_2269( REGS* regs, BYTE* inst )
 DLL_EXPORT bool tf_2270( REGS* regs )
 {
     TF02270 rec;
-    memcpy( rec.fpr, regs->fpr, sizeof( rec.fpr ));
+    int  i;
+    for (i=0; i < 16; ++i)
+        memcpy( &rec.fpr[i], &regs->FPR_L(i), sizeof( rec.fpr[0] ));
     rec.afp = (regs->CR(0) & CR0_AFP) ? true : false;
     return tf_write( regs, &rec, sizeof( TF02270 ), 2270 );
 }
@@ -3850,6 +3968,16 @@ DLL_EXPORT bool tf_2276( REGS* regs )
     rec.fpc = regs->fpc;
     rec.afp = (regs->CR(0) & CR0_AFP) ? true : false;
     return tf_write( regs, &rec, sizeof( TF02276 ), 2276 );
+}
+
+//---------------------------------------------------------------------
+//               Vector Registers
+//---------------------------------------------------------------------
+DLL_EXPORT bool tf_2266( REGS* regs )
+{
+    TF02266 rec;
+    memcpy( rec.vfp, regs->vfp, sizeof( rec.vfp ));
+    return tf_write( regs, &rec, sizeof( TF02266 ), 2266 );
 }
 
 //---------------------------------------------------------------------
@@ -4188,6 +4316,9 @@ DLL_EXPORT size_t  tf_MAX_RECSIZE()
 
     if (max_recsize < sizeof( TF02276 ))
         max_recsize = sizeof( TF02276 );
+
+    if (max_recsize < sizeof( TF02266 ))
+        max_recsize = sizeof( TF02266 );
 
     if (max_recsize < sizeof( TF02324))
         max_recsize = sizeof( TF02324 );
@@ -4731,6 +4862,12 @@ DLL_EXPORT void tf_swap_rec( TFHDR* hdr, U16 msgnum )
         }
         break;
 
+        case 2266:
+        {
+            // (nothing to swap!)
+        }
+        break;
+
         case 2269:
         {
             TF02269* rec = (TF02269*) hdr;
@@ -4744,8 +4881,8 @@ DLL_EXPORT void tf_swap_rec( TFHDR* hdr, U16 msgnum )
         {
             TF02270* rec = (TF02270*) hdr;
             int  i;
-            for (i=0; i < 32; ++i)
-                rec->fpr[i]   = SWAP32( rec->fpr[i] );
+            for (i=0; i < 16; ++i)
+                rec->fpr[i].D  = SWAP64( rec->fpr[i].D );
         }
         break;
 

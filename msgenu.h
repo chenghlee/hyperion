@@ -257,7 +257,8 @@ LOGM_DLL_IMPORT int  panel_command_capture( char* cmd, char** resp, bool quiet )
 #define HHC00023 "Invalid/unsupported option: %s"
 #define HHC00024 "Unrecognized option: %s"
 #define HHC00025 "Invalid help option argument: %s"
-//efine HHC00026 - HHC00069 (available)
+#define HHC00026 "WARNING: Host does not support the '%s' instruction"
+//efine HHC00027 - HHC00069 (available)
 
 // HHC0007x, HHC0008x and HHC0009x reserved for hao.c. (to recognize own messages)
 #define HHC00070 "Unknown hao command, valid commands are:\n" \
@@ -294,7 +295,8 @@ LOGM_DLL_IMPORT int  panel_command_capture( char* cmd, char** resp, bool quiet )
 #define HHC00100 "Thread id "TIDPAT", prio %d, name '%s' started"
 #define HHC00101 "Thread id "TIDPAT", prio %d, name '%s' ended"
 #define HHC00102 "Error in function create_thread(): %s"
-//efine HHC00103 (available)
+#define HHC00103 "create_thread( \"%s\" ) error: %s"
+#define HHC00104 "%1d:%04X: Calling \"%s\" directly!"
 //efine HHC00105 (available)
 #define HHC00106 "Error in function create_thread() for %s %d of %d: %s"
 #define HHC00107 "Starting thread %s, active=%d, started=%d, max=%d"
@@ -487,9 +489,9 @@ LOGM_DLL_IMPORT int  panel_command_capture( char* cmd, char** resp, bool quiet )
 #define HHC00388 "%1d:%04X CCKD%s image %s is moderately fragmented"
 #define HHC00389 "%1d:%04X CCKD%s image %s is slightly fragmented"
 #define HHC00390 "%1d:%04X CCKD file: device has no shadow files"
-//efine HHC00391 (available)
-//efine HHC00392 (available)
-//efine HHC00393 (available)
+#define HHC00391 "Starting CCKD Dasd Hardener pass..."
+#define HHC00392 "CCKD Dasd Hardener pass complete."
+#define HHC00393 "Thread '%s': sleeping for %d seconds at %s..."
 //efine HHC00394 (available)
 //efine HHC00395 (available)
 #define HHC00396 "%1d:%04X %s" // (cckd_trace)
@@ -553,27 +555,27 @@ LOGM_DLL_IMPORT int  panel_command_capture( char* cmd, char** resp, bool quiet )
 #define HHC00451 "%1d:%04X CKD file %s: DASD table entry not found for devtype 0x%2.2X"
 #define HHC00452 "%1d:%04X CKD file %s: initialization failed"
 #define HHC00453 "%1d:%04X CKD file %s: heads %d trklen %d"
-#define HHC00454 "%1d:%04X FBA file %s: sectors %d size %d"
+//efine HHC00454 (available)
 #define HHC00455 "%1d:%04X CKD file %s: %s record not found"
 #define HHC00456 "%1d:%04X CKD file %s: VOLSER %s VTOC %4.4X%4.4X%2.2X"
 #define HHC00457 "%1d:%04X CKD file %s: VTOC start %2.2X%2.2X%2.2X%2.2X end %2.2X%2.2X%2.2X%2.2X"
 #define HHC00458 "%1d:%04X CKD file %s: dataset %s not found in VTOC"
 #define HHC00459 "%1d:%04X CKD file %s: DSNAME %s F1DSCB CCHHR=%4.4X%4.4X%2.2X"
-#define HHC00460 "%1d:%04X CKD file %s: %u %s successfully written"
+#define HHC00460 "%1d:%04X %s file %s: %u %s successfully written"
 #define HHC00461 "%1d:%04X CKD file %s: %s count %u is outside range %u-%u"
 #define HHC00462 "%1d:%04X CKD file %s: creating %4.4X volume %s: %u cyls, %u trks/cyl, %u bytes/track"
-#define HHC00463 "%1d:%04X FBA file %s: creating %4.4X volume %s: %u sectors, %u bytes/sector"
-#define HHC00464 "%1d:%04X CKD file %s: file size too large: %"PRIu64" [%d]"
-#define HHC00465 "%1d:%04X FBA file %s: creating %4.4X compressed volume %s: %u sectors, %u bytes/sector"
+//efine HHC00463 (available)
+//efine HHC00464 (available)
+//efine HHC00465 (available)
 #define HHC00466 "Maximum of %u %s in %u 2GB file(s) is supported"
 #define HHC00467 "Maximum %s supported is %u"
 #define HHC00468 "For larger capacity DASD volumes, use %s"
 #define HHC00469 "%1d:%04X %s file %s: shadow files not supported for %s dasd"
 #define HHC00470 "%1d:%04X %s file %s: model %s cyls %d heads %d tracks %d trklen %d"
-#define HHC00471 "%1d:%04X CKD64 file %s: %u %s successfully written"
+//efine HHC00471 (available)
 #define HHC00472 "%1d:%04X CKD64 file %s: creating %4.4X volume %s: %u cyls, %u trks/cyl, %u bytes/track"
-#define HHC00473 "%1d:%04X FBA64 file %s: creating %4.4X volume %s: %u sectors, %u bytes/sector"
-#define HHC00474 "%1d:%04X FBA64 file %s: creating %4.4X compressed volume %s: %u sectors, %u bytes/sector"
+//efine HHC00473 (available)
+//efine HHC00474 (available)
 #define HHC00475 "This might take a while... Please wait..."
 #define HHC00476 "%1d:%04X %s file %s: opened r/o%s"
 //efine HHC00477 - HHC00499 (available)
@@ -602,7 +604,15 @@ LOGM_DLL_IMPORT int  panel_command_capture( char* cmd, char** resp, bool quiet )
 #define HHC00519 "Thread "TIDPAT" %1d:%04X FBA file %s: read blkgrp %d offset %"PRId64" len %d"
 #define HHC00520 "Thread "TIDPAT" %1d:%04X FBA file %s: positioning to 0x%"PRIX64" %"PRId64
 #define HHC00521 "Maximum of %u %s in a 2GB file"
-//efine HHC00522 - HHC00599 (available)
+// fba dasd device related messages...
+#define HHC00522 "%1d:%04X %s file %s: sectors %d size %d"
+#define HHC00523 "%1d:%04X %s file %s: %u %s successfully written"
+#define HHC00524 "%1d:%04X %s file %s: creating %4.4X volume %s: %u sectors, %u bytes/sector"
+//efine HHC00525 (available)
+#define HHC00526 "%1d:%04X %s file %s: creating %4.4X compressed volume %s: %u sectors, %u bytes/sector"
+#define HHC00527 "%1d:%04X %s file %s: creating %4.4X volume %s: %u sectors, %u bytes/sector"
+#define HHC00528 "%1d:%04X %s file %s: creating %4.4X compressed volume %s: %u sectors, %u bytes/sector"
+//efine HHC00529 - HHC00599 (available)
 
 // scedasd.c
 #define HHC00600 "SCE file %s: error in function %s: %s"
@@ -684,7 +694,10 @@ LOGM_DLL_IMPORT int  panel_command_capture( char* cmd, char** resp, bool quiet )
 #define HHC00743 "Shared:  %s" // (trace message)
 #define HHC00744 "Shared: Server already active"
 #define HHC00745 "%1d:%04X Shared: CKD file: 'fakewrite' invalid without 'readonly'"
-//efine HHC00746 - HHC00799 (available)
+#define HHC00746 "%1d:%04X Shared: error retrieving control unit information"
+#define HHC00747 "%1d:%04X Shared: client/server device control unit type/model mismatch"
+#define HHC00748 "%1d:%04X Shared: %s cu type/model: %4.4X %2.2X"
+//efine HHC00749 - HHC00799 (available)
 
 // reserve 008xx for processor related messages
 #define HHC00800 "Processor %s%02X: loaded wait state PSW %s"
@@ -712,7 +725,7 @@ LOGM_DLL_IMPORT int  panel_command_capture( char* cmd, char** resp, bool quiet )
 #define HHC00822 "PROCESSOR %s%02X APPEARS TO BE HUNG!"
 #define HHC00823 "You have %d seconds to attach a debugger before crash dump will be taken!"
 #define HHC00824 "Debugger attached! NOT crashing!"
-#define HHC00825 "TIME'S UP! (or debugger has been detached!) - Forcing crash dump!"
+#define HHC00825 "Creating crash dump!"
 #define HHC00826 "Processor %s%02X: processor %sstopped due to disabled wait"
 #define HHC00827 "Processor %s%02X: engine %02X type %1d set: %s"
 #define HHC00828 "Processor %s%02X: ipl failed: %s" // (IPL I/O error)
@@ -793,7 +806,7 @@ LOGM_DLL_IMPORT int  panel_command_capture( char* cmd, char** resp, bool quiet )
 #define HHC00902 "%1d:%04X %s: ioctl %s failed for device %s: %s"
 #define HHC00903 "%1d:%04X: CTC DEBUG is %s"
 #define HHC00904 "%1d:%04X %s: Halt or clear recognized"
-//efine HHC00905 (available)
+#define HHC00905 "%1d:%04X %s: %s %s for %s device"
 #define HHC00906 "%1d:%04X CTC: write CCW count %u is invalid"
 #define HHC00907 "%1d:%04X CTC: interface command: %s %8.8X"
 #define HHC00908 "%1d:%04X CTC: incomplete write buffer segment header at offset %4.4X"
@@ -986,9 +999,11 @@ LOGM_DLL_IMPORT int  panel_command_capture( char* cmd, char** resp, bool quiet )
 #define HHC01111 "%1d:%04X Printer: channel 1 is undefined"
 #define HHC01112 "%1d:%04X Printer: invalid fcb: maximum channel codes exceeded"
 #define HHC01113 "%1d:%04X Printer: incompatible '%s' and 'lpp' values detected"
-//efine HHC01114 - HHC01159 (available)
+//efine HHC01114 - HHC01149 (available)
 
-// range   01150 - 01199 available
+// HIM device (him.c)
+#define HHC01150 "%1d:%04X HIM: Error in function %s: %s"
+//efine HHC01151 - HHC01199 (available)
 
 // reserve 012xx for card devices
 //efine HHC01200 (available)
@@ -1100,7 +1115,7 @@ LOGM_DLL_IMPORT int  panel_command_capture( char* cmd, char** resp, bool quiet )
 #define HHC01418 "Symbol expansion will result in buffer overflow; ignored"
 #define HHC01419 "Symbol and/or Value is invalid; ignored"
 #define HHC01420 "Begin Hercules shutdown"
-//efine HHC01421 (available)
+#define HHC01421 "Shutdown: %s"
 #define HHC01422 "Configuration released"
 #define HHC01423 "Calling termination routines"
 #define HHC01424 "All termination routines complete"
@@ -1440,7 +1455,7 @@ LOGM_DLL_IMPORT int  panel_command_capture( char* cmd, char** resp, bool quiet )
 #define HHC02263 "Script %d: processing resumed..."
 #define HHC02264 "Script %d: file %s processing ended"
 #define HHC02265 "Script %d: file %s aborted due to previous conditions"
-//efine HHC02266 (available)
+#define HHC02266 "%s" // Vector registers
 #define HHC02267 "%s" // (trace instr: Real address is not valid)
 #define HHC02268 "%s" // maxrates command
 #define HHC02269 "%s" // General purpose registers
@@ -1708,11 +1723,11 @@ LOGM_DLL_IMPORT int  panel_command_capture( char* cmd, char** resp, bool quiet )
        "HHC02439I operation, have their data automatically merged into\n" \
        "HHC02439I the resulting output file."
 
-// dasdinit.c
+// dasd utilities
 //efine HHC02440 (available)
 //efine HHC02441 (available)
 //efine HHC02442 (available)
-//efine HHC02443 (available)
+#define HHC02443 "filename extension does not reflect compression option"
 #define HHC02444 "Member %s is not a single text record"
 #define HHC02445 "Invalid, unsupported or missing %s: %s"
 #define HHC02446 "Invalid number of arguments"
@@ -2300,7 +2315,8 @@ LOGM_DLL_IMPORT int  panel_command_capture( char* cmd, char** resp, bool quiet )
 #define HHC03006 "%s error: %s"
 #define HHC03007 "File size:      (%s bytes)"
 #define HHC03008 "Compressed device header inconsistency(s) found! code: %4.4X"
-//efine HHC03009 - HHC03019 (available)
+#define HHC03009 "Only '-i' (summary information only) is supported for CFBA/CFBA64 devices"
+//efine HHC03010 - HHC03019 (available)
 #define HHC03020 "" // (blank line)
 #define HHC03021 "%s of:     \"%s\""
 #define HHC03022                                                            "\n" \
@@ -2438,13 +2454,18 @@ LOGM_DLL_IMPORT int  panel_command_capture( char* cmd, char** resp, bool quiet )
 #define HHC03254 "File successfully swapped from %s endian to %s endian"
 //efine HHC03255 - HHC03299 (available)
 
-// txt2card
-#define HHC03300 "Usage:  txt2card  codepage  infile  outfile"
+// txt2card/card2txt
+#define HHC03300 "Usage:  txt2card  codepage  ifile  {ofile | host:port}"
 #define HHC03301 "Incorrect number of arguments"
 #define HHC03302 "Invalid/unsupported codepage"
 #define HHC03303 "Error opening \"%s\": %s"
 #define HHC03304 "I/O error on file \"%s\": %s"
-//efine HHC03305 - HHC03349 (available)
+#define HHC03305 "Invalid socket specification: %s"
+#define HHC03306 "Transmission error on socket: %s"
+#define HHC03307 "%d cards submitted"
+#define HHC03308 "Socket creation error: %s"
+#define HHC03309 "Error connecting to %s"
+//efine HHC03310 - HHC03349 (available)
 
 //efine HHC03350 - HHC03399 (available)
 
@@ -2621,7 +2642,8 @@ LOGM_DLL_IMPORT int  panel_command_capture( char* cmd, char** resp, bool quiet )
 #define HHC17013 "Process ID = %d"
 #define HHC17014 "%s value is invalid; valid range is %d - %d"
 #define HHC17015 "%s support not included in this engine build"
-//efine HHC17016 - HHC17099 (available)
+#define HHC17016 "%s server port set to %s"
+//efine HHC17017 - HHC17099 (available)
 
 //efine HHC17100 - HHC17198 (available)
 #define HHC17199 "%.4s %s"
@@ -2755,7 +2777,11 @@ LOGM_DLL_IMPORT int  panel_command_capture( char* cmd, char** resp, bool quiet )
 #define HHC90027 "Total threads running: %d"
 #define HHC90028 "lock %s was already initialized at %s"
 #define HHC90029 "Lock "PTR_FMTx" (%s) obtained by "TIDPAT" (%s) on %s at %s"
-//efine HHC90030 - HHC90099 (available)
+//efine HHC90030 (available)
+//efine HHC90031 (available)
+#define HHC90032 "DBG: %s" // EXCLUSIVELY for CTCI-WIN "tt32 debug" messages
+                           // See w32ctca.c "tt32_output_debug_string".
+//efine HHC90033 - HHC90099 (available)
 
 /* from crypto/dyncrypt.c when compiled with debug on */
 #define HHC90100 "%s"

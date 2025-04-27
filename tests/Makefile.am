@@ -470,6 +470,11 @@ EXTRA_DIST =                    \
      privop.core                \
      privop.list                \
      privop.tst                 \
+     prno.asm                   \
+     prno.core                  \
+     prno.list                  \
+     prno.pdf                   \
+     prno.tst                   \
      problem.asm                \
      problem.core               \
      problem.list               \
@@ -490,6 +495,11 @@ EXTRA_DIST =                    \
      semipriv.core              \
      semipriv.list              \
      semipriv.tst               \
+     ShiftLeft.asm              \
+     ShiftLeft.core             \
+     ShiftLeft.list             \
+     ShiftLeft.pdf              \
+     ShiftLeft.tst              \
      sigp.assemble              \
      sigp.listing               \
      sigp.tst                   \
@@ -617,4 +627,149 @@ EXTRA_DIST =                    \
      wild.tst                   \
      zeos.assemble              \
      zeos.listing               \
-     zeos.tst
+     zeos.tst                   \
+     zvector-e6-01-loads.asm    \
+     zvector-e6-01-loads.core   \
+     zvector-e6-01-loads.list   \
+     zvector-e6-01-loads.pdf    \
+     zvector-e6-01-loads.tst    \
+     zvector-e6-02-stores.asm   \
+     zvector-e6-02-stores.core  \
+     zvector-e6-02-stores.list  \
+     zvector-e6-02-stores.pdf   \
+     zvector-e6-02-stores.tst   \
+     zvector-e6-03-pack.asm     \
+     zvector-e6-03-pack.core    \
+     zvector-e6-03-pack.list    \
+     zvector-e6-03-pack.pdf     \
+     zvector-e6-03-pack.tst     \
+     zvector-e6-04-unpack.asm   \
+     zvector-e6-04-unpack.core  \
+     zvector-e6-04-unpack.list  \
+     zvector-e6-04-unpack.pdf   \
+     zvector-e6-04-unpack.tst   \
+     zvector-e6-05-packarith.asm        \
+     zvector-e6-05-packarith.core       \
+     zvector-e6-05-packarith.list       \
+     zvector-e6-05-packarith.pdf        \
+     zvector-e6-05-packarith.tst        \
+     zvector-e6-06-VPKZR.asm            \
+     zvector-e6-06-VPKZR.core           \
+     zvector-e6-06-VPKZR.list           \
+     zvector-e6-06-VPKZR.pdf            \
+     zvector-e6-06-VPKZR.tst            \
+     zvector-e6-07-VSRPR.asm            \
+     zvector-e6-07-VSRPR.core           \
+     zvector-e6-07-VSRPR.list           \
+     zvector-e6-07-VSRPR.pdf            \
+     zvector-e6-07-VSRPR.tst            \
+     zvector-e6-08-VLRLR.asm            \
+     zvector-e6-08-VLRLR.core           \
+     zvector-e6-08-VLRLR.list           \
+     zvector-e6-08-VLRLR.pdf            \
+     zvector-e6-08-VLRLR.tst            \
+     zvector-e6-09-VSTRLR.asm           \
+     zvector-e6-09-VSTRLR.core          \
+     zvector-e6-09-VSTRLR.list          \
+     zvector-e6-09-VSTRLR.pdf           \
+     zvector-e6-09-VSTRLR.tst           \
+     zvector-e6-10-VLIP.asm             \
+     zvector-e6-10-VLIP.core            \
+     zvector-e6-10-VLIP.list            \
+     zvector-e6-10-VLIP.pdf             \
+     zvector-e6-10-VLIP.tst             \
+     zvector-e6-11-convertbinary.asm    \
+     zvector-e6-11-convertbinary.core   \
+     zvector-e6-11-convertbinary.list   \
+     zvector-e6-11-convertbinary.pdf    \
+     zvector-e6-11-convertbinary.tst    \
+     zvector-e6-12-countzonedhighlow.asm    \
+     zvector-e6-12-countzonedhighlow.core   \
+     zvector-e6-12-countzonedhighlow.list   \
+     zvector-e6-12-countzonedhighlow.pdf    \
+     zvector-e6-12-countzonedhighlow.tst    \
+     zvector-e6-13-converttodecimal.asm     \
+     zvector-e6-13-converttodecimal.core    \
+     zvector-e6-13-converttodecimal.list    \
+     zvector-e6-13-converttodecimal.pdf     \
+     zvector-e6-13-converttodecimal.tst     \
+     zvector-e6-14-testdecimal.asm          \
+     zvector-e6-14-testdecimal.core         \
+     zvector-e6-14-testdecimal.list         \
+     zvector-e6-14-testdecimal.pdf          \
+     zvector-e6-14-testdecimal.tst          \
+     zvector-e6-15-comparedecimal.asm       \
+     zvector-e6-15-comparedecimal.core      \
+     zvector-e6-15-comparedecimal.list      \
+     zvector-e6-15-comparedecimal.pdf       \
+     zvector-e6-15-comparedecimal.tst       \
+     zvector-e6-16-VSRP-VPSOP.asm           \
+     zvector-e6-16-VSRP-VPSOP.core          \
+     zvector-e6-16-VSRP-VPSOP.list          \
+     zvector-e6-16-VSRP-VPSOP.pdf           \
+     zvector-e6-16-VSRP-VPSOP.tst           \
+     zvector-e6-17-VSCHP.asm                \
+     zvector-e6-17-VSCHP.core               \
+     zvector-e6-17-VSCHP.list               \
+     zvector-e6-17-VSCHP.pdf                \
+     zvector-e6-17-VSCHP.tst                \
+     zvector-e6-18-VSCSHP.asm               \
+     zvector-e6-18-VSCSHP.core              \
+     zvector-e6-18-VSCSHP.list              \
+     zvector-e6-18-VSCSHP.pdf               \
+     zvector-e6-18-VSCSHP.tst               \
+     zvector-e6-19-VCSPH.asm                \
+     zvector-e6-19-VCSPH.core               \
+     zvector-e6-19-VCSPH.list               \
+     zvector-e6-19-VCSPH.pdf                \
+     zvector-e6-19-VCSPH.tst                \
+     zvector-e6-20-NNPconvert.asm           \
+     zvector-e6-20-NNPconvert.core          \
+     zvector-e6-20-NNPconvert.pdf           \
+     zvector-e6-20-NNPconvert.tst           \
+     zvector-e6-21-VCRNF.asm                \
+     zvector-e6-21-VCRNF.core               \
+     zvector-e6-21-VCRNF.list               \
+     zvector-e6-21-VCRNF.pdf                \
+     zvector-e6-21-VCRNF.tst                \
+     zvector-e7-01-MinMaxAvg.asm            \
+     zvector-e7-01-MinMaxAvg.core           \
+     zvector-e7-01-MinMaxAvg.list           \
+     zvector-e7-01-MinMaxAvg.pdf            \
+     zvector-e7-01-MinMaxAvg.tst            \
+     zvector-e7-02-VGFM.asm                 \
+     zvector-e7-02-VGFM.core                \
+     zvector-e7-02-VGFM.list                \
+     zvector-e7-02-VGFM.pdf                 \
+     zvector-e7-02-VGFM.tst                 \
+     zvector-e7-03-VGFMA.asm                \
+     zvector-e7-03-VGFMA.core               \
+     zvector-e7-03-VGFMA.list               \
+     zvector-e7-03-VGFMA.pdf                \
+     zvector-e7-03-VGFMA.tst                \
+     zvector-e7-04-BitCount.asm             \
+     zvector-e7-04-BitCount.core            \
+     zvector-e7-04-BitCount.list            \
+     zvector-e7-04-BitCount.pdf             \
+     zvector-e7-04-BitCount.tst             \
+     zvector-e7-05-VTM.asm                  \
+     zvector-e7-05-VTM.core                 \
+     zvector-e7-05-VTM.list                 \
+     zvector-e7-05-VTM.pdf                  \
+     zvector-e7-05-VTM.tst                  \
+     zvector-e7-06-Find.asm                 \
+     zvector-e7-06-Find.core                \
+     zvector-e7-06-Find.list                \
+     zvector-e7-06-Find.pdf                 \
+     zvector-e7-06-Find.tst                 \
+     zvector-e7-07-VGBM.asm                 \
+     zvector-e7-07-VGBM.core                \
+     zvector-e7-07-VGBM.list                \
+     zvector-e7-07-VGBM.pdf                 \
+     zvector-e7-07-VGBM.tst                 \
+     zvector-e7-08-VISTR.asm                \
+     zvector-e7-08-VISTR.core               \
+     zvector-e7-08-VISTR.list               \
+     zvector-e7-08-VISTR.pdf                \
+     zvector-e7-08-VISTR.tst
+

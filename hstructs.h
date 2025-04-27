@@ -1,6 +1,6 @@
 /* HSTRUCTS.H   (C) Copyright Roger Bowler, 1999-2012                */
 /*              (C) Copyright TurboHercules, SAS 2011                */
-/*              (C) and others 2013-2023                             */
+/*              (C) and others 2013-2024                             */
 /*              Hercules Structure Definitions                       */
 /*                                                                   */
 /*   Released under "The Q Public License Version 1"                 */
@@ -185,7 +185,7 @@ struct REGS {                           /* Processor registers       */
         ALIGN_128
         DW      gr[16];                 /* General registers         */
         U32     ar[16];                 /* Access registers          */
-        U32     fpr[32];                /* FP registers              */
+        QW      vfp[32];                /* zVector/FP registers      */
         U32     fpc;                    /* FP Control register       */
 
 #define GR_G(_r)     gr[(_r)].D
@@ -203,6 +203,23 @@ struct REGS {                           /* Processor registers       */
 #define GR_LHLCH(_r) gr[(_r)].F.L.H.L.B.H /* Character, bits 48-55   */
 
 #define AR(_r)       ar[(_r)]
+
+#define FPR_L(_r)    vfp[(_r)].D.H.D      /* Long, bits 0-63         */
+#define FPR_S(_r)    vfp[(_r)].F.HH.F     /* Short, bits 0-31        */
+// fine FPR_T(_r)    vfp[(_r)].F.HH.H.H.H /* Tiny, bits 0-15         */
+
+#define VR_Q(_v)     vfp[(_v)]               /* Quadword             */
+#if defined(WORDS_BIGENDIAN)
+  #define VR_D(_v,_i)  vfp[(_v)].d[(_i)]   /* Doubleword           */
+  #define VR_F(_v,_i)  vfp[(_v)].f[(_i)]   /* Fullword             */
+  #define VR_H(_v,_i)  vfp[(_v)].h[(_i)]   /* Halfword             */
+  #define VR_B(_v,_i)  vfp[(_v)].b[(_i)]   /* Byte                 */
+#else
+  #define VR_D(_v,_i)  vfp[(_v)].d[1-(_i)]   /* Doubleword           */
+  #define VR_F(_v,_i)  vfp[(_v)].f[3-(_i)]   /* Fullword             */
+  #define VR_H(_v,_i)  vfp[(_v)].h[7-(_i)]   /* Halfword             */
+  #define VR_B(_v,_i)  vfp[(_v)].b[15-(_i)]  /* Byte                 */
+#endif
 
         ALIGN_128
         DW           cr_struct[1+16+16];  /* Control registers       */
@@ -532,18 +549,24 @@ struct REGS {                           /* Processor registers       */
 
         const INSTR_FUNC    *s370_runtime_opcode_xxxx,
                             *s370_runtime_opcode_e3________xx,
+                            *s370_runtime_opcode_e6xx______xx,
+                            *s370_runtime_opcode_e7________xx,
                             *s370_runtime_opcode_eb________xx,
                             *s370_runtime_opcode_ec________xx,
                             *s370_runtime_opcode_ed________xx;
 
         const INSTR_FUNC    *s390_runtime_opcode_xxxx,
                             *s390_runtime_opcode_e3________xx,
+                            *s390_runtime_opcode_e6xx______xx,
+                            *s390_runtime_opcode_e7________xx,
                             *s390_runtime_opcode_eb________xx,
                             *s390_runtime_opcode_ec________xx,
                             *s390_runtime_opcode_ed________xx;
 
         const INSTR_FUNC    *z900_runtime_opcode_xxxx,
                             *z900_runtime_opcode_e3________xx,
+                            *z900_runtime_opcode_e6xx______xx,
+                            *z900_runtime_opcode_e7________xx,
                             *z900_runtime_opcode_eb________xx,
                             *z900_runtime_opcode_ec________xx,
                             *z900_runtime_opcode_ed________xx;
@@ -646,6 +669,7 @@ struct SYSBLK {
   const char  **extpkg_vers;            /* External Package versions */
 
         bool    ulimit_unlimited;       /* ulimit -c unlimited       */
+        bool    is_debugger_present;    /* gdb debugger present?     */
         pid_t   hercules_pid;           /* Process Id of Hercules    */
         time_t  impltime;               /* TOD system was IMPL'ed    */
         LOCK    bindlock;               /* Sockdev bind lock         */
@@ -683,6 +707,7 @@ struct SYSBLK {
         bool    sys_suspended;          /* System has been suspended */
         bool    sys_resumed;            /* System has been resumed   */
 #endif
+        bool    allow_wd_debugging;     /* allow watchdog debugging  */
 #endif
         enum OPERATION_MODE operation_mode; /* CPU operation mode    */
         u_int   lparmode:1;             /* LPAR mode active          */
@@ -712,7 +737,7 @@ struct SYSBLK {
         U8      cpccr;                  /* Dynamic CP change reason  */
         U8      cpcai;                  /* Dynamic CP capacity adj.  */
         U8      hhc_111_112;            /* HHC00111/HHC00112 issued  */
-        U8      unused1;                /* (pad/align/unused/avail)  */
+        U8      have_PCLMULQDQ:1;       /* Host PCLMULQDQ available  */
 
         COND    cpucond;                /* CPU config/deconfig cond  */
         LOCK    cpulock[ MAX_CPU_ENGS ];/* CPU lock               */
@@ -792,6 +817,10 @@ atomic_update64( &sysblk.txf_stats[ contran ? 1 : 0 ].txf_ ## ctr, +1 )
         CPU Measurement Sampling facility
         Load Program Parameter facility */
         U64     program_parameter;      /* Program Parameter Register*/
+
+#if defined( _FEATURE_057_MSA_EXTENSION_FACILITY_5 )
+        HRANDHAND  PRNOrandhand;        /* secure random api handle  */
+#endif /* defined( _FEATURE_057_MSA_EXTENSION_FACILITY_5 ) */
 
 #if defined( _FEATURE_076_MSA_EXTENSION_FACILITY_3 )
         HRANDHAND  wkrandhand;          /* secure random api handle  */
@@ -984,6 +1013,7 @@ atomic_update64( &sysblk.txf_stats[ contran ? 1 : 0 ].txf_ ## ctr, +1 )
                 sfcmd:1,                /* 1 = 'sf' command issued   */
                 daemon_mode:1,          /* Daemon mode active        */
                 panel_init:1,           /* Panel display initialized */
+                herclin:1,              /* herclin.exe has no panel  */
                 npquiet:1,              /* New Panel quiet indicator */
 #if defined(_FEATURE_SYSTEM_CONSOLE)
                 scpecho:1,              /* scp echo mode indicator   */
@@ -1112,6 +1142,7 @@ atomic_update64( &sysblk.txf_stats[ contran ? 1 : 0 ].txf_ ## ctr, +1 )
             U64 imape3[256];
             U64 imape4[256];
             U64 imape5[256];
+            U64 imape6[256];
             U64 imape7[256];
             U64 imapeb[256];
             U64 imapec[256];
@@ -1134,6 +1165,7 @@ atomic_update64( &sysblk.txf_stats[ contran ? 1 : 0 ].txf_ ## ctr, +1 )
             U64 imape3T[256];
             U64 imape4T[256];
             U64 imape5T[256];
+            U64 imape6T[256];
             U64 imape7T[256];
             U64 imapebT[256];
             U64 imapecT[256];
@@ -1460,6 +1492,16 @@ struct DEVBLK {                         /* Device configuration block*/
         BYTE    sensemm[5];             /* Manuf. & model for sense  */
 
         /*  control flags...                                         */
+
+        BYTE    hoc;                    /* Halt or Clear type        */
+
+#define HOC_NONE        0
+#define HOC_HSCH        1
+#define HOC_CSCH        2
+#define HOC_HIO_HDV     3
+#define HOC_HALT        4
+#define HOC_RESET       5
+
         unsigned int                    /* Flags                     */
                 append:1,               /* 1=append new data to end  */
                 s370start:1,            /* 1=S/370 non-BMX behavior  */
@@ -1482,12 +1524,15 @@ struct DEVBLK {                         /* Device configuration block*/
                 ccwopstrace:1,          /* 1=trace CCW opcodes       */
                 cdwmerge:1,             /* 1=Channel will merge data
                                              chained write CCWs      */
+                himdev:1,               /* 1=is a HIM device         */
                 debug:1,                /* 1=generic debug flag      */
                 reinit:1;               /* 1=devinit, not attach     */
 
         unsigned int                    /* Device state - serialized
                                             by dev->lock             */
                 busy:1,                 /* 1=Device is busy          */
+                halting:1,              /* 1=Halt/Clear busy         */
+                synchalt:1,             /* 1=Synchronous Halt/Clear  */
                 reserved:1,             /* 1=Device is reserved      */
                 suspended:1,            /* 1=Channel pgm suspended   */
                 pending:1,              /* 1=I/O interrupt pending   */
@@ -1885,6 +1930,7 @@ struct DEVBLK {                         /* Device configuration block*/
         BYTE    devcache:1;             /* 0 = device cache off
                                            1 = device cache on       */
         u_int   ckd3990:1;              /* 1=Control unit is 3990    */
+        u_int   ckd3880:1;              /* 1=Control unit is 3880    */
         u_int   ckdxtdef:1;             /* 1=Define Extent processed */
         u_int   ckdsetfm:1;             /* 1=Set File Mask processed */
         u_int   ckdlocat:1;             /* 1=Locate Record processed */

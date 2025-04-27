@@ -334,9 +334,52 @@ init_retry:
         return -1;
     }
 
-    /* Set flag bit if 3990 controller */
+    /* Set flag bit if 3880/3990 controller */
+    if (dev->ckdcu->devt == 0x3880)
+        dev->ckd3880 = 1;
     if (dev->ckdcu->devt == 0x3990)
         dev->ckd3990 = 1;
+
+    /* Get the control unit type and model if the server supports such a query */
+
+    if (dev->rmtver <  SHARED_VERSION ||
+       (dev->rmtver == SHARED_VERSION &&
+        dev->rmtrel <  SHARED_RELEASE))
+    {
+        /* (No choice but to presume they're the same!) */
+    }
+    else /* (server SHOULD support the SHRD_CU query) */
+    {
+        struct { U16 devt; BYTE model; } svr_cu;
+
+        rc = clientRequest (dev, (BYTE*)&svr_cu, sizeof( svr_cu ),
+                            SHRD_QUERY, SHRD_CU, NULL, NULL);
+
+        if (rc < 0)
+            goto init_retry;
+        else if (rc == 0 || rc > (int)sizeof( CKDCU ))
+        {
+            // "%1d:%04X Shared: error retrieving control unit information"
+            WRMSG( HHC00746, "S", LCSS_DEVNUM );
+            return -1;
+        }
+
+        /* verify control unit type and model are the same */
+
+        if (0
+            || svr_cu.devt  != dev->ckdcu->devt
+            || svr_cu.model != dev->ckdcu->model
+        )
+        {
+            // "%1d:%04X Shared: client/server device control unit type/model mismatch"
+            WRMSG( HHC00747, "E", LCSS_DEVNUM );
+
+            // "%1d:%04X Shared: %s cu type/model: %4.4X %2.2X"
+            WRMSG( HHC00748, "I", LCSS_DEVNUM, "client", dev->ckdcu->devt, dev->ckdcu->model );
+            WRMSG( HHC00748, "I", LCSS_DEVNUM, "server",      svr_cu.devt,      svr_cu.model );
+            return -1;
+        }
+    }
 
     /* Clear the DPA */
     memset(dev->pgid, 0, sizeof(dev->pgid));
@@ -2037,6 +2080,16 @@ char     trcmsg[32];
             serverSend (dev, ix, hdr, dev->serial, (U32)sizeof( dev->serial ));
             break;
 
+        case SHRD_CU:
+        {
+            struct { U16 devt; BYTE model; } temp;
+            temp.devt  = dev->ckdcu->devt;
+            temp.model = dev->ckdcu->model;
+            SHRD_SET_HDR (hdr, 0, 0, dev->devnum, id, sizeof( temp ));
+            serverSend (dev, ix, hdr, (BYTE*)&temp, (U32)sizeof( temp ));
+            break;
+        }
+
         case SHRD_CKDCYLS:
             store_fw (buf, dev->ckdcyls);
             SHRD_SET_HDR (hdr, 0, 0, dev->devnum, id, 4);
@@ -2990,8 +3043,6 @@ struct timeval          timeout = {0};
         timeout.tv_usec = SHARED_SELECT_WAIT_MSECS * 1000;
         rc = select( hi, &selset, NULL, NULL, &timeout );
 
-        SHRDGENTRACE("shared_server: select rc %d", rc );
-
         if (rc == 0)
             continue;
 
@@ -3000,10 +3051,14 @@ struct timeval          timeout = {0};
             if (HSO_errno == HSO_EINTR)
                 continue;
 
+            SHRDGENTRACE(" shared_server: select rc %d", rc );
+
             // "Shared: error in function %s: %s"
             WRMSG( HHC00735, "E", "select()", strerror( HSO_errno ));
             break;
         }
+
+        SHRDGENTRACE(" shared_server: select rc %d", rc );
 
         /* If a client connection request has arrived then accept it */
         if (FD_ISSET( lsock, &selset ))

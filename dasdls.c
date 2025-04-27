@@ -41,7 +41,7 @@ int  chainf3             (int *size, BYTE *ptr, int *count );
 int  ordday_to_calday    (int year, int ordinalday, int *month, int *day);
 
 int  end_of_track        (BYTE *p);
-int  list_contents       (CIFBLK *cif, char *sfile, char *volser, DSXTENT *extent );
+int  list_contents       (CIFBLK *cif, DSXTENT *extent );
 int  do_ls_cif           (CIFBLK *cif, char *sfile);
 int  do_ls               (char *file,  char *sfile);
 
@@ -391,7 +391,7 @@ int chainf3( int *size, BYTE *ptr, int *count )
 /*********************************************************************/
 /* list_contents partly based on dasdutil.c:search_key_equal         */
 
-int list_contents( CIFBLK *cif, char *sfile, char *volser, DSXTENT *extent )
+int list_contents( CIFBLK *cif, DSXTENT *extent )
 {
     u_int cext  = 0;
     u_int ccyl  = (extent[cext].xtbcyl[0] << 8) | extent[cext].xtbcyl[1];
@@ -400,11 +400,6 @@ int list_contents( CIFBLK *cif, char *sfile, char *volser, DSXTENT *extent )
     u_int ehead = (extent[cext].xtetrk[0] << 8) | extent[cext].xtetrk[1];
 
     EXTGUIMSG( "ETRK=%d\n", (ecyl * cif->heads) + ehead );
-
-    if (sfile)
-        LOGMSG( "\nVOLSER:  %-6s    \"%s\" sf=\"%s\"\n\n", volser, cif->fname, &sfile[3] );
-    else
-        LOGMSG( "\nVOLSER:  %-6s    \"%s\"\n\n", volser, cif->fname );
 
     if (runflgs & rf_header)
     {
@@ -684,6 +679,11 @@ int do_ls_cif( CIFBLK *cif, char *sfile )
 
     make_asciiz( volser, sizeof( volser ), vol1data + 4, 6 );
 
+    if (sfile)
+        LOGMSG( "\nVOLSER:  %-6s    \"%s\" sf=\"%s\"\n\n", volser, cif->fname, &sfile[3] );
+    else
+        LOGMSG( "\nVOLSER:  %-6s    \"%s\"\n\n", volser, cif->fname );
+
     cyl  = (vol1data[11] << 8) | vol1data[12];
     head = (vol1data[13] << 8) | vol1data[14];
     rec  =  vol1data[15];
@@ -700,7 +700,7 @@ int do_ls_cif( CIFBLK *cif, char *sfile )
         return -1;
     }
 
-    return list_contents( cif, sfile, volser, &f4dscb->ds4vtoce );
+    return list_contents( cif, &f4dscb->ds4vtoce );
 }
 
 /*********************************************************************/

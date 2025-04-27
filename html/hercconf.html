@@ -96,8 +96,8 @@ a real System/390.  The configuration file is an ASCII text file.
     <a href="#LOGOPT">LOGOPT</a>     TIMESTAMP NODATESTAMP
 
     <a href="#CODEPAGE">CODEPAGE</a>   819/1047
-    <a href="#CNSLPORT">CNSLPORT</a>   3270
-    <a href="#SYSGPORT">SYSGPORT</a>   3278
+    <a href="#CNSLPORT">CNSLPORT</a>   3270             Listening port for 3270 device connections
+    <a href="#SYSGPORT">SYSGPORT</a>   3278             Listening port for SYSG device connections
     <a href="#CONKPALV">CONKPALV</a>   (3,1,10)
     <a href="#LEGACYSENSEID">LEGACYSENSEID</a>   OFF
 
@@ -144,7 +144,7 @@ a real System/390.  The configuration file is an ASCII text file.
 
     0000      <a href="#SYSG">SYSG</a>    SYSGCONS
 
-    0100      <a href="#ckddasd">3390</a>    disks/linux.dsk  <a href="#shadow">sf=shadows/linux_*.dsk</a>  <a href="#ckdser">ser=000000000001</a>
+    0100      <a href="#ckddasd">3390</a>    disks/linux.dsk  <a href="#shadow">sf=shadows/linux_*.dsk</a>  <a href="#ckdser">ser=000000000001</a>  <a href="#cu">cu=3990-6</a>
 
     0120      <a href="#3380">3380</a>    <a href="#ENHSYMINC">${DASD_PATH=dasd/}</a>mvsv5r.120
     0121      <a href="#3380">3380</a>    <a href="#ENHSYMINC">${DASD_PATH=dasd/}</a>mvsv5d.121
@@ -179,6 +179,9 @@ a real System/390.  The configuration file is an ASCII text file.
     0023      <a href="#2703">2703</a>    lport=3780 rhost=localhost rport=3781 dial=no
     0045      <a href="#2703">2703</a>    lport=32003 dial=IN lnctl=ibm1 term=2741 skip=5EDE code=ebcd
 
+    621-62B   <a href="#HIMdevice">UDPH</a>     10.0.0.46
+    62C-643   <a href="#HIMdevice">TLNT</a>     10.0.0.46
+    644-64F   <a href="#HIMdevice">TCPH</a>     10.0.0.46
 
 </pre></code>
 </td></tr></table>
@@ -381,6 +384,10 @@ a real System/390.  The configuration file is an ASCII text file.
     <p>
     See the <a href="telnet.html">Telnet/tn3270 Console How-To</a>
     for additional information about setting up a telnet or tn3270 client.
+    <p>
+    Note that the CNSLPORT statement will be ignored and no listening port
+    will be opened unless there is at least one <a href="#device_types_table">
+    3270 device</a> defined in your configuration.
     <p>
 
 <a name="CODEPAGE"></a>
@@ -1323,15 +1330,38 @@ a real System/390.  The configuration file is an ASCII text file.
     for information regarding modifying Windows's "Adapter Binding Order" and/or defining
     a preferred CTCI-WIN default host network adapter.
     <p>
+<a name="netpriv"></a>
     <center>
     <table width=95%>
       <tr><td>
+        <p class="box">
         <i>
-        <b>Note:</b> Hercules's networking support requires <u>privileged access</u>
-        to your host's networking devices. If Hercules is not started with
-        <u>Administrative (root) privileges</u> then initialization of your
-        networking devices will fail and your guest's networking will not work.
+        <b>Note:</b> Hercules's networking support <u>MAY</u> require <u>privileged access</u>
+        to your host's networking devices, depending on whether you use pre-configured interfaces
+        or not. If you do not use pre-configured interfaces and Hercules is not started with
+        <u>Administrative (root) privileges</u>, then initialization of your networking devices
+        will fail and your guest's networking will not work!
+        </br></br>
+        If one uses pre-configured interfaces on Linux et al. however <b>(recommended!)</b>,
+        then Hercules does <u>not</u> need to run as root, because the network interface it needs
+        to use already exists and is already properly configured (because you already created
+        and configured it yourself before you even started Hercules! So there's nothing Hercules
+        needs to do before it can use it!).
+        </br></br>
+        If you <u>don't</u> use pre-configured interfaces however (and instead rely on Hercules
+        itself to both create and configure your networking interface for you), then
+        <b><u>yes</u></b>, Hercules will obviously need to be started as root in order to be able
+        to do that for you.
+        </br></br>
+        This is why using pre-configured interfaces on *Nix et al. is so highly recommended: so
+        that you <b>don't</b> need to run Hercules as root.
+        </br></br>
+        On Windows however, due to the way CTCI-WIN works, Administrative privileges is
+        <b><u>always</u></b> required, as CTCI-WIN hooks directly into Windows's real network
+        adapter's networking stack to be able to read packets directly from and write packets
+        directly to the real physical adapter's networking stack.
         </i>
+        </p>
       </td></tr>
     </table>
     </center>
@@ -1602,6 +1632,10 @@ a real System/390.  The configuration file is an ASCII text file.
     <p>
     See the <a href="telnet.html">Telnet/tn3270 Console How-To</a>
     for additional information about setting up a telnet or tn3270 client.
+    <p>
+    Note that the SYSGPORT statement will be ignored and no listening port
+    will be opened unless your configuration has a <a href="#device_types_table">
+    SYSG device</a> defined.
     <p>
 
 <a name="TIMERINT"></a>
@@ -2219,9 +2253,9 @@ a real System/390.  The configuration file is an ASCII text file.
     specified for a device number or group of devices. The Identification
     number is specified at the beginning of the definition, followed by a ':'
     character. For example :<p>
-    1:0400-040F 3270<p>
+    &nbsp; &nbsp; &nbsp; &nbsp; <code>1:0400-040F &nbsp;3270</code><p>
     defines 3270 devices 400 to 40F to be on S/370 Channel Set 1 or on S/390
-    or z/Architecture Logical Channel Subsystem # 1.<p>
+    or z/Architecture Logical Channel Subsystem #1.<p>
     Since each Logical Channel Subsystem defines its own device numbering space,
     care should be taken in S/370 mode as to define a coherent set of device
     numbers.<p>
@@ -2413,6 +2447,11 @@ a real System/390.  The configuration file is an ASCII text file.
             <tr><td>2703</td>
                 <td><a href="#2703">Communication Line</a>, <a href="#2703">Remote Teletype</a>, etc.</td>
                 <td>TCP Socket</td>
+            </tr>
+
+            <tr><td>TLNT, TCPH, UDPH</td>
+                <td>MTS HIM network interface</td>
+                <td><a href="#HIMdevice">MTS Host Interface Machine emulator</a></td>
             </tr>
 
             </table>
@@ -3156,27 +3195,27 @@ a real System/390.  The configuration file is an ASCII text file.
             the additional features provided by the HET format.
             <p>
 
-        <dt><code>COMPRESS=<em>n</em></code>
-        <dt><code>IDRC=<em>n</em></code>
+        <dt><code>COMPRESS=<em><u><b>1</b></u></em>&#124;<em>0</em></code>
+        <dt><code>IDRC=<em><u><b>1</b></u></em></code>&#124;<em>0</em></code>
         <dd><p>
             <code>COMPRESS</code> and <code>IDRC</code> control
             whether compression should be used when writing to HET
             files.  The value <code><em>n</em></code> &nbsp;can be <code>1</code>
-            to turn on compression (the default) or <code>0</code> to turn
+            to turn on compression <i>(the default)</i> or <code>0</code> to turn
             it off.  <code>IDRC</code> is currently a synonym for
             <code>COMPRESS</code>, but may be used in the future to
             control other emulated tape drive features.
             <p>
 
-        <dt><code>METHOD=<em>n</em></code>
+        <dt><code>METHOD=<em><u><b>1</b></u></em>&#124;<em>n</em></code>
         <dd><p>
             The <code>METHOD</code> option allows you to specify
             which compression method to use.  You may specify
             <code>1</code> for ZLIB compression or <code>2</code>
-            for BZIP2 compression.  The default is <code>1</code>.
+            for BZIP2 compression.  The default is <code>1</code> <i>(zlib)</i>.
             <p>
 
-        <dt><code>LEVEL=<em>n</em></code>
+        <dt><code>LEVEL=<em><u><b>4</b></u></em>&#124;<em>n</em></code>
         <dd><p>
             The <code>LEVEL</code> option controls the level of
             compression.  It ranges from <code>1</code> for fastest
@@ -3184,21 +3223,22 @@ a real System/390.  The configuration file is an ASCII text file.
             The default is <code>4</code>.
             <p>
 
-        <dt><code>CHUNKSIZE=<em>nnnnn</em></code>
+        <dt><code><u>CHUNKSIZE=<em><b>65535</b></em></u></code>
+            &nbsp;&#124;&nbsp; <code>CHUNKSIZE=<em>nnnnn</em></code>
         <dd><p>
             The <code>CHUNKSIZE</code> option allows you to create
             HET files that contain different chunk sizes.  The AWSTAPE
             (and therefore the HET) format allows each tape block to be
             logically broken up into smaller chunks.  For instance, if
             your S/3x0 application creates tapes with a block size of
-            27998, those blocks would be broken down into
+            e.g. 27998, those blocks would be broken down into
             <code><em>nnnnn</em></code> &nbsp;sized chunks.
-            The range is from <code>4096</code>
-            to <code>65535</code>, the latter being the default.
-            Decreasing the value from its default may reduce compression
-            performance.
-            For compatibility with AWSTAPE files created by the P/390,
-            specify <code>AWSTAPE</code> with <code>CHUNKSIZE=4096</code>.
+            <p>
+            The range is from <code>4096</code> to <code><u>65535</u></code>,
+            with 65535 being the default. If 0 is specified, the default is used.
+            Decreasing the value from its default may reduce compression performance.
+            For compatibility with AWSTAPE files created by the P/390, specify
+            the <code>AWSTAPE</code> option with <code>CHUNKSIZE=4096</code>.
             <p>
 
         </dl> <!-- end Additional HET arguments -->
@@ -3213,25 +3253,33 @@ a real System/390.  The configuration file is an ASCII text file.
 
         <dl> <!-- begin Additional AWS/HET/FAKE parameters -->
 
-        <dt><code>MAXSIZE</code>=<i>n[s]</i> &nbsp;&#124;&nbsp; <code>MAXSIZEK</code>=<i>n</i>
-             &nbsp;&#124;&nbsp; <code>MAXSIZEM</code>=<i>n</i>
+        <dt><u><code>MAXSIZE=<b>0</b></code></u>
+            &nbsp;&#124;&nbsp; <code>MAXSIZE</code>=<i>nnn</i>
+            &nbsp;&#124;&nbsp; <code>MAXSIZE<b>K</b></code>=<i>nnn</i>
+            &nbsp;&#124;&nbsp; <code>MAXSIZE<b>M</b></code>=<i>nnn</i>
+            &nbsp;&#124;&nbsp; <code>MAXSIZE</code>=<i>nnn<b>S</b></i>
         <dd><p>
-            Specifies the maximum size (in bytes, Kilobytes or Megabytes)
+            Specifies the maximum size (in nnn bytes,
+            <i><b>K</b></i>ilobytes or
+            <i><b>M</b></i>egabytes)
             that the emulated file is allowed to grow to.
             <p>
-            Or, nnns where s is either K - KILO, M - MEGA, G - GIGA, or T - TERA - BYTES
+            Or, <i>nnn<b>S</b></i> where <i><b>S</b></i> is either K (kilo),
+            M (mega), G (giga), or T (tera) bytes.&nbsp;T may not be available on all platforms.
             <p>
-            Specifying zero for this parameter means "unlimited" (i.e. there is no limit).
-            Note: "T" is not available on all platforms.
+            The default is 0 (zero), meaning unlimited. When 0 is specified,
+            the <code>EOTMARGIN</code> parameter is ignored.
             <p>
 
-        <dt><code>EOTMARGIN</code>=<em>n[s]</em>
+        <dt><u><code>EOTMARGIN=<b>128K</b></code></u>
+            &nbsp;&#124;&nbsp; <code>EOTMARGIN</code>=<i>nnn<b>S</b></i>
         <dd><p>
-            Specifies the number of bytes remaining before reaching <em>maxsize</em>
+            Specifies the number of bytes remaining before reaching <code>MAXSIZE</code>
             at which point the tape device will signal the presence of the "End of Tape"
             marker (reflector), thus allowing the program to switch to the next tape.
-            <p>
-            Value is either n = bytes, or ns where s is either a K, M, G, or T multiplier.
+            The value is either <i>nnn</i> (bytes), or <i>nnn<b>S</b></i> where <i><b>S</b></i>
+            is either K, M, G, or T. The <code>EOTMARGIN</code> parameter ignored
+            when <code>MAXSIZE=0</code> is specified.
             <p>
 
         <dt><code>READONLY</code>=<em>n</em>
@@ -3621,25 +3669,31 @@ a real System/390.  The configuration file is an ASCII text file.
 
         <p>
 
+        <p class="box">
         <i>
-        <b>Note:</b> Hercules's networking support requires <u>privileged access</u>
-        to your host's networking devices. The easiest way to do this on Linux is
-        to enable setuid of hercifc using the <tt>--enable-setuid-hercifc</tt>
-        configure option. If that's not an option, or you're not running under
-        Linux, using Administrative (root) privileges when running Hercules will
-        work as well.
+        <b>Note:</b> Hercules's networking support <u>MAY</u> require <u>privileged access</u>
+        to your host's networking devices depending on whether you use pre-configured networking
+        interfaces or not, which means Hercules itself <u>MAY</u> need to be started with
+        Administrative (root) privileges. (Refer to the discussion in the
+        <a href=#netpriv>NETDEV</a> statement.)
+        </br></br>
+        The easiest way to do this on Linux et al. is to enable setuid for hercifc using the
+        <tt>--enable-setuid-hercifc</tt> configure option. If that's not possible (or
+        you're not running Hercules under Linux et al), then Hercules <u>must</u> be started
+        with Administrative (root) privileges or your Hercules networking devices will not work.
         </i>
 
         <br><br>
 
         <i>
-        <b>Please note</b> that this is still considered to be an experimental
+        <b>Please also note</b> that the QETH (OSA) device is still considered to be an experimental
         driver still under development. Not all of the features or functionality
         that real OSA devices have are currently supported. For example, the
         current implementation only supports three devices: the read device,
         the write device and the datapath device. Real OSA devices support
         multiple datapath devices. Support for this feature is planned, but is
-        not yet implemented.
+        not yet implemented. Regardless, QETH (OSA) device support appears to be stable
+        and has been working fine without any problems for several years now.
         </i>
 
         </p>
@@ -3812,14 +3866,13 @@ a real System/390.  The configuration file is an ASCII text file.
 
         <p>
 
+        <p class="box">
         <i>
-        <b>Note:</b> Hercules's networking support requires <u>privileged access</u>
-        to your host's networking devices. If Hercules is not started with
-        <u>Administrative (root) privileges</u> then initialization of your
-        networking devices will fail and your guest's networking will not work.
+        <b>Note:</b> Refer to the discussion in the <a href=#netpriv>NETDEV</a> statement
+        for important information regarding elevated privileges that <u>may</u> be required
+        for networking devices.
         </i>
-
-        <p>
+        </p>
 
         Rather than a point-to-point link, this emulation creates a
         virtual ethernet adapter through which the guest operating system
@@ -4072,12 +4125,13 @@ ROUTE  00  172.21.3.32  255.255.255.224
 
         <p>
 
+        <p class="box">
         <i>
-        <b>Note:</b> Hercules's networking support requires <u>privileged access</u>
-        to your host's networking devices. If Hercules is not started with
-        <u>Administrative (root) privileges</u> then initialization of your
-        networking devices will fail and your guest's networking will not work.
+        <b>Note:</b> Refer to the discussion in the <a href=#netpriv>NETDEV</a> statement
+        for important information regarding elevated privileges that <u>may</u> be required
+        for networking devices.
         </i>
+        </p>
 
         <p>
         The Windows implementation is different from the unix one. See
@@ -4223,12 +4277,13 @@ ROUTE  00  172.21.3.32  255.255.255.224
         two or more Hercules instances.
         <p>
 
+        <p class="box">
         <i>
-        <b>Note:</b> Hercules's networking support requires <u>privileged access</u>
-        to your host's networking devices. If Hercules is not started with
-        <u>Administrative (root) privileges</u> then initialization of your
-        networking devices will fail and your guest's networking will not work.
+        <b>Note:</b> Refer to the discussion in the <a href=#netpriv>NETDEV</a> statement
+        for important information regarding elevated privileges that <u>may</u> be required
+        for networking devices.
         </i>
+        </p>
 
         <p>
         A Hercules CTCE device requires two even-odd pairs of devices, one for
@@ -4431,12 +4486,13 @@ ROUTE  00  172.21.3.32  255.255.255.224
 
         <p>
 
+        <p class="box">
         <i>
-        <b>Note:</b> Hercules's networking support requires <u>privileged access</u>
-        to your host's networking devices. If Hercules is not started with
-        <u>Administrative (root) privileges</u> then initialization of your
-        networking devices will fail and your guest's networking will not work.
+        <b>Note:</b> Refer to the discussion in the <a href=#netpriv>NETDEV</a> statement
+        for important information regarding elevated privileges that <u>may</u> be required
+        for networking devices.
         </i>
+        </p>
 
         <p>
         For *nix systems, such as Linux, BSD, and OSX, you may use
@@ -4788,18 +4844,19 @@ ROUTE  00  172.21.3.32  255.255.255.224
         <code>fulltrkio</code> or <code>ftio</code>
         <p>
 
+<a name="cu"></a>
     <dt><code>cu=<em>type</em></code>
     <dd><p>
         Specifies the type of control unit to which this device is attached.
         The use of this parameter does not necessarily imply that
-        all functions of the specified control unit are emulated,
-        its only purpose is to force a particular control unit type
+        all functions of the specified control unit are emulated.
+        Its sole purpose is to force a particular control unit type
         to be indicated in the data returned by SENSE ID and similar CCW's.
         <p>
         The default value depends on the device type:
         <blockquote>
             <table border=1 cellpadding=3>
-            <tr align="center"><th>Device type</th><th>Default CU type</dev></th></tr>
+            <tr align="center"><th>&nbsp;Dasd Device type&nbsp;</th><th>&nbsp;Default 'cu=' Control Unit Type&nbsp;</th></tr>
             <tr align="center"><td>2311</td><td>2841</td></tr>
             <tr align="center"><td>2314</td><td>2314</td></tr>
             <tr align="center"><td>3330 3340<br>3350 3375<br>3380</td><td>3880</td></tr>
@@ -4808,11 +4865,16 @@ ROUTE  00  172.21.3.32  255.255.255.224
             </table>
         </blockquote>
         <p>
-        Other values which may be specified are:
-        3990-3 and 3990-6.
+        Other values which may be specified for 3390 dasd device types are
+        <code>3990-3</code> and <code>3990-6</code>.
         <p>
-        Normally the default value is appropriate and this parameter need
-        not be specified.
+        For modern "z" operating systems such as z/OS and z/VM using 3390 dasds,
+        <code>cu=3990-6</code> should be specified. For older legacy type operating
+        systems, <code>cu=3990-3</code> is probably what should be specified instead.
+        The default control unit type of <code>cu=3990</code> is rarely what you actually want.
+        <p>
+        <i>Please note</i> that this option must be specified in lower case "<code>cu=</code>".
+        Using upper case "<code>CU=</code>" will not be recognized and will result in an error.
         <p>
 
 <a name="ckdser"></a>
@@ -5138,6 +5200,29 @@ ROUTE  00  172.21.3.32  255.255.255.224
         <p>
 
     </dl> <!-- end Addtional 2703 options -->
+
+<hr width="50%"><p>
+
+<a name="HIMdevice"></a>
+<dt><em>Host Interface Machine (HIM) device</em>
+<dd><p>
+
+    These device types emulate the Host Interface Machine (HIM) devices that 
+    are used to connect a host running The Michigan Terminal System (MTS)
+    to the Internet.  The device type (TLNT, TCPH, or UDPH) should match
+    the device type configured into MTS.
+    <p>
+
+    The only parameter is the IP address the emulated interface 
+    should bind to.
+    <p>
+
+    Note that HIM emulation requires <u>privileged access</u>
+        to your host's networking devices. If Hercules is not started with
+        <u>Administrative (root) privileges</u> then initialization of your
+        HIM devices will fail and MTS will not be able to connect to the
+        network.
+        <p>
 
 
 </dl> <!-- end Arguments for each device type -->
