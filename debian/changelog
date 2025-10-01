@@ -1,3 +1,9 @@
+sdl-hercules (4.8-1ppa2~ubuntu22.04) jammy; urgency=medium
+
+  * Adopt upstream fix for buffer overflow in `create_compressed_fba`
+
+ -- Cheng H. Lee <cheng.h.lee@gmail.com>  Tue, 30 Sep 2025 20:02:34 -0500
+
 sdl-hercules (4.8-1ppa1~ubuntu22.04) jammy; urgency=medium
 
   * New upstream release

@@ -1,0 +1,42 @@
+commit ffab9853b9108807db856e6a5af8d3ea28cd718f
+Author: Fish (David B. Trout) <fish@infidels.org>
+Date:   Sat Mar 29 18:39:26 2025 -0700
+
+    Fix buffer overflow CRASH in FBA dasdcopy
+
+diff --git a/dasdutil.c b/dasdutil.c
+index 63cc23f8..e875d941 100644
+--- a/dasdutil.c
++++ b/dasdutil.c
+@@ -2250,6 +2250,13 @@ int create_compressed_fba( char* fname, U16 devtype, U32 sectsz,
+     }
+ 
+     /* Clear the first block group's image data to binary zeros */
++    if (!(pBuf = realloc( pBuf, FBA_BKGHDR_SIZE + CFBA_BLKGRP_SIZE )))
++    {
++        // "Out of memory"
++        FWRMSG( stderr, HHC00152, "S" );
++        return -1;
++    }
++
+     memset( pBuf, 0, FBA_BKGHDR_SIZE + CFBA_BLKGRP_SIZE );
+ 
+     /* Build the "Track Header" (FBA Block Group Header) */
+diff --git a/dasdutil64.c b/dasdutil64.c
+index 7801e428..61739285 100644
+--- a/dasdutil64.c
++++ b/dasdutil64.c
+@@ -1409,6 +1409,13 @@ int create_compressed_fba64( char* fname, U16 devtype, U32 sectsz,
+     }
+ 
+     /* Clear the first block group's image data to binary zeros */
++    if (!(pBuf = realloc( pBuf, FBA_BKGHDR_SIZE + CFBA_BLKGRP_SIZE )))
++    {
++        // "Out of memory"
++        FWRMSG( stderr, HHC00152, "S" );
++        return -1;
++    }
++
+     memset( pBuf, 0, FBA_BKGHDR_SIZE + CFBA_BLKGRP_SIZE );
+ 
+     /* Build the "Track Header" (FBA Block Group Header) */
