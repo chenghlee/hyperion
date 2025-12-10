@@ -1132,7 +1132,8 @@ static int qeth_create_interface (DEVBLK *dev, OSA_GRP *grp)
             | (grp->l3 ? IFF_TUN : IFF_TAP)
         ,
         &grp->ttfd,
-        grp->ttifname
+        grp->ttifname,
+        &grp->internal
 
     )) != 0)
         return QERRMSG( dev, grp, errno,
@@ -1227,7 +1228,7 @@ static int qeth_create_interface (DEVBLK *dev, OSA_GRP *grp)
             MSGBUF( buf, "TUNTAP_SetDestAddr(\"%s\") failed", grp->ttipaddr );
             return QERRMSG( dev, grp, errno, "E", buf );
         }
-#else /* Linux */
+#else /* Linux - and FreeBSD, albeit not very pretty */
         if ((rc = TUNTAP_SetIPAddr( grp->ttifname, grp->ttipaddr )) != 0)
         {
             char buf[64];
@@ -1430,7 +1431,7 @@ U16 offph;
             /* Allocate a buffer to which the request will be copied */
             /* and then modified, to become the response.            */
             FETCH_FW(rqsize,req_th->length);
-            rsp_bhr = alloc_buffer( dev, rqsize+100 );
+            rsp_bhr = alloc_buffer( dev, rqsize + 4095 );
             if (!rsp_bhr)
                 break;
             rsp_bhr->datalen = rqsize;
@@ -1451,7 +1452,10 @@ U16 offph;
             ipa = (MPC_IPA*)((BYTE*)rsp_th + offdata);
 
             /* Modify the response MPC_TH and MPC_RRH. */
-            STORE_FW( rsp_th->seqnum, 0 );
+            /* STORE_FW( rsp_th->seqnum, 0 ); */
+            grp->seqnumth = -2;
+            grp->seqnumcm = 0;
+            STORE_FW( rsp_th->seqnum, ++grp->seqnumth );
             STORE_HW( rsp_th->unknown10, 0x0FFC );        /* !!! */
             rsp_rrh->proto = PROTOCOL_UNKNOWN;
             memcpy( rsp_rrh->token, grp->gtulpconn, MPC_TOKEN_LENGTH );
@@ -1799,7 +1803,11 @@ U16 offph;
                     else if (proto == IPA_PROTO_IPV6)
                     {
                       FETCH_FW(flags,ipa_sip->data.ip6.flags);
-                      if (flags == IPA_SIP_DEFAULT)
+                      if (0
+                          || flags == IPA_SIP_DEFAULT
+                          || flags == IPA_SIP_VIPA
+                          || flags == IPA_SIP_TAKEOVER
+                      )
                       {
                         /* Register the IPv6 address */
                         rc = register_ipv6(grp, dev, (BYTE*)ipa_sip->data.ip6.addr);
@@ -2029,7 +2037,11 @@ U16 offph;
                     if (proto == IPA_PROTO_IPV4)
                     {
                       FETCH_FW(flags,ipa_sip->data.ip4.flags);
-                      if (flags == IPA_SIP_DEFAULT)
+                      if (0
+                          || flags == IPA_SIP_DEFAULT
+                          || flags == IPA_SIP_VIPA
+                          || flags == IPA_SIP_TAKEOVER
+                      )
                       {
 
                         /* Unregister the IPv4 address */
@@ -2046,7 +2058,11 @@ U16 offph;
                     else if (proto == IPA_PROTO_IPV6)
                     {
                       FETCH_FW(flags,ipa_sip->data.ip6.flags);
-                      if (flags == IPA_SIP_DEFAULT)
+                      if (0
+                          || flags == IPA_SIP_DEFAULT
+                          || flags == IPA_SIP_VIPA
+                          || flags == IPA_SIP_TAKEOVER
+                      )
                       {
 
                         /* Register the IPv6 address */
@@ -2378,7 +2394,7 @@ U16 reqtype;
 
     /* Allocate a buffer to which the IEA will be copied */
     /* and then modified, to become the IEAR.            */
-    rsp_bhr = alloc_buffer( dev, ieasize+10 );
+    rsp_bhr = alloc_buffer( dev, ieasize );
     if (!rsp_bhr)
         return;
     rsp_bhr->datalen = ieasize;
@@ -3867,6 +3883,9 @@ static void qeth_halt_read_device( DEVBLK* dev, OSA_GRP* grp )
                 */
                 signal_condition( &grp->q_idxrt_cond );
                 wait_condition( &grp->q_hread_cond, &grp->qlock );
+                unregister_all_ipv4( grp );
+                unregister_all_ipv6( grp );
+                unregister_all_mac( grp );
                 PTT_QETH_TRACE( "af halt read", 0,0,0 );
             }
             DBGTRC( dev, "Read device halted" );
@@ -3897,6 +3916,12 @@ static void qeth_halt_data_device( DEVBLK* dev, OSA_GRP* grp )
                 VERIFY( qeth_write_pipe( grp->ppfd[1], &sig ) == 1);
                 wait_condition( &grp->q_hdata_cond, &grp->qlock );
                 dev->scsw.flag2 &= ~SCSW2_Q;
+#if defined( OPTION_W32_CTCI )
+                /* If the interface is still enabled/up we need to */
+                /* bring it down (disable it) to avoid "late" I/O  */
+                if (grp->enabled)
+                    VERIFY( qeth_disable_interface( dev, grp ) == 0);
+#endif
                 PTT_QETH_TRACE( "af halt data", 0,0,0 );
             }
             DBGTRC( dev, "Data device halted" );
@@ -3934,32 +3959,70 @@ static void*  qeth_halt_or_clear_thread( void* arg)
         OBTAIN_DEVLOCK( dev  );
     }
     {
-        if (QTYPE_READ == dev->qtype) // "read" device?
+        switch (dev->qtype)
         {
-            qtype = "read";
-
-            // "%1d:%04X %s: %s %s for %s device"
-            WRMSG( HHC00905, "I", LCSS_DEVNUM, dev->typname, hoc, "recognized", qtype );
+            case 0:     // guest OSA/QETH open/initialization...
             {
-                qeth_halt_read_device( dev, grp );
-            }
-            // "%1d:%04X %s: %s %s for %s device"
-            WRMSG( HHC00905, "I", LCSS_DEVNUM, dev->typname, hoc, "completed", qtype );
-        }
-        else if (QTYPE_DATA == dev->qtype) // "data device?
-        {
-            qtype = "data";
+                qtype = "this";
 
-            // "%1d:%04X %s: %s %s for %s device"
-            WRMSG( HHC00905, "I", LCSS_DEVNUM, dev->typname, hoc, "recognized", qtype );
-            {
-                qeth_halt_data_device( dev, grp );
+                // "%1d:%04X %s: %s %s for %s device"
+                WRMSG( HHC00905, "I", LCSS_DEVNUM, dev->typname, hoc, "recognized", qtype );
+                {
+                    // (qtype not assigned yet; do nothing)
+                }
+                // "%1d:%04X %s: %s %s for %s device"
+                WRMSG( HHC00905, "I", LCSS_DEVNUM, dev->typname, hoc, "completed", qtype );
             }
-            // "%1d:%04X %s: %s %s for %s device"
-            WRMSG( HHC00905, "I", LCSS_DEVNUM, dev->typname, hoc, "completed", qtype );
+            break;
+
+            case QTYPE_READ:
+            {
+                qtype = "Read";
+
+                // "%1d:%04X %s: %s %s for %s device"
+                WRMSG( HHC00905, "I", LCSS_DEVNUM, dev->typname, hoc, "recognized", qtype );
+                {
+                    qeth_halt_read_device( dev, grp );
+                }
+                // "%1d:%04X %s: %s %s for %s device"
+                WRMSG( HHC00905, "I", LCSS_DEVNUM, dev->typname, hoc, "completed", qtype );
+                }
+            break;
+
+            case QTYPE_WRITE:
+            {
+                qtype = "Write";
+
+                // "%1d:%04X %s: %s %s for %s device"
+                WRMSG( HHC00905, "I", LCSS_DEVNUM, dev->typname, hoc, "recognized", qtype );
+                {
+                    // (nothing to do!) 
+                }
+                // "%1d:%04X %s: %s %s for %s device"
+                WRMSG( HHC00905, "I", LCSS_DEVNUM, dev->typname, hoc, "completed", qtype );
+            }
+            break;
+
+            case QTYPE_DATA:
+            {
+                qtype = "Data";
+
+                // "%1d:%04X %s: %s %s for %s device"
+                WRMSG( HHC00905, "I", LCSS_DEVNUM, dev->typname, hoc, "recognized", qtype );
+                {
+                    qeth_halt_data_device( dev, grp );
+                }
+                // "%1d:%04X %s: %s %s for %s device"
+                WRMSG( HHC00905, "I", LCSS_DEVNUM, dev->typname, hoc, "completed", qtype );
+            }
+            break;
+
+            default: // (should never occur!)
+            {
+                BREAK_INTO_DEBUGGER();
+            }
+            break;
         }
-        else
-            BREAK_INTO_DEBUGGER(); // (should never occur!)
 
         /* Halt/Clear request completed */
         dev->halting = 0;
@@ -4639,7 +4702,7 @@ OSA_GRP *grp = (OSA_GRP*)(group ? group->grp_data : NULL);
         grp->ttfd = -1;
         dev->fd = -1;
         if(ttfd > 0)
-            TUNTAP_Close(ttfd);
+            TUNTAP_Close(ttfd, grp->internal);
         PTT_QETH_TRACE( "af clos ttfd", 0,0,0 );
 
         PTT_QETH_TRACE( "b4 clos pipe", 0,0,0 );
@@ -5816,8 +5879,8 @@ U16 uLength4;
     uLength2 = SIZE_TH + SIZE_RRH_1 + SIZE_PH;   // the MPC_TH/MPC_RRH/MPC_PH
     uLength1 = uLength2 + uLength3;              // the MPC_TH/MPC_RRH/MPC_PH and data
 
-    // Allocate a buffer in which the response will be build.
-    rsp_bhr = alloc_buffer( dev, uLength1+10 );
+    // Allocate a buffer in which the response will be built.
+    rsp_bhr = alloc_buffer( dev, uLength1 );
     if (!rsp_bhr)
         return NULL;
     rsp_bhr->content = strdup( dev->dev_data );
@@ -5927,8 +5990,8 @@ U16 uLength4;
     uLength2 = SIZE_TH + SIZE_RRH_1 + SIZE_PH;   // the MPC_TH/MPC_RRH/MPC_PH
     uLength1 = uLength2 + uLength3;              // the MPC_TH/MPC_RRH/MPC_PH and data
 
-    // Allocate a buffer in which the response will be build.
-    rsp_bhr = alloc_buffer( dev, uLength1+10 );
+    // Allocate a buffer in which the response will be built.
+    rsp_bhr = alloc_buffer( dev, uLength1 );
     if (!rsp_bhr)
         return NULL;
     rsp_bhr->content = strdup( dev->dev_data );
@@ -6135,8 +6198,8 @@ U16 uLength4;
     uLength2 = SIZE_TH + SIZE_RRH_1 + SIZE_PH;   // the MPC_TH/MPC_RRH/MPC_PH
     uLength1 = uLength2 + uLength3;              // the MPC_TH/MPC_RRH/MPC_PH and data
 
-    // Allocate a buffer in which the response will be build.
-    rsp_bhr = alloc_buffer( dev, uLength1+10 );
+    // Allocate a buffer in which the response will be built.
+    rsp_bhr = alloc_buffer( dev, uLength1 );
     if (!rsp_bhr)
         return NULL;
     rsp_bhr->content = strdup( dev->dev_data );
@@ -6262,8 +6325,8 @@ U16 uLength4;
     uLength2 = SIZE_TH + SIZE_RRH_1 + SIZE_PH;   // the MPC_TH/MPC_RRH/MPC_PH
     uLength1 = uLength2 + uLength3;              // the MPC_TH/MPC_RRH/MPC_PH and data
 
-    // Allocate a buffer in which the response will be build.
-    rsp_bhr = alloc_buffer( dev, uLength1+10 );
+    // Allocate a buffer in which the response will be built.
+    rsp_bhr = alloc_buffer( dev, uLength1 );
     if (!rsp_bhr)
         return NULL;
     rsp_bhr->content = strdup( dev->dev_data );
@@ -6378,8 +6441,8 @@ U16 uLength4;
     uLength2 = SIZE_TH + SIZE_RRH_1 + SIZE_PH;   // the MPC_TH/MPC_RRH/MPC_PH
     uLength1 = uLength2 + uLength3;              // the MPC_TH/MPC_RRH/MPC_PH and data
 
-    // Allocate a buffer in which the response will be build.
-    rsp_bhr = alloc_buffer( dev, uLength1+10 );
+    // Allocate a buffer in which the response will be built.
+    rsp_bhr = alloc_buffer( dev, uLength1 );
     if (!rsp_bhr)
         return NULL;
     rsp_bhr->content = strdup( dev->dev_data );

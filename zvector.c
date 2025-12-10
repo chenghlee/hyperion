@@ -17,6 +17,8 @@
 #include "opcode.h"
 #include "inline.h"
 
+#include "zvector.h"
+
 /* ====================================================================== */
 /* ZVECTOR_END macro for debugging Vector instructions                    */
 /* Note: block comments are used to avoid gcc                             */
@@ -44,97 +46,6 @@
 
 #if defined( FEATURE_129_ZVECTOR_FACILITY )
 
-/*------------------------------------------------------------------------*/
-/* See zvector2.c for the following Vector instructions.                  */
-/*------------------------------------------------------------------------*/
-/* E601 VLEBRH  - VECTOR LOAD BYTE REVERSED ELEMENT (16)          [VRX]   */
-/* E602 VLEBRG  - VECTOR LOAD BYTE REVERSED ELEMENT (64)          [VRX]   */
-/* E603 VLEBRF  - VECTOR LOAD BYTE REVERSED ELEMENT (32)          [VRX]   */
-/* E604 VLLEBRZ - VECTOR LOAD BYTE REVERSED ELEMENT AND ZERO      [VRX]   */
-/* E605 VLBRREP - VECTOR LOAD BYTE REVERSED ELEMENT AND REPLICATE [VRX]   */
-/* E606 VLBR    - VECTOR LOAD BYTE REVERSED ELEMENTS              [VRX]   */
-/* E607 VLER    - VECTOR LOAD ELEMENTS REVERSED                   [VRX]   */
-/* E609 VSTEBRH - VECTOR STORE BYTE REVERSED ELEMENT (16)         [VRX]   */
-/* E60A VSTEBRG - VECTOR STORE BYTE REVERSED ELEMENT (64)         [VRX]   */
-/* E60B VSTEBRF - VECTOR STORE BYTE REVERSED ELEMENT (32)         [VRX]   */
-/* E60E VSTBR   - VECTOR STORE BYTE REVERSED ELEMENTS             [VRX]   */
-/* E60F VSTER   - VECTOR STORE ELEMENTS REVERSED                  [VRX]   */
-/* E634 VPKZ    - VECTOR PACK ZONED                               [VSI]   */
-/* E635 VLRL    - VECTOR LOAD RIGHTMOST WITH LENGTH               [VSI]   */
-/* E637 VLRLR   - VECTOR LOAD RIGHTMOST WITH LENGTH (reg)         [VRS-d] */
-/* E63C VUPKZ   - VECTOR UNPACK ZONED                             [VSI]   */
-/* E63D VSTRL   - VECTOR STORE RIGHTMOST WITH LENGTH              [VSI]   */
-/* E63F VSTRLR  - VECTOR STORE RIGHTMOST WITH LENGTH (reg)        [VRS-d] */
-/* E649 VLIP    - VECTOR LOAD IMMEDIATE DECIMAL                   [VRI-h] */
-/* E650 VCVB    - VECTOR CONVERT TO BINARY (32)                   [VRR-i] */
-/* E651 VCLZDP  - VECTOR COUNT LEADING ZERO DIGITS                [VRR-k] */
-/* E652 VCVBG   - VECTOR CONVERT TO BINARY (64)                   [VRR-i] */
-/* E654 VUPKZH  - VECTOR UNPACK ZONED HIGH                        [VRR-k] */
-/* E658 VCVD    - VECTOR CONVERT TO DECIMAL (32)                  [VRI-i] */
-/* E659 VSRP    - VECTOR SHIFT AND ROUND DECIMAL                  [VRi-g] */
-/* E65A VCVDG   - VECTOR CONVERT TO DECIMAL (64)                  [VRI-i] */
-/* E65B VPSOP   - VECTOR PERFORM SIGN OPERATION DECIMAL           [VRI-g] */
-/* E65C VUPKZL  - VECTOR UNPACK ZONED LOW                         [VRR-k] */
-/* E65F VTP     - VECTOR TEST DECIMAL                             [VRR-g] */
-/* E670 VPKZR   - VECTOR PACK ZONED REGISTER                      [VRI-f] */
-/* E671 VAP     - VECTOR ADD DECIMAL                              [VRI-f] */
-/* E672 VSRPR   - VECTOR SHIFT AND ROUND DECIMAL REGISTER         [VRI-f] */
-/* E673 VSP     - VECTOR SUBTRACT DECIMAL                         [VRI-f] */
-/* E674 VSCHP   - DECIMAL SCALE AND CONVERT TO HFP                [VRR-b] */
-/* E677 VCP     - VECTOR COMPARE DECIMAL                          [VRR-h] */
-/* E678 VMP     - VECTOR MULTIPLY DECIMAL                         [VRI-f] */
-/* E679 VMSP    - VECTOR MULTIPLY AND SHIFT DECIMAL               [VRI-f] */
-/* E67A VDP     - VECTOR DIVIDE DECIMAL                           [VRI-f] */
-/* E67B VRP     - VECTOR REMAINDER DECIMAL                        [VRI-f] */
-/* E67C VSCSHP  - DECIMAL SCALE AND CONVERT AND SPLIT TO HFP      [VRR-b] */
-/* E67D VCSPH   - VECTOR CONVERT HFP TO SCALED DECIMAL            [VRR-j] */
-/* E67E VSDP    - VECTOR SHIFT AND DIVIDE DECIMAL                 [VRI-f] */
-/*------------------------------------------------------------------------*/
-
-/*------------------------------------------------------------------------*/
-/* See nnpa.c for the following Specialized-Function-Assist instructions. */
-/*------------------------------------------------------------------------*/
-/* E655 VCNF   - VECTOR FP CONVERT TO NNP                         [VRR-a] */
-/* E656 VCLFNH - VECTOR FP CONVERT AND LENGTHEN FROM NNP HIGH     [VRR_a] */
-/* E65D VCFN   - VECTOR FP CONVERT FROM NNP                       [VRR-a] */
-/* E65E VCLFNL - VECTOR FP CONVERT AND LENGTHEN FROM NNP LOW      [VRR-a] */
-/* E675 VCRNF  - VECTOR FP CONVERT AND ROUND TO NNP               [VRR-c] */
-/*------------------------------------------------------------------------*/
-
-/*------------------------------------------------------------------------*/
-/* See ieee.c for the following Vector Floating-Point instructions.       */
-/*------------------------------------------------------------------------*/
-/* E74A VFTCI  - Vector FP Test Data Class Immediate              [VRI-e] */
-/* E78E VFMS   - Vector FP Multiply and Subtract                  [VRR-e] */
-/* E78F VFMA   - Vector FP Multiply and Add                       [VRR-e] */
-/* E79E VFNMS  - Vector FP Negative Multiply And Subtract         [VRR-e] */
-/* E79F VFNMA  - Vector FP Negative Multiply And Add              [VRR-e] */
-/* E7C0 VCLFP  - Vector FP Convert To Logical (short BFP to 32)   [VRR-a] */
-/* E7C0 VCLGD  - Vector FP Convert To Logical (long BFP to 64)    [VRR-a] */
-/* E7C1 VCFPL  - Vector FP Convert From Logical (32 to short BFP) [VRR-a] */
-/* E7C1 VCDLG  - Vector FP Convert From Logical (64 to long BFP)  [VRR-a] */
-/* E7C2 VCSFP  - Vector FP Convert To Fixed (short BFP to 32)     [VRR-a] */
-/* E7C2 VCGD   - Vector FP Convert To Fixed (long BFP to 64)      [VRR-a] */
-/* E7C3 VCFPS  - Vector FP Convert From Fixed (32 to short BFP)   [VRR-a] */
-/* E7C3 VCDG   - Vector FP Convert From Fixed (64 to long BFP)    [VRR-a] */
-/* E7C4 VFLL   - Vector FP Load Lengthened                        [VRR-a] */
-/* E7C5 VFLR   - Vector FP Load Rounded                           [VRR-a] */
-/* E7C7 VFI    - Vector Load FP Integer                           [VRR-a] */
-/* E7CA WFK    - Vector FP Compare and Signal Scalar              [VRR-a] */
-/* E7CB WFC    - Vector FP Compare Scalar                         [VRR-a] */
-/* E7CC VFPSO  - Vector FP Perform Sign Operation                 [VRR-a] */
-/* E7CE VFSQ   - Vector FP Square Root                            [VRR-a] */
-/* E7E2 VFS    - Vector FP Subtract                               [VRR-c] */
-/* E7E3 VFA    - Vector FP Add                                    [VRR-c] */
-/* E7E5 VFD    - Vector FP Divide                                 [VRR-c] */
-/* E7E7 VFM    - Vector FP Multiply                               [VRR-c] */
-/* E7E8 VFCE   - Vector FP Compare Equal                          [VRR-c] */
-/* E7EA VFCHE  - Vector FP Compare High or Equal                  [VRR-c] */
-/* E7EB VFCH   - Vector FP Compare High                           [VRR-c] */
-/* E7EE VFMIN  - Vector FP Minimum                                [VRR-c] */
-/* E7EF VFMAX  - Vector FP Maximum                                [VRR-c] */
-/*------------------------------------------------------------------------*/
-
 /*===================================================================*/
 /* Achitecture Independent Routines                                  */
 /*===================================================================*/
@@ -142,396 +53,25 @@
 #if !defined(_ZVECTOR_ARCH_INDEPENDENT_)
 #define _ZVECTOR_ARCH_INDEPENDENT_
 
-
 /*-------------------------------------------------------------------*/
-/* 128 bit types                                                     */
+/* Vector-processing exception.                                      */
 /*-------------------------------------------------------------------*/
-
+/* Create the VXC from the VIX and the VIC.                          */
+/* Bits 0-3 of the VXC are the vector index (VIX).                   */
+/*   The VIX is the index of the source element that caused          */
+/*   the trapping exception. If trapping conditions exist for        */
+/*   multiple elements, the exception of the lowest-indexed          */
+/*   source element is recognized.                                   */
+/* Bits 4-7 of the VXC are the vector interrupt code (VIC).          */
 /*-------------------------------------------------------------------*/
-/* are the compiler 128 bit types available?                         */
-/*-------------------------------------------------------------------*/
-#if defined( __SIZEOF_INT128__ )
-    #define _USE_128_
-#endif
-
-/*-------------------------------------------------------------------*/
-/* U128                                                              */
-/*-------------------------------------------------------------------*/
-typedef union {
-        QW   Q;
-#if defined( _USE_128_ )
-    unsigned __int128 u_128;
-#endif
-        U64  u_64[2];
-        U32  u_32[4];
-        U16  u_16[8];
-        U8   u_8[16];
-
-#if defined( _USE_128_ )
-    __int128 s_128;
-#endif
-        S64  s_64[2];
-        S32  s_32[4];
-        S16  s_16[8];
-        S8   s_8[16];
-
-#if defined( FEATURE_V128_SSE )
-        __m128i V;      // intrinsic type vector
-#endif
-
-}  U128  ;
-
-/*===================================================================*/
-/* U128 Arithmetic (add, sub, mul)                                   */
-/*===================================================================*/
-
-/*-------------------------------------------------------------------*/
-/* U128 Add: return a + b                                            */
-/*-------------------------------------------------------------------*/
-static inline U128 U128_add( U128 a, U128 b)
+static void vector_processing_trap( REGS *regs, int vix, U32 vic )
 {
-#if defined( _USE_128_ )
-    U128 temp;                           /* temp (return) value      */
-
-    temp.u_128 =  a.u_128 + b.u_128;
-    return temp;
-
-#else
-    U128 temp;                           /* temp (return) value      */
-
-    temp.Q.D.H.D =  a.Q.D.H.D + b.Q.D.H.D;
-    temp.Q.D.L.D =  a.Q.D.L.D + b.Q.D.L.D;
-    if (temp.Q.D.L.D < b.Q.D.L.D) temp.Q.D.H.D++;
-    return temp;
-#endif
-}
-
-/*-------------------------------------------------------------------*/
-/* U128 Subtract: return a - b                                       */
-/*-------------------------------------------------------------------*/
-static inline U128 U128_sub( U128 a, U128 b)
-{
-#if defined( _USE_128_ )
-    U128 temp;                           /* temp (return) value      */
-
-    temp.u_128 =  a.u_128 - b.u_128;
-    return temp;
-
-#else
-    U128 temp;                           /* temp (return) value      */
-
-    temp.Q.D.H.D =  a.Q.D.H.D - b.Q.D.H.D;
-    if (a.Q.D.L.D < b.Q.D.L.D) temp.Q.D.H.D--;
-    temp.Q.D.L.D =  a.Q.D.L.D - b.Q.D.L.D;
-
-    return temp;
-#endif
-}
-
-/*-------------------------------------------------------------------*/
-/* U128: U64 * U64 Multiply: return a * b (overflow ignored)         */
-/*                                                                   */
-/* Very simple, standard approach to arithmetic multiply             */
-/*                                                                   */
-/*                                                                   */
-/*-------------------------------------------------------------------*/
-static inline U128 U64_mul (U64 aa, U64 bb)
-{
-#if defined( _USE_128_)
-    U128 temp;                           /* temp (return) value      */
-
-    temp.u_128 =  (unsigned __int128) aa * bb;
-    return temp;
-
-#else
-    DW a;                                /* arg 'aa' as DW            */
-    DW b;                                /* arg 'bb' as DW            */
-    DW t64;                              /* temp                      */
-    U128 r;                              /* U128 multiply result      */
-    U128 t128;                           /* temp                      */
-
-    /* initialize result */
-    r.Q.D.H.D = 0UL;
-    r.Q.D.L.D = 0UL;
-
-    /* zero check */
-    if (aa == 0 || bb == 0) return r;
-
-    /* arguments as DWs */
-    a.D = aa;
-    b.D = bb;
-
-    /* a low 32 x b low 32 */
-    if ( a.F.L.F != 0 && b.F.L.F!= 0 )
-    {
-        r.Q.D.L.D = (U64) a.F.L.F * (U64) b.F.L.F;
-    }
-
-    /* a high 32 x b low 32 */
-    if ( a.F.H.F != 0 && b.F.L.F!= 0 )
-    {
-        t64.D =  (U64) a.F.H.F * (U64) b.F.L.F;
-        t128.Q.D.H.D = 0UL;
-        t128.Q.D.L.D = 0UL;
-        t128.Q.D.H.F.L.F = t64.F.H.F;
-        t128.Q.D.L.F.H.F = t64.F.L.F;
-        r = U128_add( r, t128 );
-    }
-
-    /* a low 32 x b high 32 */
-    if ( a.F.L.F != 0 && b.F.H.F!= 0 )
-    {
-        t64.D =  (U64) a.F.L.F * (U64) b.F.H.F;
-        t128.Q.D.H.D = 0UL;
-        t128.Q.D.L.D = 0UL;
-        t128.Q.D.H.F.L.F = t64.F.H.F;
-        t128.Q.D.L.F.H.F = t64.F.L.F;
-        r = U128_add( r, t128 );
-    }
-
-    /* a high 32 x b high 32 */
-    if ( a.F.H.F != 0 && b.F.H.F!= 0 )
-    {
-        t64.D =  (U64) a.F.H.F * (U64) b.F.H.F;
-        t128.Q.D.H.D = 0UL;
-        t128.Q.D.L.D = 0UL;
-        t128.Q.D.H.F.L.F = t64.F.L.F;
-        t128.Q.D.H.F.H.F = t64.F.H.F;
-        r = U128_add( r, t128 );
-    }
-
-    return r;
-#endif
-
-}
-
-/*-------------------------------------------------------------------*/
-/* U128 * U32 Multiply: return a * b (overflow ignored)              */
-/*                                                                   */
-/* Very simple, standard approach to arithmetic multiply             */
-/*                                                                   */
-/*                                                                   */
-/*-------------------------------------------------------------------*/
-static inline U128 U128_U32_mul( U128 a, U32 b)
-{
-#if defined( _USE_128_ )
-    U128 temp;                           /* temp (return) value      */
-
-    temp.u_128 =  a.u_128 * b;
-    return temp;
-
-#else
-    U128 r;                           /* return value                */
-    U64 t;                            /* temp                        */
-
-
-    /* initialize result */
-    r.Q.D.H.D = 0UL;
-    r.Q.D.L.D = 0UL;
-
-    if (b == 0) return r;
-
-    /* 1st 32 bits : LL */
-    if (a.Q.F.LL.F != 0) r.Q.D.L.D = (U64) a.Q.F.LL.F * (U64) b;
-
-    /* 2nd 32 bits : LH */
-    if( a.Q.F.LH.F != 0)
-    {
-        t = (U64) a.Q.F.LH.F  * (U64) b  +  (U64) r.Q.F.LH.F;
-        r.Q.F.LH.F = t & 0xFFFFFFFFUL;
-        r.Q.F.HL.F = t >> 32;
-    }
-
-    /* 3rd 32 bits : HL */
-    if( a.Q.F.HL.F != 0)
-    {
-        t = (U64) a.Q.F.HL.F  * (U64) b  +  (U64) r.Q.F.HL.F;
-        r.Q.F.HL.F = t & 0xFFFFFFFFUL;
-        r.Q.F.HH.F = t >> 32;
-    }
-
-    /* 4th 32 bits : HH */
-    if( a.Q.F.HH.F != 0)
-    {
-        t = (U64) a.Q.F.HH.F  * (U64) b  +  (U64) r.Q.F.HH.F;
-        r.Q.F.HH.F = t & 0xFFFFFFFFUL;
-    }
-    return r;
-#endif
-}
-
-/*-------------------------------------------------------------------*/
-/* Debug helper for U128                                             */
-/*                                                                   */
-/* Input:                                                            */
-/*      msg     pointer to logmsg context string                     */
-/*      u       U128 number                                          */
-/*                                                                   */
-/*-------------------------------------------------------------------*/
-static inline void u128_logmsg(const char * msg, U128 u)
-{
-    printf("%s: u128=%16.16"PRIX64".%16.16"PRIX64" \n", msg, u.Q.D.H.D, u.Q.D.L.D);
-}
-
-
-/*-------------------------------------------------------------------*/
-/* Galois Field Multiply                                             */
-/*-------------------------------------------------------------------*/
-
-/*-------------------------------------------------------------------*/
-/* Galois Field(2) 32-bit Multiply                                   */
-/*                                                                   */
-/* Input:                                                            */
-/*      m1      32-bit multiply operand                              */
-/*      m2      32-bit multiply operand                              */
-/*                                                                   */
-/* Returns:                                                          */
-/*              64-bit GF(2) multiply result                         */
-/*                                                                   */
-/* version depends on whether intrinsics are being used              */
-/*-------------------------------------------------------------------*/
-static inline U64 gf_mul_32( U32 m1, U32 m2)
-{
-#if defined( FEATURE_V128_SSE ) && defined( FEATURE_HW_CLMUL )
-
-    if (sysblk.have_PCLMULQDQ)
-    {
-        /* intrinsic GF 64-bit multiply */
-        QW  mm1;                      /* U128 m1                       */
-        QW  mm2;                      /* U128 m2                       */
-        QW  acc;                      /* U128 accumulator              */
-
-        mm1.v = _mm_setzero_si128();
-        mm1.D.L.D = m1;
-            //logmsg("%s: u128=%16.16"PRIX64".%16.16"PRIX64" \n", "gf_mul_32 mm1.v", mm1.D.H.D, mm1.D.L.D);
-
-        mm2.v = _mm_setzero_si128();
-        mm2.D.L.D = m2;
-            //logmsg("%s: u128=%16.16"PRIX64".%16.16"PRIX64" \n", "gf_mul_32 mm2.v", mm2.D.H.D, mm2.D.L.D);
-
-        acc.v =  _mm_clmulepi64_si128 ( mm1.v, mm2.v, 0);
-            //logmsg("%s: u128=%16.16"PRIX64".%16.16"PRIX64" \n", "gf_mul_32 acc.v", acc.D.H.D, acc.D.L.D);
-
-        return acc.D.L.D;
-    }
-    else
-
-#endif  //  !(defined( FEATURE_V128_SSE ) && defined( FEATURE_HW_CLMUL )), or
-        // "PCLMULQDQ" instruction unavailable
-    {
-        int     i;                    /* loop index                      */
-        U32     myerU32;              /* multiplier                      */
-        U64     mcandU64;             /* multiplicand                    */
-        U64     accu64;               /* accumulator                     */
-
-        accu64 = 0;
-
-        /* select muliplier with fewest 'right most' bits */
-        /* to exit loop soonest                           */
-        if (m1 < m2)
-        {
-            mcandU64 = m2;
-            myerU32  = m1;
-        }
-        else
-        {
-            mcandU64 = m1;
-            myerU32  = m2;
-        }
-
-        /* galois multiply - no overflow */
-        for (i=0; i < 32 && myerU32 !=0; i++)
-        {
-            if ( myerU32 & 0x01 )
-                accu64 ^= mcandU64;
-            myerU32  >>= 1;
-            mcandU64 <<=1;
-        }
-
-        return accu64;
-    }
-}
-
-/*-------------------------------------------------------------------*/
-/* Galois Field(2) 64-bit Multiply                                   */
-/*                                                                   */
-/* Input:                                                            */
-/*      m1          64-bit multiply operand                          */
-/*      m2          64-bit multiply operand                          */
-/*      accu128h    pointer to high 64 bits of result                */
-/*      accu128l    pointer to low 64 bits of result                 */
-/*                                                                   */
-/* version depends on whether intrinsics are being used              */
-/*-------------------------------------------------------------------*/
-static inline void gf_mul_64( U64 m1, U64 m2, U64* accu128h, U64* accu128l)
-{
-#if defined( FEATURE_V128_SSE ) && defined( FEATURE_HW_CLMUL )
-
-    if (sysblk.have_PCLMULQDQ)
-    {
-        /* intrinsic GF 64-bit multiply */
-        QW  mm1;                      /* U128 m1                       */
-        QW  mm2;                      /* U128 m2                       */
-        QW  acc;                      /* U128 accumulator              */
-
-        mm1.v = _mm_setzero_si128();
-        mm1.D.L.D = m1;
-            //logmsg("%s: u128=%16.16"PRIX64".%16.16"PRIX64" \n", "gf_mul_64 mm1.v", mm1.D.H.D, mm1.D.L.D);
-
-        mm2.v = _mm_setzero_si128();
-        mm2.D.L.D = m2;
-            //logmsg("%s: u128=%16.16"PRIX64".%16.16"PRIX64" \n", "gf_mul_64 mm2.v", mm2.D.H.D, mm2.D.L.D);
-
-        acc.v =  _mm_clmulepi64_si128 ( mm1.v, mm2.v, 0);
-            //logmsg("%s: u128=%16.16"PRIX64".%16.16"PRIX64" \n", "gf_mul_64 acc.v", acc.D.H.D, acc.D.L.D);
-
-        *accu128h = acc.D.H.D;
-        *accu128l = acc.D.L.D;
-    }
-    else
-
-#endif  //  !(defined( FEATURE_V128_SSE ) && defined( FEATURE_HW_CLMUL )), or
-        // "PCLMULQDQ" instruction unavailable
-    {
-        /* portable C: GF 64-bit multiply */
-        int     i;                    /* loop index                      */
-        U64     myerU64;              /* doublewword multiplier          */
-        U64     mcandU128h;           /* doublewword multiplicand - high */
-        U64     mcandU128l;           /* doublewword multiplicand - low  */
-
-        *accu128h = 0;
-        *accu128l = 0;
-
-        /* select muliplier with fewest 'right most' bits */
-        /* to exit loop soonest                           */
-        if (m1 < m2)
-        {
-            mcandU128h  = 0;
-            mcandU128l = m2;
-            myerU64  = m1;
-        }
-        else
-        {
-            mcandU128h  = 0;
-            mcandU128l = m1;
-            myerU64  = m2;
-        }
-
-        /* galois multiply - no overflow */
-        for (i=0; i < 64 && myerU64 !=0; i++)
-        {
-            if ( myerU64 & 0x01 )
-            {
-                *accu128h ^= mcandU128h;
-                *accu128l ^= mcandU128l;
-            }
-            myerU64  >>= 1;
-
-            /* U128: shift left 1 bit*/
-            mcandU128h = (mcandU128h << 1) | (mcandU128l >> 63);
-            mcandU128l <<= 1;
-        }
-    }
+    U32 vxc;
+    vxc = ( vix << VXC_VIX_SHIFT ) | vic;  /* Build VXC            */
+    regs->dxc = vxc;                       /* Save VXC in PSA      */
+    regs->fpc &= ~FPC_DXC;                 /* Clear DXC/VXC in FPC */
+    regs->fpc |= (vxc << FPC_DXC_SHIFT);   /* Insert VXC into FPC  */
+    regs->program_interrupt( regs, PGM_VECTOR_PROCESSING_EXCEPTION );
 }
 
 #endif /*!defined(_ZVECTOR_ARCH_INDEPENDENT_)*/
@@ -1811,6 +1351,9 @@ DEF_INST( vector_count_trailing_zeros )
 
     ZVECTOR_CHECK( regs );
 
+    if ( m3 == 4 && !FACILITY_ENABLED( 198_VECTOR_ENH_3, regs ) )
+        ARCH_DEP( program_interrupt )( regs, PGM_SPECIFICATION_EXCEPTION );
+
     switch (m3)
     {
     case 0:  /* Byte */
@@ -1859,6 +1402,17 @@ DEF_INST( vector_count_trailing_zeros )
             regs->VR_D(v1, i) = count;
         }
         break;
+    case 4:  /* Quadword */
+        count = 0;
+        for (j=15; j >= 0; j--)
+        {
+            k = TrailingZerosInByte[regs->VR_B(v2, j)];
+            count += k;
+            if (k != 8) break;
+        }
+        regs->VR_D(v1, 0) = 0;
+        regs->VR_D(v1, 1) = count;
+        break;
     default:
         ARCH_DEP( program_interrupt )( regs, PGM_SPECIFICATION_EXCEPTION );
         break;
@@ -1902,6 +1456,9 @@ DEF_INST( vector_count_leading_zeros )
     UNREFERENCED( m5 );
 
     ZVECTOR_CHECK( regs );
+
+    if ( m3 == 4 && !FACILITY_ENABLED( 198_VECTOR_ENH_3, regs ) )
+        ARCH_DEP( program_interrupt )( regs, PGM_SPECIFICATION_EXCEPTION );
 
     switch (m3)
     {
@@ -1951,6 +1508,17 @@ DEF_INST( vector_count_leading_zeros )
             regs->VR_D(v1, i) = count;
         }
         break;
+    case 4:  /* Quadword */
+        count = 0;
+        for (j=0; j < 16; j++)
+        {
+            k = LeadingZerosInByte[regs->VR_B(v2, j)];
+            count += k;
+            if (k != 8) break;
+        }
+        regs->VR_D(v1, 0) = 0;
+        regs->VR_D(v1, 1) = count;
+        break;
     default:
         ARCH_DEP( program_interrupt )( regs, PGM_SPECIFICATION_EXCEPTION );
         break;
@@ -1958,6 +1526,89 @@ DEF_INST( vector_count_leading_zeros )
 
     ZVECTOR_END( regs );
 }
+
+#if defined( FEATURE_198_VECTOR_ENH_FACILITY_3 )
+/*-------------------------------------------------------------------*/
+/* E754 VGEM   - Vector Generate Element Masks               [VRR-a] */
+/*-------------------------------------------------------------------*/
+DEF_INST( vector_generate_element_masks )
+{
+    int     v1, v2, m3, m4, m5;
+    int     i;
+    U32     mask;
+
+    VRR_A( inst, regs, v1, v2, m3, m4, m5 );
+
+    /* m4, m5 are not part of this instruction */
+    UNREFERENCED( m4 );
+    UNREFERENCED( m5 );
+
+    ZVECTOR_CHECK( regs );
+
+    mask = regs->VR_F(v2, 0);
+
+    switch (m3)
+    {
+    case 0:  /* Byte */
+        for (i=0; i < 16; i++)
+        {
+            if (mask & 0x80000000)
+                regs->VR_B(v1, i) = 0xFF;
+            else
+                regs->VR_B(v1, i) = 0x00;
+            mask <<= 1;
+        }
+        break;
+    case 1:  /* Halfword */
+        for (i=0; i < 8; i++)
+        {
+            if (mask & 0x80000000)
+                regs->VR_H(v1, i) = 0xFFFF;
+            else
+                regs->VR_H(v1, i) = 0x0000;
+            mask <<= 1;
+        }
+        break;
+    case 2:  /* Word */
+        for (i=0; i < 4; i++)
+        {
+            if (mask & 0x80000000)
+                regs->VR_F(v1, i) = 0xFFFFFFFF;
+            else
+                regs->VR_F(v1, i) = 0x00000000;
+            mask <<= 1;
+        }
+        break;
+    case 3:  /* Doubleword */
+        for (i=0; i < 2; i++)
+        {
+            if (mask & 0x80000000)
+                regs->VR_D(v1, i) = 0xFFFFFFFFFFFFFFFFull;
+            else
+                regs->VR_D(v1, i) = 0x0000000000000000ull;
+            mask <<= 1;
+        }
+        break;
+    case 4:  /* Quadword */
+        if (mask & 0x80000000)
+        {
+            regs->VR_D(v1, 0) = 0xFFFFFFFFFFFFFFFFull;
+            regs->VR_D(v1, 1) = 0xFFFFFFFFFFFFFFFFull;
+        }
+        else
+        {
+            regs->VR_D(v1, 0) = 0x0000000000000000ull;
+            regs->VR_D(v1, 1) = 0x0000000000000000ull;
+        }
+        break;
+    default:
+        ARCH_DEP( program_interrupt )( regs, PGM_SPECIFICATION_EXCEPTION );
+        break;
+    }
+
+    ZVECTOR_END( regs );
+}
+#endif /* defined( FEATURE_198_VECTOR_ENH_FACILITY_3 ) */
 
 /*-------------------------------------------------------------------*/
 /* E756 VLR    - Vector Load Vector                          [VRR-a] */
@@ -2528,8 +2179,8 @@ DEF_INST( vector_nor )
 
     ZVECTOR_CHECK( regs );
 
-    regs->VR_D(v1, 0) = ~regs->VR_D(v2, 0) & ~regs->VR_D(v3, 0);
-    regs->VR_D(v1, 1) = ~regs->VR_D(v2, 1) & ~regs->VR_D(v3, 1);
+    regs->VR_D(v1, 0) = ~(regs->VR_D(v2, 0) | regs->VR_D(v3, 0));
+    regs->VR_D(v1, 1) = ~(regs->VR_D(v2, 1) | regs->VR_D(v3, 1));
 
     ZVECTOR_END( regs );
 }
@@ -2597,8 +2248,8 @@ DEF_INST( vector_nand )
 
     ZVECTOR_CHECK( regs );
 
-    regs->VR_D(v1, 0) = ~regs->VR_D(v2, 0) | ~regs->VR_D(v3, 0);
-    regs->VR_D(v1, 1) = ~regs->VR_D(v2, 1) | ~regs->VR_D(v3, 1);
+    regs->VR_D(v1, 0) = ~(regs->VR_D(v2, 0) & regs->VR_D(v3, 0));
+    regs->VR_D(v1, 1) = ~(regs->VR_D(v2, 1) & regs->VR_D(v3, 1));
 
     ZVECTOR_END( regs );
 }
@@ -3736,11 +3387,12 @@ DEF_INST( vector_shift_left_double_by_bit )
     SV_D( temp, 2 ) = regs->VR_D( v3, 0 );
     SV_D( temp, 3 ) = regs->VR_D( v3, 1 );
 
-    for (i = 0; i < 3; i++) {
-        j = SV_D( temp, i ) << i4;
-        k = SV_D( temp, i+1 ) >> ( 64 - i4 );
-        SV_D( temp, i ) = j | k;
-    }
+    if ( i4 > 0 )
+        for (i = 0; i < 3; i++) {
+            j = SV_D( temp, i ) << i4;
+            k = SV_D( temp, i+1 ) >> ( 64 - i4 );
+            SV_D( temp, i ) = j | k;
+        }
 
     regs->VR_D( v1, 0 ) = SV_D( temp, 0 );
     regs->VR_D( v1, 1 ) = SV_D( temp, 1 );
@@ -3773,17 +3425,752 @@ DEF_INST( vector_shift_right_double_by_bit )
     SV_D( temp, 2 ) = regs->VR_D( v3, 0 );
     SV_D( temp, 3 ) = regs->VR_D( v3, 1 );
 
-    for (i = 3; i > 0; i--) {
-        j = SV_D( temp, i-1 ) << ( 64 - i4 );
-        k = SV_D( temp, i ) >> i4;
-        SV_D( temp, i ) = j | k;
-    }
+    if ( i4 > 0 )
+        for (i = 3; i > 0; i--) {
+            j = SV_D( temp, i-1 ) << ( 64 - i4 );
+            k = SV_D( temp, i ) >> i4;
+            SV_D( temp, i ) = j | k;
+        }
 
     regs->VR_D( v1, 0 ) = SV_D( temp, 2 );
     regs->VR_D( v1, 1 ) = SV_D( temp, 3 );
 
     ZVECTOR_END( regs );
 }
+
+#if defined( FEATURE_198_VECTOR_ENH_FACILITY_3 )
+/*-------------------------------------------------------------------*/
+/* E788 VEVAL  - Vector Evaluate                             [VRI-k] */
+/*-------------------------------------------------------------------*/
+DEF_INST( vector_evaluate )
+{
+    int     v1, v2, v3, v4, i5;
+    U128    tempv1, tempv2, tempv3, tempv4;
+
+    VRI_K( inst, regs, v1, v2, v3, v4, i5 );
+
+    ZVECTOR_CHECK( regs );
+
+    tempv1 = U128_zero();
+    tempv2.Q = regs->VR_Q(v2);
+    tempv3.Q = regs->VR_Q(v3);
+    tempv4.Q = regs->VR_Q(v4);
+
+    /*  Note:
+        The following case statement implements boolean functions defined in
+        PoP SA22-7832-14, Figure 22-3. Boolean operations, paged 22-14.
+        These boolean functions are optimized versions compared to the
+        default case with a loop for each bit of the source and result
+        vectors.
+    */
+
+    switch (i5)
+    {
+    /* Row 0 */
+    case 0:     /* 00000 000  |||  Result inferred from VEVAL definition */
+        tempv1 = U128_zero();
+        break;
+    case 1:     /* 00000 001  AND(A,B,C)  */
+        tempv1 = U128_and3( tempv2, tempv3, tempv4 );
+        // tempv1 = U128_and(tempv2, U128_and(tempv3, tempv4));
+        break;
+    // case 2:     /* 00000 010  +++  */
+    //     break;
+    // case 3:     /* 00000 011  |||  */
+    //     break;
+    // case 4:     /* 00000 100  +++  */
+    //     break;
+    // case 5:     /* 00000 101  |||  */
+    //     break;
+    case 6:     /* 00000 110  AND(A,XOR(B,C))  */
+        tempv1 = U128_and(tempv2, U128_xor(tempv3, tempv4));
+        break;
+    case 7:     /* 00000 111  AND(A,OR(B,C))  */
+        tempv1 = U128_and(tempv2, U128_or(tempv3, tempv4));
+        break;
+    /* Row 1 */
+    case 8:     /* 00001 000  AND(A,NOR(B,C))  */
+        tempv1 = U128_and(tempv2, U128_nor(tempv3, tempv4));
+        break;
+    case 9:     /* 00001 001  AND(A,NXOR(B,C))  */
+        tempv1 = U128_and(tempv2, U128_nxor(tempv3, tempv4));
+        break;
+    // case 10:    /* 00001 010  |||  */
+    //     break;
+    // case 11:    /* 00001 011  +++  */
+    //     break;
+    // case 12:    /* 00001 100  |||  */
+    //     break;
+    // case 13:    /* 00001 101  +++  */
+    //     break;
+    case 14:    /* 00001 110  AND(A,NAND(B,C))  */
+        tempv1 = U128_and(tempv2, U128_nand(tempv3, tempv4));
+        break;
+    // case 15:    /* 00001 111  |||  */
+    //     break;
+    /* Row 2 */
+    case 16:    /* 00010 000  NOR(A,NAND(B,C))  */
+        tempv1 = U128_nor(tempv2, U128_nand(tempv3, tempv4));
+        break;
+    // case 17:    /* 00010 001  |||  */
+    //     break;
+    // case 18:    /* 00010 010  +++  */
+    //     break;
+    // case 19:    /* 00010 011  +++  */
+    //     break;
+    // case 20:    /* 00010 100  +++  */
+    //     break;
+    // case 21:    /* 00010 101  +++  */
+    //     break;
+    case 22:    /* 00010 110  SEL(A,XOR(B,C),AND(B,C))  */
+        tempv1 = U128_select( tempv2, U128_xor( tempv3, tempv4), U128_and( tempv3, tempv4) );
+        break;
+    case 23:    /* 00010 111  MAJOR(A,B,C)  */
+        tempv1 = U128_major(tempv2, tempv3, tempv4);
+        break;
+    /* Row 3 */
+    case 24:    /* 00011 000  SEL(A,NOR(B,C),AND(B,C))  */
+        tempv1 = U128_select( tempv2, U128_nor( tempv3, tempv4), U128_and( tempv3, tempv4) );
+        break;
+    case 25:    /* 00011 001  SEL(A,NXOR(B,C),AND(B,C))  */
+        tempv1 = U128_select( tempv2, U128_nxor( tempv3, tempv4), U128_and( tempv3, tempv4) );
+        break;
+    // case 26:    /* 00011 010  +++  */
+    //     break;
+    // case 27:    /* 00011 011  |||  */
+    //     break;
+    case 28:    /* 00011 100  SEL(A,NOT(B),AND(B,C)) */
+        tempv1 = U128_select( tempv2, U128_not( tempv3), U128_and( tempv3, tempv4) );
+        break;
+    // case 29:    /* 00011 101  |||  */
+    //     break;
+    case 30:    /* 00011 110  XOR(A,AND(B,C))  */
+        tempv1 = U128_xor(tempv2, U128_and(tempv3, tempv4));
+        break;
+    case 31:    /* 00011 111  OR(A,AND(B,C))  */
+        tempv1 = U128_or(tempv2, U128_and(tempv3, tempv4));
+        break;
+    /* Row 4 */
+    // case 32:    /* 00100 000  +++  */
+    //     break;
+    // case 33:    /* 00100 001  +++  */
+    //     break;
+    // case 34:    /* 00100 010  |||  */
+    //     break;
+    // case 35:    /* 00100 011  +++  */
+    //     break;
+    // case 36:    /* 00100 100  +++  */
+    //     break;
+    // case 37:    /* 00100 101  +++  */
+    //     break;
+    // case 38:    /* 00100 110  +++  */
+    //     break;
+    // case 39:    /* 00100 111  |||  */
+    //     break;
+    /* Row 5 */
+    // case 40:    /* 00101 000  +++  */
+    //     break;
+    // case 41:    /* 00101 001  +++  */
+    //     break;
+    // case 42:    /* 00101 010  +++  */
+    //     break;
+    // case 43:    /* 00101 011  +++  */
+    //     break;
+    // case 44:    /* 00101 100  +++  */
+    //     break;
+    // case 45:    /* 00101 101  +++  */
+    //     break;
+    // case 46:    /* 00101 110  +++  */
+    //     break;
+    // case 47:    /* 00101 111  +++  */
+    //     break;
+    /* Row 6 */
+    // case 48:    /* 00110 000  |||  */
+    //     break;
+    // case 49:    /* 00110 001  +++  */
+    //     break;
+    // case 50:    /* 00110 010  +++  */
+    //     break;
+    // case 51:    /* 00110 011  |||  */
+    //     break;
+    // case 52:    /* 00110 100  +++  */
+    //     break;
+    // case 53:    /* 00110 101  |||  */
+    //     break;
+    // case 54:    /* 00110 110  +++  */
+    //     break;
+    // case 55:    /* 00110 111  +++  */
+    //     break;
+    /* Row 7 */
+    // case 56:    /* 00111 000  +++  */
+    //     break;
+    // case 57:    /* 00111 001  +++  */
+    //     break;
+    // case 58:    /* 00111 010  +++  */
+    //     break;
+    // case 59:    /* 00111 011  +++  */
+    //     break;
+    // case 60:    /* 00111 100  |||  */
+    //     break;
+    // case 61:    /* 00111 101  +++  */
+    //     break;
+    // case 62:    /* 00111 110  +++  */
+    //     break;
+    // case 63:    /* 00111 111  |||  */
+    //     break;
+    /* Row 8 */
+    // case 64:    /* 01000 000  +++  */
+    //     break;
+    // case 65:    /* 01000 001  +++  */
+    //     break;
+    // case 66:    /* 01000 010  +++  */
+    //     break;
+    // case 67:    /* 01000 011  +++  */
+    //     break;
+    // case 68:    /* 01000 100  |||  */
+    //     break;
+    // case 69:    /* 01000 101  +++  */
+    //     break;
+    // case 70:    /* 01000 110  +++  */
+    //     break;
+    // case 71:    /* 01000 111  |||  */
+    //     break;
+    /* Row 9  */
+    // case 72:    /* 01001 000  +++  */
+    //     break;
+    // case 73:    /* 01001 001  +++  */
+    //     break;
+    // case 74:    /* 01001 010  +++  */
+    //     break;
+    // case 75:    /* 01001 011  +++  */
+    //     break;
+    // case 76:    /* 01001 100  +++  */
+    //     break;
+    // case 77:    /* 01001 101  +++  */
+    //     break;
+    // case 78:    /* 01001 110  +++  */
+    //     break;
+    // case 79:    /* 01001 111  +++  */
+    //     break;
+    /* Row 10 */
+    // case 80:    /* 01010 000  |||  */
+    //     break;
+    case 81:    /* 01010 001  SEL(A,AND(B,C),C)  */
+        tempv1 = U128_select( tempv2, U128_and( tempv3, tempv4), tempv4 );
+        break;
+    // case 82:    /* 01010 010  +++  */
+    //     break;
+    // case 83:    /* 01010 011  |||  */
+    //     break;
+    // case 84:    /* 01010 100  +++  */
+    //     break;
+    // case 85:    /* 01010 101  |||  */
+    //     break;
+    // case 86:    /* 01010 110  +++  */
+    //     break;
+    // case 87:    /* 01010 111  +++  */
+    //     break;
+    /* Row 11 */
+    case 88:    /* 01011 000  SEL(A,NOR(B,C),C)  */
+        tempv1 = U128_select( tempv2, U128_nor( tempv3, tempv4), tempv4 );
+        break;
+    case 89:    /* 01011 001  SEL(A,NXOR(B,C),C)  */
+        tempv1 = U128_select( tempv2, U128_nxor( tempv3, tempv4), tempv4 );
+        break;
+    // case 90:    /* 01011 010  |||  */
+    //     break;
+    // case 91:    /* 01011 011   +++  */
+    //     break;
+    case 92:    /* 01011 100  SEL(A,NOT(B),C)  */
+        tempv1 = U128_select( tempv2, U128_not( tempv3 ), tempv4 );
+        break;
+    // case 93:    /* 01011 101  +++  */
+    //     break;
+    case 94:    /* 01011 110  SEL(A,NAND(B,C),C)  */
+        tempv1 = U128_select( tempv2, U128_nand( tempv3, tempv4), tempv4 );
+        break;
+    // case 95:    /* 01011 111  |||  */
+    //     break;
+    /* Row 12 */
+    case 96:    /* 01100 000  NOR(A,NXOR(B,C))  */
+        tempv1 = U128_nor(tempv2, U128_nxor(tempv3, tempv4));
+        break;
+    case 97:    /* 01100 001  SEL(A,AND(B,C),XOR(B,C))  */
+        tempv1 = U128_select( tempv2, U128_and( tempv3, tempv4 ), U128_xor( tempv3, tempv4 ) );
+        break;
+    // case 98:    /* 01100 010   +++  */
+    //     break;
+    case 99:    /* 01100 011  SEL(A,B,XOR(B,C))  */
+        tempv1 = U128_select( tempv2,  tempv3, U128_xor( tempv3, tempv4 ) );
+        break;
+    // case 100:   /* 01100 100  +++  */
+    //     break;
+    // case 101:   /* 01100 101  +++  */
+    //     break;
+    // case 102:   /* 01100 110  |||  */
+    //     break;
+    case 103:   /* 01100 111  SEL(A,OR(B,C),XOR(B,C))  */
+        tempv1 = U128_select( tempv2, U128_or( tempv3, tempv4 ), U128_xor( tempv3, tempv4 ) );
+        break;
+    /* Row 13 */
+    case 104:   /* 01101 000  SEL(A,NOR(B,C),XOR(B,C))  */
+        tempv1 = U128_select( tempv2, U128_nor( tempv3, tempv4 ), U128_xor( tempv3, tempv4 ) );
+        break;
+    case 105:   /* 01101 001  XOR(A,B,C)  */
+        tempv1 = U128_xor3( tempv2, tempv3, tempv4 );
+        break;
+    // case 106:   /* 01101 010  +++  */
+    //     break;
+    // case 107:   /* 01101 011  +++  */
+    //     break;
+    // case 108:   /* 01101 100  +++  */
+    //     break;
+    // case 109:   /* 01101 101  +++  */
+    //     break;
+    // case 110:   /* 01101 110  +++  */
+    //     break;
+    case 111:   /* 01101 111  OR(A,XOR(B,C))  */
+        tempv1 = U128_or(tempv2, U128_xor(tempv3, tempv4));
+        break;
+    /* Row 14 */
+    case 112:   /* 01110 000  NOR(A,NOR(B,C))  */
+        tempv1 = U128_nor(tempv2, U128_nor(tempv3, tempv4));
+        break;
+    case 113:   /* 01110 001  SEL(A,AND(B,C),OR(B,C))  */
+        tempv1 = U128_select( tempv2, U128_and( tempv3, tempv4 ), U128_or( tempv3, tempv4 ) );
+        break;
+    // case 114:   /* 01110 010  +++  */
+    //     break;
+    case 115:   /* 01110 011  SEL(A,B,OR(B,C))  */
+        tempv1 = U128_select( tempv2, tempv3, U128_or( tempv3, tempv4 ) );
+        break;
+    // case 116:   /* 01110 100  +++  */
+    //     break;
+    // case 117:   /* 01110 101  +++  */
+    //     break;
+    // case 118:   /* 01110 110  +++  */
+    //     break;
+    // case 119:   /* 01110 111  |||  */
+    //     break;
+    /* Row 15 */
+    case 120:   /* 01111 000  XOR(A,OR(B,C))  */
+        tempv1 = U128_xor(tempv2, U128_or(tempv3, tempv4));
+        break;
+    case 121:   /* 01111 001  SEL(A,NXOR(B,C),OR(B,C))  */
+        tempv1 = U128_select( tempv2, U128_nxor( tempv3, tempv4 ), U128_or( tempv3, tempv4 ) );
+        break;
+    // case 122:   /* 01111 010  +++  */
+    //     break;
+    // case 123:   /* 01111 011  +++  */
+    //     break;
+    case 124:   /* 01111 100  SEL(A,NOT(B),OR(B,C))  */
+        tempv1 = U128_select( tempv2, U128_not( tempv3 ), U128_or( tempv3, tempv4 ) );
+        break;
+    // case 125:   /* 01111 101  +++  */
+    //     break;
+    case 126:   /* 01111 110  SEL(A,NAND(B,C),OR(B,C))  */
+        tempv1 = U128_select( tempv2, U128_nand( tempv3, tempv4 ), U128_or( tempv3, tempv4 ) );
+        break;
+    case 127:   /* 01111 111  OR(A,B,C)  */
+        tempv1 = U128_or3( tempv2, tempv3, tempv4 );
+        // tempv1 = U128_or(tempv2, U128_or(tempv3, tempv4));
+        break;
+    /* Row 16 */
+    case 128:   /* 10000 000  NOR(A,B,C)  */
+        tempv1 = U128_nor3( tempv2, tempv3, tempv4 );
+        // tempv1 = U128_nor(tempv2, U128_nor(tempv3, tempv4));
+        break;
+    case 129:   /* 10000 001  SEL(A,AND(B,C),NOR(B,C))  */
+        tempv1 = U128_select( tempv2, U128_and( tempv3, tempv4 ), U128_nor( tempv3, tempv4 ) );
+        break;
+    // case 130:   /* 10000 010  +++  */
+    //     break;
+    case 131:   /* 10000 011  SEL(A,B,NOR(B,C))  */
+        tempv1 = U128_select( tempv2, tempv3, U128_nor( tempv3, tempv4 ) );
+        break;
+    // case 132:   /* 10000 100  +++  */
+    //     break;
+    // case 133:   /* 10000 101  +++  */
+    //     break;
+    case 134:   /* 10000 110  SEL(A,XOR(B,C),NOR(B,C))  */
+        tempv1 = U128_select( tempv2, U128_xor( tempv3, tempv4 ), U128_nor( tempv3, tempv4 ) );
+        break;
+    case 135:   /* 10000 111  NXOR(A,OR(B,C))  */
+        tempv1 = U128_nxor(tempv2, U128_or(tempv3, tempv4));
+        break;
+    /* Row 17 */
+    // case 136:   /* 10001 000  |||  */
+    //     break;
+    // case 137:   /* 10001 001  +++  */
+    //     break;
+    // case 138:   /* 10001 010  +++  */
+    //     break;
+    // case 139:   /* 10001 011  +++  */
+    //     break;
+    case 140:   /* 10001 100  SEL(A,NOT(B),NOR(B,C))  */
+        tempv1 = U128_select( tempv2, U128_not( tempv3 ), U128_nor( tempv3, tempv4 ) );
+        break;
+    // case 141:   /* 10001 101  +++  */
+    //     break;
+    case 142:   /* 10001 110  SEL(A,NAND(B,C),NOR(B,C))  */
+        tempv1 = U128_select( tempv2, U128_nand( tempv3, tempv4 ), U128_nor( tempv3, tempv4 ) );
+        break;
+    case 143:   /* 10001 111  OR(A,NOR(B,C))  */
+        tempv1 = U128_or(tempv2, U128_nor(tempv3, tempv4));
+        break;
+    /* Row 18 */
+    case 144:   /* 10010 000  NOR(A,XOR(B,C))  */
+        tempv1 = U128_nor(tempv2, U128_xor(tempv3, tempv4));
+        break;
+    // case 145:   /* 10010 001  +++  */
+    //     break;
+    // case 146:   /* 10010 010  +++  */
+    //     break;
+    // case 147:   /* 10010 011  +++  */
+    //     break;
+    // case 148:   /* 10010 100  +++  */
+    //     break;
+    // case 149:   /* 10010 101  +++  */
+    //     break;
+    case 150:   /* 10010 110  NXOR(A,B,C)  */
+        tempv1 = U128_nxor3( tempv2, tempv3, tempv4 );
+        // tempv1 = U128_nxor(tempv2, U128_nxor(tempv3, tempv4));
+        break;
+    case 151:   /* 10010 111  SEL(A,OR(B,C),NXOR(B,C))  */
+        tempv1 = U128_select( tempv2, U128_or( tempv3, tempv4 ), U128_nxor( tempv3, tempv4 ) );
+        break;
+    /* Row 19 */
+    case 152:   /* 10011 000  SEL(A,NOR(B,C),NXOR(B,C))  */
+        tempv1 = U128_select( tempv2, U128_nor( tempv3, tempv4 ), U128_nxor( tempv3, tempv4 ) );
+        break;
+    // case 153:   /* 10011 001  |||  */
+    //     break;
+    // case 154:   /* 10011 010  +++  */
+    //     break;
+    // case 155:   /* 10011 011  +++  */
+    //     break;
+    case 156:   /* 10011 100  SEL(A,NOT(B),NXOR(B,C))  */
+        tempv1 = U128_select( tempv2, U128_not( tempv3 ), U128_nxor( tempv3, tempv4 ) );
+        break;
+    // case 157:   /* 10011 101  +++  */
+    //     break;
+    case 158:   /* 10011 110  SEL(A,NAND(B,C),NXOR(B,C))  */
+        tempv1 = U128_select( tempv2, U128_nand( tempv3, tempv4 ), U128_nxor( tempv3, tempv4 ) );
+        break;
+    case 159:   /* 10011 111  OR(A,NXOR(B,C))  */
+        tempv1 = U128_or(tempv2, U128_nxor(tempv3, tempv4));
+        break;
+    /* Row 20 */
+    // case 160:   /* 10100 000 * |||  */
+    //     break;
+    case 161:   /* 10100 001  SEL(A,AND(B,C),NOT(C))  */
+        tempv1 = U128_select( tempv2, U128_and( tempv3, tempv4 ), U128_not( tempv4 ) );
+        break;
+    // case 162:   /* 10100 010  +++  */
+    //     break;
+    case 163:   /* 10100 011  SEL(A,B,NOT(C))  */
+        tempv1 = U128_select( tempv2, tempv3, U128_not( tempv4 ) );
+        break;
+    // case 164:   /* 10100 100  +++  */
+    //     break;
+    // case 165:   /* 10100 101  |||  */
+    //     break;
+    case 166:   /* 10100 110  SEL(A,XOR(B,C),NOT(C)  */
+        tempv1 = U128_select( tempv2, U128_xor( tempv3, tempv4 ), U128_not( tempv4 ) );
+        break;
+    case 167:   /* 10100 111  SEL(A,OR(B,C),NOT(C))  */
+        tempv1 = U128_select( tempv2, U128_or( tempv3, tempv4 ), U128_not( tempv4 ) );
+        break;
+    /* Row 21 */
+    // case 168:   /* 10101 000  +++  */
+    //     break;
+    // case 169:   /* 10101 001  +++  */
+    //     break;
+    // case 170:   /* 10101 010  |||  */
+    //     break;
+    // case 171:   /* 10101 011  +++  */
+    //     break;
+    case 172:   /* 10101 100  SEL(A,NOT(B),NOT(C))  */
+        tempv1 = U128_select( tempv2, U128_not( tempv3 ), U128_not( tempv4 ) );
+        break;
+    // case 173:   /* 10101 101  +++  */
+    //     break;
+    case 174:   /* 10101 110  SEL(A,NAND(B,C),NOT(C))  */
+        tempv1 = U128_select( tempv2, U128_nand( tempv3, tempv4 ), U128_not( tempv4 ) );
+        break;
+    // case 175:   /* 10101 111  |||  */
+    //     break;
+    /* Row 22 */
+    // case 176:   /* 10110 000  +++  */
+    //     break;
+    // case 177:   /* 10110 001  +++  */
+    //     break;
+    // case 178:   /* 10110 010  +++  */
+    //     break;
+    // case 179:   /* 10110 011  +++  */
+    //     break;
+    // case 180:   /* 10110 100  +++  */
+    //     break;
+    // case 181:   /* 10110 101  +++  */
+    //     break;
+    // case 182:   /* 10110 110  +++  */
+    //     break;
+    // case 183:   /* 10110 111  +++  */
+    //     break;
+    /* Row 23 */
+    // case 184:   /* 10111 000  +++  */
+    //     break;
+    // case 185:   /* 10111 001  +++  */
+    //     break;
+    // case 186:   /* 10111 010  +++  */
+    //     break;
+    // case 187:   /* 10111 011  |||  */
+    //     break;
+    // case 188:   /* 10111 100  +++  */
+    //     break;
+    // case 189:   /* 10111 101  +++  */
+    //     break;
+    // case 190:   /* 10111 110  +++  */
+    //     break;
+    // case 191:   /* 10111 111  +++  */
+    //     break;
+    /* Row 24 */
+    // case 192:   /* 11000 000  |||  */
+    //     break;
+    // case 193:   /* 11000 001  +++  */
+    //     break;
+    // case 194:   /* 11000 010  +++  */
+    //     break;
+    // case 195:   /* 11000 011  |||  */
+    //     break;
+    // case 196:   /* 11000 100  +++  */
+    //     break;
+    // case 197:   /* 11000 101  +++  */
+    //     break;
+    // case 198:   /* 11000 110  +++  */
+    //     break;
+    // case 199:   /* 11000 111  +++  */
+    //     break;
+    /* Row 25 */
+    // case 200:   /* 11001 000  +++  */
+    //     break;
+    // case 201:   /* 11001 001  +++  */
+    //     break;
+    // case 202:   /* 11001 010  +++  */
+    //     break;
+    // case 203:   /* 11001 011  +++  */
+    //     break;
+    // case 204:   /* 11001 100  |||  */
+    //     break;
+    // case 205:   /* 11001 101  +++  */
+    //     break;
+    // case 206:   /* 11001 110  +++  */
+    //     break;
+    // case 207:   /* 11001 111  ||| */
+    //     break;
+    /* Row 26 */
+    // case 208:   /* 11010 000  +++  */
+    //     break;
+    // case 209:   /* 11010 001  +++  */
+    //     break;
+    // case 210:   /* 11010 010  +++  */
+    //     break;
+    // case 211:   /* 11010 011  +++  */
+    //     break;
+    // case 212:   /* 11010 100  +++  */
+    //     break;
+    // case 213:   /* 11010 101  +++  */
+    //     break;
+    // case 214:   /* 11010 110  +++  */
+    //     break;
+    // case 215:   /* 11010 111  +++  */
+    //     break;
+    /* Row 27 */
+    // case 216:   /* 11011 000  +++  */
+    //     break;
+    // case 217:   /* 11011 001  +++  */
+    //     break;
+    // case 218:   /* 11011 010  +++  */
+    //     break;
+    // case 219:   /* 11011 011  +++  */
+    //     break;
+    // case 220:   /* 11011 100  +++  */
+    //     break;
+    // case 221:   /* 11011 101  |||  */
+    //     break;
+    // case 222:   /* 11011 110  +++  */
+    //     break;
+    // case 223:   /* 11011 111  +++  */
+    //     break;
+    /* Row 28 */
+    case 224:   /* 11100 000  NOR(A,AND(B,C))  */
+        tempv1 = U128_nor(tempv2, U128_and(tempv3, tempv4));
+        break;
+    case 225:   /* 11100 001  NXOR(A,AND(B,C))  */
+        tempv1 = U128_nxor(tempv2, U128_and(tempv3, tempv4));
+        break;
+    // case 226:   /* 11100 010  +++  */
+    //     break;
+    case 227:   /* 11100 011  SEL(A,B,NAND(B,C))  */
+        tempv1 = U128_select( tempv2, tempv3, U128_nand( tempv3, tempv4 ) );
+        break;
+    // case 228:   /* 11100 100  +++  */
+    //     break;
+    // case 229:   /* 11100 101  +++  */
+    //     break;
+    case 230:   /* 11100 110  SEL(A,XOR(B,C),NAND(B,C))  */
+        tempv1 = U128_select( tempv2,  U128_xor( tempv3, tempv4 ), U128_nand( tempv3, tempv4 ) );
+        break;
+    case 231:   /* 11100 111  SEL(A,OR(B,C),NAND(B,C))  */
+        tempv1 = U128_select( tempv2,  U128_or( tempv3, tempv4 ), U128_nand( tempv3, tempv4 ) );
+        break;
+    /* Row 29 */
+    case 232:   /* 11101 000  MINOR(A,B,C)  */
+        tempv1 = U128_minor( tempv2, tempv3, tempv4 );
+        break;
+    case 233:   /* 11101 001  SEL(A,NXOR(B,C),NAND(B,C))  */
+        tempv1 = U128_select( tempv2,  U128_nxor( tempv3, tempv4 ), U128_nand( tempv3, tempv4 ) );
+        break;
+    // case 234:   /* 11101 010  +++  */
+    //     break;
+    // case 235:   /* 11101 011  +++  */
+    //     break;
+    // case 236:   /* 11101 100  +++  */
+    //     break;
+    // case 237:   /* 11101 101  +++  */
+    //     break;
+    // case 238:   /* 11101 110  |||  */
+    //     break;
+    case 239:   /* 11101 111  OR(A,NAND(B,C))  */
+        tempv1 = U128_or(tempv2, U128_nand(tempv3, tempv4));
+        break;
+    /* Row 30 */
+    // case 240:   /* 11110 000  |||  */
+    //     break;
+    case 241:   /* 11110 001  NAND(A,NAND(B,C))  */
+        tempv1 = U128_nand(tempv2, U128_nand(tempv3, tempv4));
+        break;
+    // case 242:   /* 11110 010  +++  */
+    //     break;
+    // case 243:   /* 11110 011  |||  */
+    //     break;
+    // case 244:   /* 11110 100  +++  */
+    //     break;
+    // case 245:   /* 11110 101  |||  */
+    //     break;
+    case 246:   /* 11110 110  NAND(A,NXOR(B,C))  */
+        tempv1 = U128_nand(tempv2, U128_nxor(tempv3, tempv4));
+        break;
+    case 247:   /* 11110 111  NAND(A,NOR(B,C))  */
+        tempv1 = U128_nand(tempv2, U128_nor(tempv3, tempv4));
+        break;
+    /* Row 31 */
+    case 248:   /* 11111 000  NAND(A,OR(B,C))  */
+        tempv1 = U128_nand(tempv2, U128_or(tempv3, tempv4));
+        break;
+    case 249:   /* 11111 001  NAND(A,XOR(B,C))  */
+        tempv1 = U128_nand(tempv2, U128_xor(tempv3, tempv4));
+        break;
+    // case 250:   /* 11111 010  |||  */
+    //     break;
+    // case 251:   /* 11111 011  +++  */
+    //     break;
+    // case 252:   /* 11111 100  |||  */
+    //     break;
+    // case 253:   /* 11111 101  +++  */
+    //     break;
+    case 254:   /* 11111 110  NAND(A,B,C)  */
+        tempv1 = U128_nand3( tempv2, tempv3, tempv4 );
+        // tempv1 = U128_nand(tempv2, U128_nand(tempv3, tempv4));
+        break;
+    case 255:   /* 11111 111  |||  Result inferred from VEVAL definition */
+        tempv1 = U128_minus_one();
+        break;
+    default:
+       tempv1 = U128_evaluate( tempv2, tempv3, tempv4, i5);
+       break;
+    }
+
+    regs->VR_Q(v1) = tempv1.Q;
+
+    ZVECTOR_END( regs );
+}
+#endif /* defined( FEATURE_198_VECTOR_ENH_FACILITY_3 ) */
+
+#if defined( FEATURE_198_VECTOR_ENH_FACILITY_3 )
+/*-------------------------------------------------------------------*/
+/* E789 VBLEND - Vector Blend                                [VRR-d] */
+/*-------------------------------------------------------------------*/
+DEF_INST( vector_blend )
+{
+    int     v1, v2, v3, v4, m5, m6;
+    int     i;
+
+    VRR_D( inst, regs, v1, v2, v3, v4, m5, m6 );
+
+    /* m6 is not part of this instruction */
+    UNREFERENCED( m6 );
+
+    ZVECTOR_CHECK( regs );
+
+    switch (m5)
+    {
+    case 0:  /* Byte */
+        for (i=0; i<16; i++)
+        {
+            if (regs->VR_B(v4, i) & 0x80)
+                regs->VR_B(v1, i) = regs->VR_B(v2, i);
+            else
+                regs->VR_B(v1, i) = regs->VR_B(v3, i);
+        }
+        break;
+    case 1:  /* Halfword */
+        for (i=0; i<8; i++)
+        {
+            if (regs->VR_H(v4, i) & 0x8000)
+                regs->VR_H(v1, i) = regs->VR_H(v2, i);
+            else
+                regs->VR_H(v1, i) = regs->VR_H(v3, i);
+        }
+        break;
+    case 2:  /* Word */
+        for (i=0; i<4; i++)
+        {
+            if (regs->VR_F(v4, i) & 0x80000000)
+                regs->VR_F(v1, i) = regs->VR_F(v2, i);
+            else
+                regs->VR_F(v1, i) = regs->VR_F(v3, i);
+        }
+        break;
+    case 3:  /* Doublword */
+        for (i=0; i<2; i++)
+        {
+            if (regs->VR_D(v4, i) & 0x8000000000000000ull )
+                regs->VR_D(v1, i) = regs->VR_D(v2, i);
+            else
+                regs->VR_D(v1, i) = regs->VR_D(v3, i);
+        }
+        break;
+    case 4:  /* Quadword */
+        if (regs->VR_D(v4, 0) & 0x8000000000000000ull )
+        {
+            regs->VR_D(v1, 0) = regs->VR_D(v2, 0);
+            regs->VR_D(v1, 1) = regs->VR_D(v2, 1);
+        }
+        else
+        {
+            regs->VR_D(v1, 0) = regs->VR_D(v3, 0);
+            regs->VR_D(v1, 1) = regs->VR_D(v3, 1);
+        }
+        break;
+    default:
+        ARCH_DEP( program_interrupt )( regs, PGM_SPECIFICATION_EXCEPTION );
+        break;
+    }
+
+    ZVECTOR_END( regs );
+}
+#endif /* defined( FEATURE_198_VECTOR_ENH_FACILITY_3 ) */
 
 /*-------------------------------------------------------------------*/
 /* E78A VSTRC  - Vector String Range Compare                 [VRR-d] */
@@ -4560,6 +4947,7 @@ DEF_INST( vector_multiply_logical_high )
 {
     int     v1, v2, v3, m4, m5, m6;
     union   { U64 d; U32 f; U16 h; } temp;
+    U128    u128temp1;
     int     i;
 
     VRR_C( inst, regs, v1, v2, v3, m4, m5, m6 );
@@ -4569,6 +4957,9 @@ DEF_INST( vector_multiply_logical_high )
     UNREFERENCED( m6 );
 
     ZVECTOR_CHECK( regs );
+
+    if ( (m4 == 3 || m4 == 4) && !FACILITY_ENABLED( 198_VECTOR_ENH_3, regs ) )
+            ARCH_DEP( program_interrupt )( regs, PGM_SPECIFICATION_EXCEPTION );
 
     switch (m4)
     {
@@ -4596,6 +4987,24 @@ DEF_INST( vector_multiply_logical_high )
             regs->VR_F(v1, i) = temp.d >> 32;
         }
         break;
+    case 3:  /* Doubleword */
+        for (i=0; i < 2; i++)
+        {
+            u128temp1 = U128_mul_64( regs->VR_D(v2, i), regs->VR_D(v3, i) );
+            regs->VR_D(v1, i) = u128temp1.Q.D.H.D;
+        }
+        break;
+    case 4:  /* Quadword */
+        {
+            U128 tempv2, tempv3;
+            U128 temphi, templo;
+
+            tempv2.Q = regs->VR_Q(v2);
+            tempv3.Q = regs->VR_Q(v3);
+            U128_mul(  tempv2, tempv3, &temphi, &templo );
+            regs->VR_Q(v1) = temphi.Q;
+        }
+        break;
     default:
         ARCH_DEP( program_interrupt )( regs, PGM_SPECIFICATION_EXCEPTION );
         break;
@@ -4611,6 +5020,7 @@ DEF_INST( vector_multiply_low )
 {
     int     v1, v2, v3, m4, m5, m6;
     union   { U64 d; U32 f; U16 h; } temp;
+    U128    u128temp1;
     int     i;
 
     VRR_C( inst, regs, v1, v2, v3, m4, m5, m6 );
@@ -4620,6 +5030,9 @@ DEF_INST( vector_multiply_low )
     UNREFERENCED( m6 );
 
     ZVECTOR_CHECK( regs );
+
+    if ( (m4 == 3 || m4 == 4) && !FACILITY_ENABLED( 198_VECTOR_ENH_3, regs ) )
+            ARCH_DEP( program_interrupt )( regs, PGM_SPECIFICATION_EXCEPTION );
 
     switch (m4)
     {
@@ -4647,6 +5060,24 @@ DEF_INST( vector_multiply_low )
             regs->VR_F(v1, i) = temp.d & 0xFFFFFFFF;
         }
         break;
+    case 3:  /* Doubleword */
+        for (i=0; i < 2; i++)
+        {
+            u128temp1 = S128_mul_64( regs->VR_D(v2, i), regs->VR_D(v3, i) );
+            regs->VR_D(v1, i) = u128temp1.Q.D.L.D;
+        }
+        break;
+    case 4:  /* Quadword */
+        {
+            U128 tempv2, tempv3;
+            U128 temphi, templo;
+
+            tempv2.Q = regs->VR_Q(v2);
+            tempv3.Q = regs->VR_Q(v3);
+            S128_mul(  tempv2, tempv3, &temphi, &templo );
+            regs->VR_Q(v1) = templo.Q;
+        }
+        break;
     default:
         ARCH_DEP( program_interrupt )( regs, PGM_SPECIFICATION_EXCEPTION );
         break;
@@ -4662,6 +5093,7 @@ DEF_INST( vector_multiply_high )
 {
     int     v1, v2, v3, m4, m5, m6;
     union   { S64 sd; S32 sf; S16 sh; } temp;
+    U128    u128temp1;
     int     i;
 
     VRR_C( inst, regs, v1, v2, v3, m4, m5, m6 );
@@ -4671,6 +5103,9 @@ DEF_INST( vector_multiply_high )
     UNREFERENCED( m6 );
 
     ZVECTOR_CHECK( regs );
+
+    if ( (m4 == 3 || m4 == 4) && !FACILITY_ENABLED( 198_VECTOR_ENH_3, regs ) )
+            ARCH_DEP( program_interrupt )( regs, PGM_SPECIFICATION_EXCEPTION );
 
     switch (m4)
     {
@@ -4698,6 +5133,24 @@ DEF_INST( vector_multiply_high )
             regs->VR_F(v1, i) = temp.sd >> 32;
         }
         break;
+    case 3:  /* Doubleword */
+        for (i=0; i < 2; i++)
+        {
+            u128temp1 = S128_mul_64( regs->VR_D(v2, i), regs->VR_D(v3, i) );
+            regs->VR_D(v1, i) = u128temp1.Q.D.H.D;
+        }
+        break;
+    case 4:  /* Quadword */
+        {
+            U128 tempv2, tempv3;
+            U128 temphi, templo;
+
+            tempv2.Q = regs->VR_Q(v2);
+            tempv3.Q = regs->VR_Q(v3);
+            S128_mul(  tempv2, tempv3, &temphi, &templo );
+            regs->VR_Q(v1) = temphi.Q;
+        }
+        break;
     default:
         ARCH_DEP( program_interrupt )( regs, PGM_SPECIFICATION_EXCEPTION );
         break;
@@ -4713,6 +5166,7 @@ DEF_INST( vector_multiply_logical_even )
 {
     int     v1, v2, v3, m4, m5, m6;
     union   { U64 d; U32 f; U16 h; } temp;
+    U128    u128temp1;
     int     i, j;
 
     VRR_C( inst, regs, v1, v2, v3, m4, m5, m6 );
@@ -4722,6 +5176,9 @@ DEF_INST( vector_multiply_logical_even )
     UNREFERENCED( m6 );
 
     ZVECTOR_CHECK( regs );
+
+    if ( m4 == 3 && !FACILITY_ENABLED( 198_VECTOR_ENH_3, regs ) )
+            ARCH_DEP( program_interrupt )( regs, PGM_SPECIFICATION_EXCEPTION );
 
     switch (m4)
     {
@@ -4748,6 +5205,10 @@ DEF_INST( vector_multiply_logical_even )
             temp.d *= regs->VR_F(v3, i);
             regs->VR_D(v1, j) = temp.d;
         }
+        break;
+    case 3:  /* Doubleword */
+        u128temp1 = U128_mul_64( regs->VR_D(v2, 0), regs->VR_D(v3, 0) );
+        regs->VR_Q(v1) = u128temp1.Q;
         break;
     default:
         ARCH_DEP( program_interrupt )( regs, PGM_SPECIFICATION_EXCEPTION );
@@ -4764,6 +5225,7 @@ DEF_INST( vector_multiply_logical_odd )
 {
     int     v1, v2, v3, m4, m5, m6;
     union   { U64 d; U32 f; U16 h; } temp;
+    U128    u128temp1;
     int     i, j;
 
     VRR_C( inst, regs, v1, v2, v3, m4, m5, m6 );
@@ -4773,6 +5235,9 @@ DEF_INST( vector_multiply_logical_odd )
     UNREFERENCED( m6 );
 
     ZVECTOR_CHECK( regs );
+
+    if ( (m4 == 3 || m4 == 4) && !FACILITY_ENABLED( 198_VECTOR_ENH_3, regs ) )
+            ARCH_DEP( program_interrupt )( regs, PGM_SPECIFICATION_EXCEPTION );
 
     switch (m4)
     {
@@ -4800,6 +5265,10 @@ DEF_INST( vector_multiply_logical_odd )
             regs->VR_D(v1, j) = temp.d;
         }
         break;
+    case 3:  /* Doubleword */
+        u128temp1 = U128_mul_64( regs->VR_D(v2, 1), regs->VR_D(v3, 1) );
+        regs->VR_Q(v1) = u128temp1.Q;
+        break;
     default:
         ARCH_DEP( program_interrupt )( regs, PGM_SPECIFICATION_EXCEPTION );
         break;
@@ -4815,6 +5284,7 @@ DEF_INST( vector_multiply_even )
 {
     int     v1, v2, v3, m4, m5, m6;
     union   { S64 sd; S32 sf; S16 sh; } temp;
+    U128    u128temp1;
     int     i, j;
 
     VRR_C( inst, regs, v1, v2, v3, m4, m5, m6 );
@@ -4824,6 +5294,9 @@ DEF_INST( vector_multiply_even )
     UNREFERENCED( m6 );
 
     ZVECTOR_CHECK( regs );
+
+    if ( m4 == 3 && !FACILITY_ENABLED( 198_VECTOR_ENH_3, regs ) )
+            ARCH_DEP( program_interrupt )( regs, PGM_SPECIFICATION_EXCEPTION );
 
     switch (m4)
     {
@@ -4851,6 +5324,10 @@ DEF_INST( vector_multiply_even )
             regs->VR_D(v1, j) = temp.sd;
         }
         break;
+    case 3:  /* Doubleword */
+        u128temp1 = S128_mul_64( regs->VR_D(v2, 0), regs->VR_D(v3, 0) );
+        regs->VR_Q(v1) = u128temp1.Q;
+        break;
     default:
         ARCH_DEP( program_interrupt )( regs, PGM_SPECIFICATION_EXCEPTION );
         break;
@@ -4866,6 +5343,7 @@ DEF_INST( vector_multiply_odd )
 {
     int     v1, v2, v3, m4, m5, m6;
     union   { S64 sd; S32 sf; S16 sh; } temp;
+    U128    u128temp1;
     int     i, j;
 
     VRR_C( inst, regs, v1, v2, v3, m4, m5, m6 );
@@ -4875,6 +5353,9 @@ DEF_INST( vector_multiply_odd )
     UNREFERENCED( m6 );
 
     ZVECTOR_CHECK( regs );
+
+    if ( m4 == 3 && !FACILITY_ENABLED( 198_VECTOR_ENH_3, regs ) )
+            ARCH_DEP( program_interrupt )( regs, PGM_SPECIFICATION_EXCEPTION );
 
     switch (m4)
     {
@@ -4902,6 +5383,10 @@ DEF_INST( vector_multiply_odd )
             regs->VR_D(v1, j) = temp.sd;
         }
         break;
+    case 3:  /* Doubleword */
+        u128temp1 = S128_mul_64( regs->VR_D(v2, 1), regs->VR_D(v3, 1) );
+        regs->VR_Q(v1) = u128temp1.Q;
+        break;
     default:
         ARCH_DEP( program_interrupt )( regs, PGM_SPECIFICATION_EXCEPTION );
         break;
@@ -4917,6 +5402,7 @@ DEF_INST( vector_multiply_and_add_logical_high )
 {
     int     v1, v2, v3, v4, m5, m6;
     union   { U64 d; U32 f; U16 h; } temp;
+    U128    u128temp1;
     int     i;
 
     VRR_D( inst, regs, v1, v2, v3, v4, m5, m6 );
@@ -4925,6 +5411,9 @@ DEF_INST( vector_multiply_and_add_logical_high )
     UNREFERENCED( m6 );
 
     ZVECTOR_CHECK( regs );
+
+    if ( (m5 == 3 || m5 == 4) && !FACILITY_ENABLED( 198_VECTOR_ENH_3, regs ) )
+            ARCH_DEP( program_interrupt )( regs, PGM_SPECIFICATION_EXCEPTION );
 
     switch (m5)
     {
@@ -4955,6 +5444,28 @@ DEF_INST( vector_multiply_and_add_logical_high )
             regs->VR_F(v1, i) = temp.d >> 32;
         }
         break;
+    case 3:  /* Doubleword */
+        for (i=0; i < 2; i++)
+        {
+            u128temp1 = U128_mul_64( regs->VR_D(v2, i), regs->VR_D(v3, i) );
+            u128temp1 = U128_add ( u128temp1, U128_U64( regs->VR_D(v4, i) ));
+            regs->VR_D(v1, i) = u128temp1.Q.D.H.D;
+        }
+        break;
+    case 4:  /* Quadword */
+        {
+            U128 tempv2, tempv3, tempv4;
+            U128 temphi, templo;
+
+            tempv2.Q = regs->VR_Q(v2);
+            tempv3.Q = regs->VR_Q(v3);
+            tempv4.Q = regs->VR_Q(v4);
+
+            U128_mul(  tempv2, tempv3, &temphi, &templo );
+            U256_add_U128 ( &temphi, &templo, tempv4, &temphi, &templo );
+            regs->VR_Q(v1) = temphi.Q;
+        }
+        break;
     default:
         ARCH_DEP( program_interrupt )( regs, PGM_SPECIFICATION_EXCEPTION );
         break;
@@ -4970,6 +5481,7 @@ DEF_INST(vector_multiply_and_add_low)
 {
     int     v1, v2, v3, v4, m5, m6;
     union   { U64 d; U32 f; U16 h; } temp;
+    U128    u128temp1;
     int     i;
 
     VRR_D(inst, regs, v1, v2, v3, v4, m5, m6);
@@ -4978,6 +5490,9 @@ DEF_INST(vector_multiply_and_add_low)
     UNREFERENCED( m6 );
 
     ZVECTOR_CHECK(regs);
+
+    if ( (m5 == 3 || m5 == 4) && !FACILITY_ENABLED( 198_VECTOR_ENH_3, regs ) )
+            ARCH_DEP( program_interrupt )( regs, PGM_SPECIFICATION_EXCEPTION );
 
     switch (m5)
     {
@@ -5008,6 +5523,28 @@ DEF_INST(vector_multiply_and_add_low)
             regs->VR_F(v1, i) = temp.d & 0xFFFFFFFF;
         }
         break;
+    case 3:  /* Doubleword */
+        for (i=0; i < 2; i++)
+        {
+            u128temp1 = S128_mul_64( regs->VR_D(v2, i), regs->VR_D(v3, i) );
+            u128temp1 = S128_add ( u128temp1, U128_S64( regs->VR_D(v4, i) ));
+            regs->VR_D(v1, i) = u128temp1.Q.D.L.D;
+        }
+        break;
+    case 4:  /* Quadword */
+        {
+            U128 tempv2, tempv3, tempv4;
+            U128 temphi, templo;
+
+            tempv2.Q = regs->VR_Q(v2);
+            tempv3.Q = regs->VR_Q(v3);
+            tempv4.Q = regs->VR_Q(v4);
+
+            S128_mul(  tempv2, tempv3, &temphi, &templo );
+            S256_add_S128 ( &temphi, &templo, tempv4, &temphi, &templo );
+            regs->VR_Q(v1) = templo.Q;
+        }
+        break;
     default:
         ARCH_DEP( program_interrupt )( regs, PGM_SPECIFICATION_EXCEPTION );
         break;
@@ -5023,6 +5560,7 @@ DEF_INST( vector_multiply_and_add_high )
 {
     int     v1, v2, v3, v4, m5, m6;
     union   { S64 sd; S32 sf; S16 sh; } temp;
+    U128    u128temp1;
     int     i;
 
     VRR_D( inst, regs, v1, v2, v3, v4, m5, m6 );
@@ -5031,6 +5569,9 @@ DEF_INST( vector_multiply_and_add_high )
     UNREFERENCED( m6 );
 
     ZVECTOR_CHECK( regs );
+
+    if ( (m5 == 3 || m5 == 4) && !FACILITY_ENABLED( 198_VECTOR_ENH_3, regs ) )
+            ARCH_DEP( program_interrupt )( regs, PGM_SPECIFICATION_EXCEPTION );
 
     switch (m5)
     {
@@ -5061,6 +5602,28 @@ DEF_INST( vector_multiply_and_add_high )
             regs->VR_F(v1, i) = temp.sd >> 32;
         }
         break;
+    case 3:  /* Doubleword */
+        for (i=0; i < 2; i++)
+        {
+            u128temp1 = S128_mul_64( regs->VR_D(v2, i), regs->VR_D(v3, i) );
+            u128temp1 = S128_add ( u128temp1, U128_S64( regs->VR_D(v4, i) ));
+            regs->VR_D(v1, i) = u128temp1.Q.D.H.D;
+        }
+        break;
+    case 4:  /* Quadword */
+        {
+            U128 tempv2, tempv3, tempv4;
+            U128 temphi, templo;
+
+            tempv2.Q = regs->VR_Q(v2);
+            tempv3.Q = regs->VR_Q(v3);
+            tempv4.Q = regs->VR_Q(v4);
+
+            S128_mul(  tempv2, tempv3, &temphi, &templo );
+            S256_add_S128 ( &temphi, &templo, tempv4, &temphi, &templo );
+            regs->VR_Q(v1) = temphi.Q;
+        }
+        break;
     default:
         ARCH_DEP( program_interrupt )( regs, PGM_SPECIFICATION_EXCEPTION );
         break;
@@ -5076,6 +5639,7 @@ DEF_INST( vector_multiply_and_add_logical_even )
 {
     int     v1, v2, v3, v4, m5, m6;
     union   { U64 d; U32 f; U16 h; } temp;
+    U128    u128temp1, u128temp2;
     int     i, j;
 
     VRR_D( inst, regs, v1, v2, v3, v4, m5, m6 );
@@ -5084,6 +5648,9 @@ DEF_INST( vector_multiply_and_add_logical_even )
     UNREFERENCED( m6 );
 
     ZVECTOR_CHECK( regs );
+
+    if ( m5 == 3 && !FACILITY_ENABLED( 198_VECTOR_ENH_3, regs ) )
+            ARCH_DEP( program_interrupt )( regs, PGM_SPECIFICATION_EXCEPTION );
 
     switch (m5)
     {
@@ -5113,6 +5680,12 @@ DEF_INST( vector_multiply_and_add_logical_even )
             temp.d += regs->VR_D(v4, j);
             regs->VR_D(v1, j) = temp.d;
         }
+        break;
+    case 3:  /* Doubleword */
+        u128temp2.Q = regs->VR_Q(v4);
+        u128temp1 = U128_mul_64( regs->VR_D(v2, 0), regs->VR_D(v3, 0) );
+        u128temp1 = U128_add ( u128temp1, u128temp2 );
+        regs->VR_Q(v1) = u128temp1.Q;
         break;
     default:
         ARCH_DEP( program_interrupt )( regs, PGM_SPECIFICATION_EXCEPTION );
@@ -5129,6 +5702,7 @@ DEF_INST( vector_multiply_and_add_logical_odd )
 {
     int     v1, v2, v3, v4, m5, m6;
     union   { U64 d; U32 f; U16 h; } temp;
+    U128    u128temp1, u128temp2;
     int     i, j;
 
     VRR_D( inst, regs, v1, v2, v3, v4, m5, m6 );
@@ -5137,6 +5711,9 @@ DEF_INST( vector_multiply_and_add_logical_odd )
     UNREFERENCED( m6 );
 
     ZVECTOR_CHECK( regs );
+
+    if ( m5 == 3 && !FACILITY_ENABLED( 198_VECTOR_ENH_3, regs ) )
+            ARCH_DEP( program_interrupt )( regs, PGM_SPECIFICATION_EXCEPTION );
 
     switch (m5)
     {
@@ -5167,6 +5744,12 @@ DEF_INST( vector_multiply_and_add_logical_odd )
             regs->VR_D(v1, j) = temp.d;
         }
         break;
+    case 3:  /* Doubleword */
+        u128temp2.Q = regs->VR_Q(v4);
+        u128temp1 = U128_mul_64( regs->VR_D(v2, 1), regs->VR_D(v3, 1) );
+        u128temp1 = U128_add ( u128temp1, u128temp2 );
+        regs->VR_Q(v1) = u128temp1.Q;
+        break;
     default:
         ARCH_DEP( program_interrupt )( regs, PGM_SPECIFICATION_EXCEPTION );
         break;
@@ -5182,6 +5765,7 @@ DEF_INST( vector_multiply_and_add_even )
 {
     int     v1, v2, v3, v4, m5, m6;
     union   { S64 sd; S32 sf; S16 sh; } temp;
+    U128    u128temp1, u128temp2;
     int     i, j;
 
     VRR_D( inst, regs, v1, v2, v3, v4, m5, m6 );
@@ -5190,6 +5774,9 @@ DEF_INST( vector_multiply_and_add_even )
     UNREFERENCED( m6 );
 
     ZVECTOR_CHECK( regs );
+
+    if ( m5 == 3 && !FACILITY_ENABLED( 198_VECTOR_ENH_3, regs ) )
+            ARCH_DEP( program_interrupt )( regs, PGM_SPECIFICATION_EXCEPTION );
 
     switch (m5)
     {
@@ -5220,6 +5807,12 @@ DEF_INST( vector_multiply_and_add_even )
             regs->VR_D(v1, j) = temp.sd;
         }
         break;
+    case 3:  /* Doubleword */
+        u128temp2.Q = regs->VR_Q(v4);
+        u128temp1 = S128_mul_64( regs->VR_D(v2, 0), regs->VR_D(v3, 0) );
+        u128temp1 = S128_add ( u128temp1, u128temp2 );
+        regs->VR_Q(v1) = u128temp1.Q;
+        break;
     default:
         ARCH_DEP( program_interrupt )( regs, PGM_SPECIFICATION_EXCEPTION );
         break;
@@ -5235,6 +5828,7 @@ DEF_INST( vector_multiply_and_add_odd )
 {
     int     v1, v2, v3, v4, m5, m6;
     union   { S64 sd; S32 sf; S16 sh; } temp;
+    U128    u128temp1, u128temp2;
     int     i, j;
 
     VRR_D( inst, regs, v1, v2, v3, v4, m5, m6 );
@@ -5243,6 +5837,9 @@ DEF_INST( vector_multiply_and_add_odd )
     UNREFERENCED( m6 );
 
     ZVECTOR_CHECK( regs );
+
+    if ( m5 == 3 && !FACILITY_ENABLED( 198_VECTOR_ENH_3, regs ) )
+            ARCH_DEP( program_interrupt )( regs, PGM_SPECIFICATION_EXCEPTION );
 
     switch (m5)
     {
@@ -5273,6 +5870,12 @@ DEF_INST( vector_multiply_and_add_odd )
             regs->VR_D(v1, j) = temp.sd;
         }
         break;
+    case 3:  /* Doubleword */
+        u128temp2.Q = regs->VR_Q(v4);
+        u128temp1 = S128_mul_64( regs->VR_D(v2, 1), regs->VR_D(v3, 1) );
+        u128temp1 = S128_add ( u128temp1, u128temp2 );
+        regs->VR_Q(v1) = u128temp1.Q;
+        break;
     default:
         ARCH_DEP( program_interrupt )( regs, PGM_SPECIFICATION_EXCEPTION );
         break;
@@ -5280,6 +5883,381 @@ DEF_INST( vector_multiply_and_add_odd )
 
     ZVECTOR_END( regs );
 }
+
+#if defined( FEATURE_198_VECTOR_ENH_FACILITY_3 )
+/*-------------------------------------------------------------------*/
+/* E7B0 VDL    - Vector Divide Logical                       [VRR-c] */
+/*-------------------------------------------------------------------*/
+DEF_INST( vector_divide_logical )
+{
+    int     v1, v2, v3, m4, m5, m6;
+    int     i;
+    U128    dividend, divisor, quotient;
+
+    VRR_C( inst, regs, v1, v2, v3, m4, m5, m6 );
+
+    /* m6 is not part of this instruction */
+    UNREFERENCED( m6 );
+
+    ZVECTOR_CHECK( regs );
+
+#define M5_IDC ((m5 & 0x8) != 0)  // Integer-Divide Control
+
+    switch (m4)
+    {
+    case 2:  /* Word */
+        for (i=0; i < 4; i++)
+        {
+            if (regs->VR_F( v3, i ) == 0)
+            {
+                if (M5_IDC)
+                {
+                    regs->VR_F( v1, i ) = 0;
+                    continue;
+                }
+                else
+                    vector_processing_trap( regs, i, VXC_INTEGER_DIVIDE );
+            }
+            regs->VR_F( v1, i ) = regs->VR_F( v2, i ) / regs->VR_F( v3, i );
+        }
+        break;
+    case 3:  /* Doubleword */
+        for (i=0; i < 2; i++)
+        {
+            if (regs->VR_D( v3, i ) == 0)
+            {
+                if (M5_IDC)
+                {
+                    regs->VR_D( v1, i ) = 0;
+                    continue;
+                }
+                else
+                    vector_processing_trap( regs, i, VXC_INTEGER_DIVIDE );
+            }
+            regs->VR_D( v1, i ) = regs->VR_D( v2, i ) / regs->VR_D( v3, i );
+        }
+        break;
+    case 4:  /* Quadword */
+        dividend.Q = regs->VR_Q( v2 );
+        divisor.Q = regs->VR_Q( v3 );
+        if (U128_isZero( divisor ))
+        {
+            if (M5_IDC)
+            {
+                regs->VR_D( v1, 0 ) = 0;
+                regs->VR_D( v1, 1 ) = 0;
+                break;
+            }
+            else
+                vector_processing_trap( regs, 0, VXC_INTEGER_DIVIDE );
+        }
+        quotient = U128_div( dividend, divisor );
+        regs->VR_Q( v1 ) = quotient.Q;
+        break;
+    default:
+        ARCH_DEP( program_interrupt )( regs, PGM_SPECIFICATION_EXCEPTION );
+        break;
+    }
+
+#undef M5_IDC
+
+    ZVECTOR_END( regs );
+}
+#endif /* defined( FEATURE_198_VECTOR_ENH_FACILITY_3 ) */
+
+#if defined( FEATURE_198_VECTOR_ENH_FACILITY_3 )
+/*-------------------------------------------------------------------*/
+/* E7B1 VRL    - Vector Remainder Logical                    [VRR-c] */
+/*-------------------------------------------------------------------*/
+DEF_INST( vector_remainder_logical )
+{
+    int     v1, v2, v3, m4, m5, m6;
+    int     i;
+    U128    dividend, divisor, remainder;
+
+    VRR_C( inst, regs, v1, v2, v3, m4, m5, m6 );
+
+    /* m6 is not part of this instruction */
+    UNREFERENCED( m6 );
+
+    ZVECTOR_CHECK( regs );
+
+#define M5_IDC ((m5 & 0x8) != 0)  // Integer-Divide Control
+
+    switch (m4)
+    {
+    case 2:  /* Word */
+        for (i=0; i < 4; i++)
+        {
+            if (regs->VR_F( v3, i ) == 0)
+            {
+                if (M5_IDC)
+                {
+                    regs->VR_F( v1, i ) = 0;
+                    continue;
+                }
+                else
+                    vector_processing_trap( regs, i, VXC_INTEGER_DIVIDE );
+            }
+            regs->VR_F( v1, i ) = regs->VR_F( v2, i ) % regs->VR_F( v3, i );
+        }
+        break;
+    case 3:  /* Doubleword */
+        for (i=0; i < 2; i++)
+        {
+            if (regs->VR_D( v3, i ) == 0)
+            {
+                if (M5_IDC)
+                {
+                    regs->VR_D( v1, i ) = 0;
+                    continue;
+                }
+                else
+                    vector_processing_trap( regs, i, VXC_INTEGER_DIVIDE );
+            }
+            regs->VR_D( v1, i ) = regs->VR_D( v2, i ) % regs->VR_D( v3, i );
+        }
+        break;
+    case 4:  /* Quadword */
+        dividend.Q = regs->VR_Q( v2 );
+        divisor.Q = regs->VR_Q( v3 );
+        if (U128_isZero( divisor ))
+        {
+            if (M5_IDC)
+            {
+                regs->VR_D( v1, 0 ) = 0;
+                regs->VR_D( v1, 1 ) = 0;
+                break;
+            }
+            else
+                vector_processing_trap( regs, 0, VXC_INTEGER_DIVIDE );
+        }
+        remainder = U128_rem( dividend, divisor );
+        regs->VR_Q( v1 ) = remainder.Q;
+        break;
+    default:
+        ARCH_DEP( program_interrupt )( regs, PGM_SPECIFICATION_EXCEPTION );
+        break;
+    }
+
+#undef M5_IDC
+
+    ZVECTOR_END( regs );
+}
+#endif /* defined( FEATURE_198_VECTOR_ENH_FACILITY_3 ) */
+
+#if defined( FEATURE_198_VECTOR_ENH_FACILITY_3 )
+/*-------------------------------------------------------------------*/
+/* E7B2 VD     - Vector Divide                               [VRR-c] */
+/*-------------------------------------------------------------------*/
+DEF_INST( vector_divide )
+{
+    int     v1, v2, v3, m4, m5, m6;
+    int     i;
+    U128    dividend, divisor, quotient;
+    U128    negone, negmax;
+
+    VRR_C( inst, regs, v1, v2, v3, m4, m5, m6 );
+
+    /* m6 is not part of this instruction */
+    UNREFERENCED( m6 );
+
+    ZVECTOR_CHECK( regs );
+
+#define M5_IDC ((m5 & 0x8) != 0)  // Integer-Divide Control
+
+    switch (m4)
+    {
+    case 2:  /* Word */
+        for (i=0; i < 4; i++)
+        {
+            if (regs->VR_F( v3, i ) == 0 ||
+               ((regs->VR_F( v3, i ) == 0xFFFFFFFF) && (regs->VR_F( v2, i ) == 0x80000000)) )
+            {
+                if (M5_IDC)
+                {
+                    regs->VR_F( v1, i ) = 0;
+                    continue;
+                }
+                else
+                    vector_processing_trap( regs, i, VXC_INTEGER_DIVIDE );
+            }
+            regs->VR_F( v1, i ) = (S32)regs->VR_F( v2, i ) / (S32)regs->VR_F( v3, i );
+        }
+        break;
+    case 3:  /* Doubleword */
+        for (i=0; i < 2; i++)
+        {
+            if (regs->VR_D( v3, i ) == 0 ||
+               ((regs->VR_D( v3, i ) == 0xFFFFFFFFFFFFFFFFull) && (regs->VR_D( v2, i ) == 0x8000000000000000ull)) )
+            {
+                if (M5_IDC)
+                {
+                    regs->VR_D( v1, i ) = 0;
+                    continue;
+                }
+                else
+                    vector_processing_trap( regs, i, VXC_INTEGER_DIVIDE );
+            }
+            regs->VR_D( v1, i ) = (S64)regs->VR_D( v2, i ) / (S64)regs->VR_D( v3, i );
+        }
+        break;
+    case 4:  /* Quadword */
+        negone.Q.D.H.D = 0xFFFFFFFFFFFFFFFFull;
+        negone.Q.D.L.D = 0xFFFFFFFFFFFFFFFFull;
+        negmax.Q.D.H.D = 0x8000000000000000ull;
+        negmax.Q.D.L.D = 0x0000000000000000ull;
+        dividend.Q = regs->VR_Q( v2 );
+        divisor.Q = regs->VR_Q( v3 );
+        if (U128_isZero( divisor ) ||
+           ((U128_cmp( divisor, negone) == 0) && (U128_cmp( dividend, negmax) == 0)) )
+        {
+            if (M5_IDC)
+            {
+                regs->VR_D( v1, 0 ) = 0;
+                regs->VR_D( v1, 1 ) = 0;
+                break;
+            }
+            else
+                vector_processing_trap( regs, 0, VXC_INTEGER_DIVIDE );
+        }
+        quotient = S128_div(  dividend, divisor );
+        regs->VR_Q( v1 ) = quotient.Q;
+        break;
+    default:
+        ARCH_DEP( program_interrupt )( regs, PGM_SPECIFICATION_EXCEPTION );
+        break;
+    }
+
+#undef M5_IDC
+
+    ZVECTOR_END( regs );
+}
+#endif /* defined( FEATURE_198_VECTOR_ENH_FACILITY_3 ) */
+
+#if defined( FEATURE_198_VECTOR_ENH_FACILITY_3 )
+/*-------------------------------------------------------------------*/
+/* E7B3 VR     - Vector Remainder                            [VRR-c] */
+/*-------------------------------------------------------------------*/
+/*
+   FixMe!
+   The VECTOR DIVIDE (VD) and VECTOR REMAINDER (VR) instructions
+   were introduced with vector-enhancements facility 3, and were
+   first described in the fifteenth edition of z/Architecture
+   Principles of Operation (SA22-7832-14). Both instructions do a
+   divide, VD returns the quotient(s), VR returns the remainder(s).
+   The descriptions of the two instructions were very similar,
+   except for the following paragraph which only appears in the
+   description of the VD instruction:
+     For VECTOR DIVIDE, if the divisor is negative one and the
+     dividend is the negative maximum value of the specified size;
+     if the IDC bit is zero, the instruction execution is suppressed
+     and an integer divide vector-processing exception is
+     recognized; if the IDC bit is one, recognition of an integer
+     divide vector-processing exception is suppressed and the result
+     is zero.
+   The conditions mentioned in the above paragraph were coded for
+   the VD instruction, but not for the VR instruction. However,
+   subsequent testing of the VR instruction with the mentioned
+   conditions resulted in:
+     +++ OOPS! +++ Hercules has crashed! (Floating point exception)
+     Creating crash dump... This will take a while...
+   and the dump indicated:
+     Program terminated with signal SIGFPE, Arithmetic exception.
+   So, what does a real zSeries machine do when the VR instruction
+   encounters the mentioned conditions? Does it
+*    a) follow the VD instruction description, because a version
+*       of the quoted paragraph is simply missing from the VR
+*       instruction description?, or
+     b) raise a vector-processing exception?
+   This implementation has opted for a. As a result Hercules'
+   emulation of the VR instruction may produce the wrong results
+   until the actions of a real zSeries machine can be determined.
+                                                                     */
+DEF_INST( vector_remainder )
+{
+    int     v1, v2, v3, m4, m5, m6;
+    int     i;
+    U128    dividend, divisor, remainder;
+    U128    negone, negmax;
+
+    VRR_C( inst, regs, v1, v2, v3, m4, m5, m6 );
+
+    /* m6 is not part of this instruction */
+    UNREFERENCED( m6 );
+
+    ZVECTOR_CHECK( regs );
+
+#define M5_IDC ((m5 & 0x8) != 0)  // Integer-Divide Control
+
+    switch (m4)
+    {
+    case 2:  /* Word */
+        for (i=0; i < 4; i++)
+        {
+            if (regs->VR_F( v3, i ) == 0 ||
+               ((regs->VR_F( v3, i ) == 0xFFFFFFFF) && (regs->VR_F( v2, i ) == 0x80000000)) )
+            {
+                if (M5_IDC)
+                {
+                    regs->VR_F( v1, i ) = 0;
+                    continue;
+                }
+                else
+                    vector_processing_trap( regs, i, VXC_INTEGER_DIVIDE );
+            }
+            regs->VR_F( v1, i ) = (S32)regs->VR_F( v2, i ) % (S32)regs->VR_F( v3, i );
+        }
+        break;
+    case 3:  /* Doubleword */
+        for (i=0; i < 2; i++)
+        {
+            if (regs->VR_D( v3, i ) == 0 ||
+               ((regs->VR_D( v3, i ) == 0xFFFFFFFFFFFFFFFFull) && (regs->VR_D( v2, i ) == 0x8000000000000000ull)) )
+            {
+                if (M5_IDC)
+                {
+                    regs->VR_D( v1, i ) = 0;
+                    continue;
+                }
+                else
+                    vector_processing_trap( regs, i, VXC_INTEGER_DIVIDE );
+            }
+            regs->VR_D( v1, i ) = (S64)regs->VR_D( v2, i ) % (S64)regs->VR_D( v3, i );
+        }
+        break;
+    case 4:  /* Quadword */
+        negone.Q.D.H.D = 0xFFFFFFFFFFFFFFFFull;
+        negone.Q.D.L.D = 0xFFFFFFFFFFFFFFFFull;
+        negmax.Q.D.H.D = 0x8000000000000000ull;
+        negmax.Q.D.L.D = 0x0000000000000000ull;
+        dividend.Q = regs->VR_Q( v2 );
+        divisor.Q = regs->VR_Q( v3 );
+        if (U128_isZero( divisor ) ||
+           ((U128_cmp( divisor, negone) == 0) && (U128_cmp( dividend, negmax) == 0)) )
+        {
+            if (M5_IDC)
+            {
+                regs->VR_D( v1, 0 ) = 0;
+                regs->VR_D( v1, 1 ) = 0;
+                break;
+            }
+            else
+                vector_processing_trap( regs, 0, VXC_INTEGER_DIVIDE );
+        }
+        remainder = S128_rem( dividend, divisor );
+        regs->VR_Q( v1 ) = remainder.Q;
+        break;
+    default:
+        ARCH_DEP( program_interrupt )( regs, PGM_SPECIFICATION_EXCEPTION );
+        break;
+    }
+
+#undef M5_IDC
+
+    ZVECTOR_END( regs );
+}
+#endif /* defined( FEATURE_198_VECTOR_ENH_FACILITY_3 ) */
 
 /*-------------------------------------------------------------------*/
 /* E7B4 VGFM   - Vector Galois Field Multiply Sum            [VRR-c] */
@@ -5375,12 +6353,12 @@ DEF_INST( vector_multiply_sum_logical )
     switch (m5)
     {
     case 3:  /* Doubleword */
-        intere = U64_mul( regs->VR_D(v2, 0), regs->VR_D(v3, 0) );
-        intero = U64_mul( regs->VR_D(v2, 1), regs->VR_D(v3, 1) );
+        intere = U128_mul_64( regs->VR_D(v2, 0), regs->VR_D(v3, 0) );
+        intero = U128_mul_64( regs->VR_D(v2, 1), regs->VR_D(v3, 1) );
         if (M6_ES)
-            intere = U128_U32_mul( intere, 2 );  // Shift left
+            intere = U128_mul_32( intere, 2 );  // Shift left
         if (M6_OS)
-            intero = U128_U32_mul( intero, 2 );  // Shift left
+            intero = U128_mul_32( intero, 2 );  // Shift left
         intere = U128_add( intere, intero );
 #if defined( _MSVC_ )
         copyv4.Q = regs->VR_Q(v4);
@@ -5556,6 +6534,17 @@ DEF_INST( vector_galois_field_multiply_sum_and_accumulate )
     ZVECTOR_END( regs );
 }
 
+//------------------------------------------------------------------------------
+// PROGRAMMING NOTE: the "potentially incorrect code/bevaior" that Microsoft's
+// C4319 warning is reporting us about was thoroughly researched and determined
+// to be unwarranted IN THIS PARTICULAR SPECIFIC CASE. Thus the disablement of
+// the warning, as the code, as written, was determined to be 100% correct.
+// Refer to GitHub Issue #787 (especially near the end) for further details.
+//------------------------------------------------------------------------------
+#if defined(_MSVC_) && (_MSC_VER >= VS2022)
+PUSH_MSVC_WARNINGS()
+DISABLE_MSVC_WARNING( 4319 )
+#endif
 /*-----------------------------------------------------------------------------*/
 /* E7BD VSBCBI - Vector Subtract With Borrow Compute Borrow Indication [VRR-d] */
 /*-----------------------------------------------------------------------------*/
@@ -5592,7 +6581,22 @@ DEF_INST( vector_subtract_with_borrow_compute_borrow_indication )
 
     ZVECTOR_END( regs );
 }
+#if defined(_MSVC_) && (_MSC_VER >= VS2022)
+POP_MSVC_WARNINGS()
+#endif
 
+
+//------------------------------------------------------------------------------
+// PROGRAMMING NOTE: the "potentially incorrect code/bevaior" that Microsoft's
+// C4319 warning is reporting us about was thoroughly researched and determined
+// to be unwarranted IN THIS PARTICULAR SPECIFIC CASE. Thus the disablement of
+// the warning, as the code, as written, was determined to be 100% correct.
+// Refer to GitHub Issue #787 (especially near the end) for further details.
+//------------------------------------------------------------------------------
+#if defined(_MSVC_) && (_MSC_VER >= VS2022)
+PUSH_MSVC_WARNINGS()
+DISABLE_MSVC_WARNING( 4319 )
+#endif
 /*-------------------------------------------------------------------*/
 /* E7BF VSBI   - Vector Subtract With Borrow Indication      [VRR-d] */
 /*-------------------------------------------------------------------*/
@@ -5631,6 +6635,9 @@ DEF_INST( vector_subtract_with_borrow_indication )
 
     ZVECTOR_END( regs );
 }
+#if defined(_MSVC_) && (_MSC_VER >= VS2022)
+POP_MSVC_WARNINGS()
+#endif
 
 /*-------------------------------------------------------------------*/
 /* E7D4 VUPLL  - Vector Unpack Logical Low                   [VRR-a] */
@@ -5647,6 +6654,9 @@ DEF_INST( vector_unpack_logical_low )
     UNREFERENCED( m5 );
 
     ZVECTOR_CHECK( regs );
+
+    if ( m3 == 3 && !FACILITY_ENABLED( 198_VECTOR_ENH_3, regs ) )
+        ARCH_DEP( program_interrupt )( regs, PGM_SPECIFICATION_EXCEPTION );
 
     switch (m3)
     {
@@ -5667,6 +6677,10 @@ DEF_INST( vector_unpack_logical_low )
             temp.d[i] = (U64) regs->VR_F(v2, i + 2);
         for (i = 0; i < 2; i++)
             regs->VR_D(v1, i) = temp.d[i];
+        break;
+    case 3:  /* Doubleword */
+        regs->VR_D(v1, 1) = regs->VR_D(v2, 1);
+        regs->VR_D(v1, 0) = 0x0000000000000000ull;
         break;
     default:
         ARCH_DEP(program_interrupt) (regs, PGM_SPECIFICATION_EXCEPTION);
@@ -5692,6 +6706,9 @@ DEF_INST( vector_unpack_logical_high )
 
     ZVECTOR_CHECK( regs );
 
+    if ( m3 == 3 && !FACILITY_ENABLED( 198_VECTOR_ENH_3, regs ) )
+        ARCH_DEP( program_interrupt )( regs, PGM_SPECIFICATION_EXCEPTION );
+
     switch (m3)
     {
     case 0:  /* Byte */
@@ -5711,6 +6728,10 @@ DEF_INST( vector_unpack_logical_high )
             temp.d[i] = (U64) regs->VR_F(v2, i);
         for (i = 0; i < 2; i++)
             regs->VR_D(v1, i) = temp.d[i];
+        break;
+    case 3:  /* Doubleword */
+        regs->VR_D(v1, 1) = regs->VR_D(v2, 0);
+        regs->VR_D(v1, 0) = 0x0000000000000000ull;
         break;
     default:
         ARCH_DEP(program_interrupt) (regs, PGM_SPECIFICATION_EXCEPTION);
@@ -5736,6 +6757,9 @@ DEF_INST( vector_unpack_low )
     UNREFERENCED( m5 );
 
     ZVECTOR_CHECK( regs );
+
+    if ( m3 == 3 && !FACILITY_ENABLED( 198_VECTOR_ENH_3, regs ) )
+        ARCH_DEP( program_interrupt )( regs, PGM_SPECIFICATION_EXCEPTION );
 
     switch (m3)
     {
@@ -5766,6 +6790,18 @@ DEF_INST( vector_unpack_low )
         for (i = 0; i < 2; i++)
             regs->VR_D(v1, i) = temp.sd[i];
         break;
+    case 3:  /* Doubleword */
+        if (regs->VR_D(v2, 1) & 0x8000000000000000ull)
+        {
+            regs->VR_D(v1, 1) = regs->VR_D(v2, 1);
+            regs->VR_D(v1, 0) = 0xFFFFFFFFFFFFFFFFull;
+        }
+        else
+        {
+            regs->VR_D(v1, 1) = regs->VR_D(v2, 1);
+            regs->VR_D(v1, 0) = 0x0000000000000000ull;
+        }
+        break;
     default:
         ARCH_DEP(program_interrupt) (regs, PGM_SPECIFICATION_EXCEPTION);
         break;
@@ -5790,6 +6826,9 @@ DEF_INST( vector_unpack_high )
     UNREFERENCED( m5 );
 
     ZVECTOR_CHECK( regs );
+
+    if ( m3 == 3 && !FACILITY_ENABLED( 198_VECTOR_ENH_3, regs ) )
+        ARCH_DEP( program_interrupt )( regs, PGM_SPECIFICATION_EXCEPTION );
 
     switch (m3)
     {
@@ -5819,6 +6858,18 @@ DEF_INST( vector_unpack_high )
         }
         for (i = 0; i < 2; i++)
             regs->VR_D(v1, i) = temp.sd[i];
+        break;
+    case 3:  /* Doubleword */
+        if (regs->VR_D(v2, 0) & 0x8000000000000000ull)
+        {
+            regs->VR_D(v1, 1) = regs->VR_D(v2, 0);
+            regs->VR_D(v1, 0) = 0xFFFFFFFFFFFFFFFFull;
+        }
+        else
+        {
+            regs->VR_D(v1, 1) = regs->VR_D(v2, 0);
+            regs->VR_D(v1, 0) = 0x0000000000000000ull;
+        }
         break;
     default:
         ARCH_DEP(program_interrupt) (regs, PGM_SPECIFICATION_EXCEPTION);
@@ -5879,6 +6930,9 @@ DEF_INST( vector_element_compare_logical )
 
     ZVECTOR_CHECK( regs );
 
+    if ( m3 == 4 && !FACILITY_ENABLED( 198_VECTOR_ENH_3, regs ) )
+        ARCH_DEP( program_interrupt )( regs, PGM_SPECIFICATION_EXCEPTION );
+
     switch (m3)
     {
     case 0:  /* Byte */
@@ -5913,6 +6967,22 @@ DEF_INST( vector_element_compare_logical )
         else
             regs->psw.cc = 2;
         break;
+    case 4:  /* Quadword */
+        {
+            U128 tempv1, tempv2;
+            int  rc;
+
+            tempv1.Q = regs->VR_Q(v1);
+            tempv2.Q = regs->VR_Q(v2);
+            rc = U128_cmp( tempv1, tempv2 );
+            if (rc == 0)
+                regs->psw.cc = 0;
+            else if (rc == -1)
+                regs->psw.cc = 1;
+            else
+                regs->psw.cc = 2;
+        }
+        break;
     default:
         ARCH_DEP(program_interrupt) (regs, PGM_SPECIFICATION_EXCEPTION);
         break;
@@ -5935,6 +7005,9 @@ DEF_INST( vector_element_compare )
     UNREFERENCED( m5 );
 
     ZVECTOR_CHECK( regs );
+
+    if ( m3 == 4 && !FACILITY_ENABLED( 198_VECTOR_ENH_3, regs ) )
+        ARCH_DEP( program_interrupt )( regs, PGM_SPECIFICATION_EXCEPTION );
 
     switch (m3)
     {
@@ -5970,6 +7043,22 @@ DEF_INST( vector_element_compare )
         else
             regs->psw.cc = 2;
         break;
+    case 4:  /* Quadword */
+        {
+            U128 tempv1, tempv2;
+            int  rc;
+
+            tempv1.Q = regs->VR_Q(v1);
+            tempv2.Q = regs->VR_Q(v2);
+            rc = S128_cmp( tempv1, tempv2 );
+            if (rc == 0)
+                regs->psw.cc = 0;
+            else if (rc == -1)
+                regs->psw.cc = 1;
+            else
+                regs->psw.cc = 2;
+        }
+        break;
     default:
         ARCH_DEP(program_interrupt) (regs, PGM_SPECIFICATION_EXCEPTION);
         break;
@@ -5994,6 +7083,9 @@ DEF_INST( vector_load_complement )
 
     ZVECTOR_CHECK( regs );
 
+    if ( m3 == 4 && !FACILITY_ENABLED( 198_VECTOR_ENH_3, regs ) )
+        ARCH_DEP( program_interrupt )( regs, PGM_SPECIFICATION_EXCEPTION );
+
     switch (m3)
     {
     case 0:  /* Byte */
@@ -6011,6 +7103,15 @@ DEF_INST( vector_load_complement )
     case 3:  /* Doubleword */
         for (i=0; i < 2; i++)
             regs->VR_D( v1, i ) = ~(S64)regs->VR_D( v2, i ) + 1;
+        break;
+    case 4:  /* Quadword */
+        {
+            U128 tempv1, tempv2;
+
+            tempv2.Q = regs->VR_Q(v2);
+            tempv1 = S128_neg( tempv2 );
+            regs->VR_Q(v1) = tempv1.Q;
+        }
         break;
     default:
         ARCH_DEP(program_interrupt) (regs, PGM_SPECIFICATION_EXCEPTION);
@@ -6035,6 +7136,9 @@ DEF_INST( vector_load_positive )
     UNREFERENCED( m5 );
 
     ZVECTOR_CHECK( regs );
+
+    if ( m3 == 4 && !FACILITY_ENABLED( 198_VECTOR_ENH_3, regs ) )
+        ARCH_DEP( program_interrupt )( regs, PGM_SPECIFICATION_EXCEPTION );
 
     switch (m3)
     {
@@ -6061,6 +7165,18 @@ DEF_INST( vector_load_positive )
             regs->VR_D( v1, i ) = (S64)regs->VR_D( v2, i ) < 0 ?
                                          -((S64)regs->VR_D( v2, i )) :
                                          (S64)regs->VR_D( v2, i );
+        break;
+    case 4:  /* Quadword */
+        {
+            U128 tempv1, tempv2;
+
+            tempv2.Q = regs->VR_Q(v2);
+            if (S128_isNeg( tempv2 ))
+                tempv1 = S128_neg( tempv2 );
+            else
+                tempv1 = tempv2;
+            regs->VR_Q(v1) = tempv1.Q;
+        }
         break;
     default:
         ARCH_DEP(program_interrupt) (regs, PGM_SPECIFICATION_EXCEPTION);
@@ -6096,19 +7212,16 @@ DEF_INST( vector_average_logical )
             regs->VR_B(v1, i) = (U8) ( ( (U16) regs->VR_B(v2, i) + (U16) regs->VR_B(v3, i) + 1) >> 1 );
         }
         break;
-
     case 1:         /* Halfword */
         for (i=0; i < 8; i++) {
             regs->VR_H(v1, i) = (U16) ( ( (U32) regs->VR_H(v2, i) + (U32) regs->VR_H(v3, i) + 1) >> 1 );
         }
         break;
-
     case 2:         /* Word */
         for (i=0; i < 4; i++) {
             regs->VR_F(v1, i) = (U32) ( ( (U64) regs->VR_F(v2, i) + (U64) regs->VR_F(v3, i) + 1) >> 1 );
         }
         break;
-
     case 3:         /* Doubleword */
         for (i=0; i < 2; i++) {
             /* U128 a + U64 b */
@@ -6128,7 +7241,27 @@ DEF_INST( vector_average_logical )
             regs->VR_D(v1, i) = (lsa >> 1) | ( msa << 63 );
         }
         break;
+    case 4:         /* Quadword */
+        {
+            U128 tempv1, tempv2, tempv3;
+            U128 temp1, temp2;
+            int carry = 0;
 
+            tempv2.Q = regs->VR_Q(v2);
+            tempv3.Q = regs->VR_Q(v3);
+
+            temp1 = U128_add( tempv2, tempv3);
+            if ( U128_cmp( temp1, tempv2) == -1 )   carry++;
+
+            temp2 = U128_add( temp1, U128_one() );
+            if ( U128_cmp( temp2, temp1) == -1 )    carry++;
+
+            tempv1 = U128_shrl( temp2, 1 );
+            if ( carry ) tempv1.Q.D.H.D |= 0x8000000000000000ull;
+
+            regs->VR_Q(v1) = tempv1.Q;
+        }
+        break;
     default:
         ARCH_DEP( program_interrupt )( regs, PGM_SPECIFICATION_EXCEPTION );
         break;
@@ -6230,19 +7363,16 @@ DEF_INST( vector_average )
             regs->VR_B(v1, i) = ( (S16) ( (S8) regs->VR_B(v2, i) + (S8) regs->VR_B(v3, i) ) + 1) >> 1;
         }
         break;
-
     case 1:         /* Halfword */
         for (i=0; i < 8; i++) {
             regs->VR_H(v1, i) = ( (S32) ( (S16) regs->VR_H(v2, i) + (S16) regs->VR_H(v3, i) ) + 1) >> 1;
         }
         break;
-
     case 2:         /* Word */
         for (i=0; i < 4; i++) {
             regs->VR_F(v1, i) = ( (S64) ( (S32) regs->VR_F(v2, i) + (S32) regs->VR_F(v3, i) ) + 1) >> 1;
         }
         break;
-
     case 3:         /* Doubleword */
         for (i=0; i < 2; i++) {
             if  (
@@ -6271,7 +7401,47 @@ DEF_INST( vector_average )
             }
         }
         break;
+    case 4:         /* Quadword */
+        {
+            U128 temp128, tempv2, tempv3;
 
+            tempv2.Q = regs->VR_Q(v2);
+            tempv3.Q = regs->VR_Q(v3);
+
+            if  (
+                    ( regs->VR_D(v2, 0) & 0x8000000000000000ull )  ==
+                    ( regs->VR_D(v3, 0) & 0x8000000000000000ull )
+                )
+            {
+                /* same signs: possible overflow */
+                if  ( regs->VR_D(v2, 0) & 0x8000000000000000ull )
+                {
+                    /* negative signs: allow overflow, round and force back to negative */
+                    temp128 = S128_add( tempv2, tempv3 );
+                    temp128 = S128_add( temp128, U128_one() );
+                    temp128 = U128_shrl( temp128, 1 );
+                    temp128.Q.D.H.D |= 0x8000000000000000ull;
+                    regs->VR_Q(v1) = temp128.Q;
+                }
+                else
+                {
+                    /* positive signs: handle as U6128 values */
+                    temp128 = S128_add( tempv2, tempv3 );
+                    temp128 = S128_add( temp128, U128_one() );
+                    temp128 = U128_shrl( temp128, 1 );
+                    regs->VR_Q(v1) = temp128.Q;
+                }
+            }
+            else
+            {
+                /* different signs */
+                temp128 = S128_add( tempv2, tempv3 );
+                temp128 = S128_add( temp128, U128_one() );
+                temp128 = U128_shrl( temp128, 1 );
+                regs->VR_Q(v1) = temp128.Q;
+            }
+        }
+        break;
     default:
         ARCH_DEP( program_interrupt )( regs, PGM_SPECIFICATION_EXCEPTION );
         break;
@@ -6466,6 +7636,9 @@ DEF_INST( vector_compare_equal )
 
 #define M5_CS ((m5 & 0x1) != 0) // Condition Code Set
 
+    if ( m4 == 4 && !FACILITY_ENABLED( 198_VECTOR_ENH_3, regs ) )
+        ARCH_DEP( program_interrupt )( regs, PGM_SPECIFICATION_EXCEPTION );
+
     switch (m4)
     {
     case 0:  /* Byte */
@@ -6512,6 +7685,25 @@ DEF_INST( vector_compare_equal )
             }
         }
         break;
+    case 4:  /* Quadword */
+        {
+            U128 tempv1, tempv2, tempv3;
+            int  rc;
+
+            el = 1;
+            tempv2.Q = regs->VR_Q(v2);
+            tempv3.Q = regs->VR_Q(v3);
+            rc = U128_cmp( tempv2, tempv3 );
+            if (rc == 0) {
+                tempv1 = U128_minus_one();
+                eq++;
+            }
+            else {
+                tempv1 = U128_zero();
+            }
+            regs->VR_Q(v1) = tempv1.Q;
+        }
+        break;
     default:
         ARCH_DEP( program_interrupt )( regs, PGM_SPECIFICATION_EXCEPTION );
         break;
@@ -6545,6 +7737,9 @@ DEF_INST( vector_compare_high_logical )
 
 #define M5_CS ((m5 & 0x1) != 0) // Condition Code Set
 
+    if ( m4 == 4 && !FACILITY_ENABLED( 198_VECTOR_ENH_3, regs ) )
+        ARCH_DEP( program_interrupt )( regs, PGM_SPECIFICATION_EXCEPTION );
+
     switch (m4)
     {
     case 0:         /* Byte */
@@ -6558,7 +7753,6 @@ DEF_INST( vector_compare_high_logical )
             }
         }
         break;
-
     case 1:        /* Halfword */
         for (el=8, i=0; i < 8; i++) {
             if (regs->VR_H(v2, i) > regs->VR_H(v3, i)) {
@@ -6570,7 +7764,6 @@ DEF_INST( vector_compare_high_logical )
             }
         }
         break;
-
     case 2:         /* Word */
         for (el=4, i=0; i < 4; i++) {
             if (regs->VR_F(v2, i) > regs->VR_F(v3, i)) {
@@ -6582,7 +7775,6 @@ DEF_INST( vector_compare_high_logical )
             }
         }
         break;
-
     case 3:        /* Doubleword */
         for (el=2, i=0; i < 2; i++) {
             if (regs->VR_D(v2, i) > regs->VR_D(v3, i)) {
@@ -6594,7 +7786,25 @@ DEF_INST( vector_compare_high_logical )
             }
         }
         break;
+    case 4:  /* Quadword */
+        {
+            U128 tempv1, tempv2, tempv3;
+            int  rc;
 
+            el = 1;
+            tempv2.Q = regs->VR_Q(v2);
+            tempv3.Q = regs->VR_Q(v3);
+            rc = U128_cmp( tempv2, tempv3 );
+            if (rc == 1) {
+                tempv1 = U128_minus_one();
+                hi++;
+            }
+            else {
+                tempv1 = U128_zero();
+            }
+            regs->VR_Q(v1) = tempv1.Q;
+        }
+        break;
     default:
         ARCH_DEP( program_interrupt )( regs, PGM_SPECIFICATION_EXCEPTION );
         break;
@@ -6628,6 +7838,9 @@ DEF_INST( vector_compare_high )
 
 #define M5_CS ((m5 & 0x1) != 0) // Condition Code Set
 
+    if ( m4 == 4 && !FACILITY_ENABLED( 198_VECTOR_ENH_3, regs ) )
+        ARCH_DEP( program_interrupt )( regs, PGM_SPECIFICATION_EXCEPTION );
+
     switch (m4)
     {
     case 0:         /* Byte */
@@ -6641,7 +7854,6 @@ DEF_INST( vector_compare_high )
             }
         }
         break;
-
     case 1:        /* Halfword */
         for (el=8, i=0; i < 8; i++) {
             if ( (S16) regs->VR_H(v2, i) > (S16) regs->VR_H(v3, i) ) {
@@ -6653,7 +7865,6 @@ DEF_INST( vector_compare_high )
             }
         }
         break;
-
     case 2:         /* Word */
         for (el=4, i=0; i < 4; i++) {
             if ( (S32) regs->VR_F(v2, i) > (S32) regs->VR_F(v3, i) ) {
@@ -6665,7 +7876,6 @@ DEF_INST( vector_compare_high )
             }
         }
         break;
-
     case 3:        /* Doubleword */
         for (el=2, i=0; i < 2; i++) {
             if ( (S64) regs->VR_D(v2, i) > (S64) regs->VR_D(v3, i) ) {
@@ -6677,7 +7887,25 @@ DEF_INST( vector_compare_high )
             }
         }
         break;
+    case 4:        /* Quadword */
+        {
+            U128 tempv1, tempv2, tempv3;
+            int  rc;
 
+            el = 1;
+            tempv2.Q = regs->VR_Q(v2);
+            tempv3.Q = regs->VR_Q(v3);
+            rc = S128_cmp( tempv2, tempv3 );
+            if (rc == 1) {
+                tempv1 = U128_minus_one();
+                hi++;
+            }
+            else {
+                tempv1 = U128_zero();
+            }
+            regs->VR_Q(v1) = tempv1.Q;
+        }
+        break;
     default:
         ARCH_DEP( program_interrupt )( regs, PGM_SPECIFICATION_EXCEPTION );
         break;
@@ -6703,7 +7931,6 @@ DEF_INST( vector_compare_high )
 DEF_INST( vector_minimum_logical )
 {
     int     v1, v2, v3, m4, m5, m6;
-
     int i;                          /* loop index                    */
 
     VRR_C( inst, regs, v1, v2, v3, m4, m5, m6 );
@@ -6714,6 +7941,9 @@ DEF_INST( vector_minimum_logical )
 
     ZVECTOR_CHECK( regs );
 
+    if ( m4 == 4 && !FACILITY_ENABLED( 198_VECTOR_ENH_3, regs ) )
+            ARCH_DEP( program_interrupt )( regs, PGM_SPECIFICATION_EXCEPTION );
+
     switch (m4)
     {
     case 0:         /* Byte */
@@ -6721,25 +7951,30 @@ DEF_INST( vector_minimum_logical )
             regs->VR_B(v1, i) =  regs->VR_B(v2, i) <= regs->VR_B(v3, i) ? regs->VR_B(v2, i) : regs->VR_B(v3, i);
         }
         break;
-
     case 1:         /* Halfword */
         for (i=0; i < 8; i++) {
             regs->VR_H(v1, i) = regs->VR_H(v2, i) <= regs->VR_H(v3, i) ? regs->VR_H(v2, i) : regs->VR_H(v3, i);
         }
         break;
-
     case 2:         /* Word */
         for (i=0; i < 4; i++) {
             regs->VR_F(v1, i) = regs->VR_F(v2, i) <= regs->VR_F(v3, i) ? regs->VR_F(v2, i) : regs->VR_F(v3, i);
         }
         break;
-
     case 3:         /* Doubleword */
         for (i=0; i < 2; i++) {
             regs->VR_D(v1, i) = regs->VR_D(v2, i) <= regs->VR_D(v3, i) ? regs->VR_D(v2, i) : regs->VR_D(v3, i);
         }
         break;
+    case 4:         /* Quadword */
+        {
+            U128 tempv2, tempv3;
 
+            tempv2.Q = regs->VR_Q(v2);
+            tempv3.Q = regs->VR_Q(v3);
+            regs->VR_Q(v1) = ( U128_cmp( tempv2,  tempv3) == -1)  ? regs->VR_Q(v2) : regs->VR_Q(v3);
+        }
+        break;
     default:
         ARCH_DEP( program_interrupt )( regs, PGM_SPECIFICATION_EXCEPTION );
         break;
@@ -6754,7 +7989,6 @@ DEF_INST( vector_minimum_logical )
 DEF_INST( vector_maximum_logical )
 {
     int     v1, v2, v3, m4, m5, m6;
-
     int i;                          /* loop index                    */
 
     VRR_C( inst, regs, v1, v2, v3, m4, m5, m6 );
@@ -6765,6 +7999,9 @@ DEF_INST( vector_maximum_logical )
 
     ZVECTOR_CHECK( regs );
 
+    if ( m4 == 4 && !FACILITY_ENABLED( 198_VECTOR_ENH_3, regs ) )
+            ARCH_DEP( program_interrupt )( regs, PGM_SPECIFICATION_EXCEPTION );
+
     switch (m4)
     {
     case 0:         /* Byte */
@@ -6772,25 +8009,30 @@ DEF_INST( vector_maximum_logical )
             regs->VR_B(v1, i) =  regs->VR_B(v2, i) >= regs->VR_B(v3, i) ? regs->VR_B(v2, i) : regs->VR_B(v3, i);
         }
         break;
-
     case 1:         /* Halfword */
         for (i=0; i < 8; i++) {
             regs->VR_H(v1, i) = regs->VR_H(v2, i) >= regs->VR_H(v3, i) ? regs->VR_H(v2, i) : regs->VR_H(v3, i);
         }
         break;
-
     case 2:         /* Word */
         for (i=0; i < 4; i++) {
             regs->VR_F(v1, i) = regs->VR_F(v2, i) >= regs->VR_F(v3, i) ? regs->VR_F(v2, i) : regs->VR_F(v3, i);
         }
         break;
-
     case 3:         /* Doubleword */
         for (i=0; i < 2; i++) {
             regs->VR_D(v1, i) = regs->VR_D(v2, i) >= regs->VR_D(v3, i) ? regs->VR_D(v2, i) : regs->VR_D(v3, i);
         }
         break;
+    case 4:         /* Quadword */
+        {
+            U128 tempv2, tempv3;
 
+            tempv2.Q = regs->VR_Q(v2);
+            tempv3.Q = regs->VR_Q(v3);
+            regs->VR_Q(v1) = ( U128_cmp( tempv2,  tempv3) == 1)  ? regs->VR_Q(v2) : regs->VR_Q(v3);
+        }
+        break;
     default:
         ARCH_DEP( program_interrupt )( regs, PGM_SPECIFICATION_EXCEPTION );
         break;
@@ -6805,7 +8047,6 @@ DEF_INST( vector_maximum_logical )
 DEF_INST( vector_minimum )
 {
     int     v1, v2, v3, m4, m5, m6;
-
     int i;                          /* loop index                    */
 
     VRR_C( inst, regs, v1, v2, v3, m4, m5, m6 );
@@ -6816,6 +8057,9 @@ DEF_INST( vector_minimum )
 
     ZVECTOR_CHECK( regs );
 
+    if ( m4 == 4 && !FACILITY_ENABLED( 198_VECTOR_ENH_3, regs ) )
+            ARCH_DEP( program_interrupt )( regs, PGM_SPECIFICATION_EXCEPTION );
+
     switch (m4)
     {
     case 0:         /* Byte */
@@ -6823,25 +8067,30 @@ DEF_INST( vector_minimum )
             regs->VR_B(v1, i) = (S8) regs->VR_B(v2, i) <= (S8) regs->VR_B(v3, i) ? regs->VR_B(v2, i) : regs->VR_B(v3, i);
         }
         break;
-
     case 1:         /* Halfword */
         for (i=0; i < 8; i++) {
             regs->VR_H(v1, i) = (S16) regs->VR_H(v2, i) <= (S16) regs->VR_H(v3, i) ? regs->VR_H(v2, i) : regs->VR_H(v3, i);
         }
         break;
-
     case 2:         /* Word */
         for (i=0; i < 4; i++) {
             regs->VR_F(v1, i) = (S32) regs->VR_F(v2, i) <= (S32) regs->VR_F(v3, i) ? regs->VR_F(v2, i) : regs->VR_F(v3, i);
         }
         break;
-
     case 3:         /* Doubleword */
         for (i=0; i < 2; i++) {
             regs->VR_D(v1, i) = (S64) regs->VR_D(v2, i) <= (S64) regs->VR_D(v3, i) ? regs->VR_D(v2, i) : regs->VR_D(v3, i);
         }
         break;
+    case 4:         /* Quadword */
+        {
+            U128 tempv2, tempv3;
 
+            tempv2.Q = regs->VR_Q(v2);
+            tempv3.Q = regs->VR_Q(v3);
+            regs->VR_Q(v1) = ( S128_cmp( tempv2,  tempv3) == -1)  ? regs->VR_Q(v2) : regs->VR_Q(v3);
+        }
+        break;
     default:
         ARCH_DEP( program_interrupt )( regs, PGM_SPECIFICATION_EXCEPTION );
         break;
@@ -6855,7 +8104,6 @@ DEF_INST( vector_minimum )
 DEF_INST( vector_maximum )
 {
     int     v1, v2, v3, m4, m5, m6;
-
     int i;                          /* loop index                    */
 
     VRR_C( inst, regs, v1, v2, v3, m4, m5, m6 );
@@ -6866,6 +8114,9 @@ DEF_INST( vector_maximum )
 
     ZVECTOR_CHECK( regs );
 
+    if ( m4 == 4 && !FACILITY_ENABLED( 198_VECTOR_ENH_3, regs ) )
+            ARCH_DEP( program_interrupt )( regs, PGM_SPECIFICATION_EXCEPTION );
+
     switch (m4)
     {
     case 0:         /* Byte */
@@ -6873,25 +8124,30 @@ DEF_INST( vector_maximum )
             regs->VR_B(v1, i) = (S8) regs->VR_B(v2, i) >= (S8) regs->VR_B(v3, i) ? regs->VR_B(v2, i) : regs->VR_B(v3, i);
         }
         break;
-
     case 1:         /* Halfword */
         for (i=0; i < 8; i++) {
             regs->VR_H(v1, i) = (S16) regs->VR_H(v2, i) >= (S16) regs->VR_H(v3, i) ? regs->VR_H(v2, i) : regs->VR_H(v3, i);
         }
         break;
-
     case 2:         /* Word */
         for (i=0; i < 4; i++) {
             regs->VR_F(v1, i) = (S32) regs->VR_F(v2, i) >= (S32) regs->VR_F(v3, i) ? regs->VR_F(v2, i) : regs->VR_F(v3, i);
         }
         break;
-
     case 3:         /* Doubleword */
         for (i=0; i < 2; i++) {
             regs->VR_D(v1, i) = (S64) regs->VR_D(v2, i) >= (S64) regs->VR_D(v3, i) ? regs->VR_D(v2, i) : regs->VR_D(v3, i);
         }
         break;
+    case 4:         /* Quadword */
+        {
+            U128 tempv2, tempv3;
 
+            tempv2.Q = regs->VR_Q(v2);
+            tempv3.Q = regs->VR_Q(v3);
+            regs->VR_Q(v1) = ( S128_cmp( tempv2,  tempv3) == 1)  ? regs->VR_Q(v2) : regs->VR_Q(v3);
+        }
+        break;
     default:
         ARCH_DEP( program_interrupt )( regs, PGM_SPECIFICATION_EXCEPTION );
         break;

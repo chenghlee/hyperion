@@ -835,23 +835,23 @@ U16             devtype;                /* Device type (e.g. 0x3390) */
 
     /* Retrieve and report garbage collector state, but ONLY if
        the image is over 100MB in size. This prevents "scaring"
-       the user about SEVERELY fragmented files when the file
-       is too small to be much of a concern, as is usually the
-       case with e.g. shadow files.
+       the user about very fragmented files when the file is
+       too small to be much of a concern, as is usually the case
+       with e.g. shadow files.
     */
     if (cdevhdr.cdh_size > (100 * _1M))
     {
         int gc = dev_gc_state();
         const char *gc_str, *sev;
 
-             if (gc <= 1) gc_str = "SEVERELY",   sev = "W";
-        else if (gc <= 2) gc_str = "moderately", sev = "W";
+             if (gc <= 1) gc_str = "very",       sev = "W";
+        else if (gc <= 2) gc_str = "moderately", sev = "I";
         else if (gc <= 3) gc_str = "slightly",   sev = "I";
         else              gc_str = "not",        sev = "I";
 
-        // "Image is %s fragmented%s"
+        // "Image is %s fragmented."
         WRMSG( HHC03020, "I" );
-        WRMSG( HHC03050, sev, gc_str, gc <= 1 ? "!" : "." );
+        WRMSG( HHC03050, sev, gc_str );
     }
 
     /* FBA devices don't have tracks, so cannot report track information */
@@ -1150,6 +1150,8 @@ U16             devtype;                /* Device type (e.g. 0x3390) */
 
     if (verbose || info_only)  /* (inaccurate statistics otherwise!) */
     {
+        char percent[16] = {0};
+
         seek_total    = 0;
         active_tracks = 0;
 
@@ -1185,6 +1187,14 @@ U16             devtype;                /* Device type (e.g. 0x3390) */
             }
         }
 
+        // Calculate Avg. L2-to-block seek, or
+        // Calculate Avg. L2-to-track seek...
+
+        if (active_tracks)
+            MSGBUF( percent, "%.3f MB", (((double) seek_total)/((double) active_tracks)) / (1024.0 * 1024.0) );
+        else
+            STRLCPY( percent, "undefined" );
+
         if (fba)
         {
             // ""
@@ -1192,7 +1202,7 @@ U16             devtype;                /* Device type (e.g. 0x3390) */
             // "Avg. L2-to-block seek  = %.3f MB"
             if (!total_unknown) WRMSG( HHC03020, "I" );
             WRMSG( HHC03045, "I", active_tracks );
-            WRMSG( HHC03046, "I", (((double) seek_total)/((double) active_tracks)) / (1024.0 * 1024.0) );
+            WRMSG( HHC03046, "I", percent );
         }
         else
         {
@@ -1201,7 +1211,7 @@ U16             devtype;                /* Device type (e.g. 0x3390) */
             // "Avg. L2-to-track seek  = %.3f MB"
             if (!total_unknown) WRMSG( HHC03020, "I" );
             WRMSG( HHC03043, "I", active_tracks );
-            WRMSG( HHC03044, "I", (((double) seek_total)/((double) active_tracks)) / (1024.0 * 1024.0) );
+            WRMSG( HHC03044, "I", percent );
         }
     }
 

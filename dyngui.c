@@ -677,6 +677,7 @@ void  UpdateStatus ()
         || curr_instcount            != prev_instcount
         || pTargetCPU_REGS->cpustate != prev_cpustate
         || memcmp( prev_psw, psw, sizeof( prev_psw )) != 0
+        || (WAITSTATE( &pTargetCPU_REGS->psw) && IS_IC_DISABLED_WAIT_PSW( pTargetCPU_REGS ))
     )
     {
         bStatusChanged = TRUE;          // (something has indeed changed...)
@@ -2067,7 +2068,7 @@ void Cleanup()
 }
 
 ///////////////////////////////////////////////////////////////////////////////
-// Hercules  "daemon_task"  -or-  "panel_display"  override...
+// Hercules  "noui_task"  -or-  "panel_display"  override...
 
 void gui_panel_display ()
 {
@@ -2145,7 +2146,7 @@ HDL_REGISTER_SECTION            // ("Register" our entry-points)
     //             entry-point      entry-point
     //             name             value
     HDL_REGISTER ( panel_display,   gui_panel_display   );// (Yep! We override EITHER!)
-    HDL_REGISTER ( daemon_task,     gui_panel_display   );// (Yep! We override EITHER!)
+    HDL_REGISTER ( noui_task,       gui_panel_display   );// (Yep! We override EITHER!)
     HDL_REGISTER ( debug_cpu_state, gui_debug_cpu_state );
     HDL_REGISTER ( debug_cd_cmd,    gui_debug_cd_cmd    );
     HDL_REGISTER ( panel_command,   gui_panel_command   );

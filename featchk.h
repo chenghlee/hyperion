@@ -360,6 +360,10 @@
  #define    _FEATURE_081_PPA_IN_ORDER_FACILITY
 #endif
 
+#if defined( FEATURE_084_MISC_INSTR_EXT_FACILITY_4 )
+ #define    _FEATURE_084_MISC_INSTR_EXT_FACILITY_4
+#endif
+
 #if defined( FEATURE_129_ZVECTOR_FACILITY )
  #define    _FEATURE_129_ZVECTOR_FACILITY
 #endif
@@ -474,6 +478,14 @@
 
 #if defined( FEATURE_197_PROC_ACT_EXT_1_FACILITY )
  #define    _FEATURE_197_PROC_ACT_EXT_1_FACILITY
+#endif
+
+#if defined( FEATURE_198_VECTOR_ENH_FACILITY_3 )
+ #define    _FEATURE_198_VECTOR_ENH_FACILITY_3
+#endif
+
+#if defined( FEATURE_199_VECT_PACKDEC_ENH_FACILITY_3 )
+ #define    _FEATURE_199_VECT_PACKDEC_ENH_FACILITY_3
 #endif
 
 /*-------------------------------------------------------------------*/
@@ -1084,6 +1096,34 @@
 
 #if defined( FEATURE_197_PROC_ACT_EXT_1_FACILITY ) && !defined( FEATURE_196_PROC_ACT_FACILITY )
  #error Processor-Activity-Instrumentation Extension 1 Facility requires Processor-Activity-Instrumentation Facility
+#endif
+
+#if defined( FEATURE_198_VECTOR_ENH_FACILITY_3 ) && !defined( FEATURE_129_ZVECTOR_FACILITY )
+ #error Vector-Enhancements Facility 3 requires z/Architecture Vector Facility
+#endif
+
+#if defined( FEATURE_198_VECTOR_ENH_FACILITY_3 ) && !defined( FEATURE_135_ZVECTOR_ENH_FACILITY_1 )
+ #error Vector-Enhancements Facility 3 requires Vector-Enhancements Facility 1
+#endif
+
+#if defined( FEATURE_198_VECTOR_ENH_FACILITY_3 ) && !defined( FEATURE_148_VECTOR_ENH_FACILITY_2 )
+ #error Vector-Enhancements Facility 3 requires Vector-Enhancements Facility 2
+#endif
+
+#if defined( FEATURE_199_VECT_PACKDEC_ENH_FACILITY_3 ) && !defined( FEATURE_129_ZVECTOR_FACILITY )
+ #error Vector-Packed-Decimal-Enhancement Facility 3 requires z/Architecture Vector Facility
+#endif
+
+#if defined( FEATURE_199_VECT_PACKDEC_ENH_FACILITY_3 ) && !defined( FEATURE_134_ZVECTOR_PACK_DEC_FACILITY )
+ #error Vector-Packed-Decimal-Enhancement Facility 3 requires Vector Packed-Decimal Facility
+#endif
+
+#if defined( FEATURE_199_VECT_PACKDEC_ENH_FACILITY_3 ) && !defined( FEATURE_152_VECT_PACKDEC_ENH_FACILITY )
+ #error Vector-Packed-Decimal-Enhancement Facility 3 requires Vector-Packed-Decimal-Enhancement Facility 1
+#endif
+
+#if defined( FEATURE_199_VECT_PACKDEC_ENH_FACILITY_3 ) && !defined( FEATURE_192_VECT_PACKDEC_ENH_2_FACILITY )
+ #error Vector-Packed-Decimal-Enhancement Facility 3 requires Vector-Packed-Decimal-Enhancement Facility 2
 #endif
 
 /*-------------------------------------------------------------------*/

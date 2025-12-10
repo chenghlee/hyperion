@@ -798,22 +798,30 @@ do { \
 /* of the Hercules build or the host it is currently running on.     */
 /*-------------------------------------------------------------------*/
 
-#ifdef WORDS_BIGENDIAN
- #define CSWAP16(_x)    (_x)            // (result ALWAYS big endian)
- #define CSWAP32(_x)    (_x)            // (result ALWAYS big endian)
- #define CSWAP64(_x)    (_x)            // (result ALWAYS big endian)
- #define CSWAP128(_x)   (_x)            // (result ALWAYS big endian)
-#else
- #define CSWAP16(_x)    bswap_16(_x)    // (result ALWAYS big endian)
- #define CSWAP32(_x)    bswap_32(_x)    // (result ALWAYS big endian)
- #define CSWAP64(_x)    bswap_64(_x)    // (result ALWAYS big endian)
- #define CSWAP128(_x)   bswap_128(_x)   // (result ALWAYS big endian)
+#ifdef WORDS_BIGENDIAN                 // BE (BIG Endian) host...
+
+// (_x) = Z guest BE format, result thus ALWAYS BE (BIG Endian format
+
+ #define CSWAP16(_x)    (_x)           // (result ALWAYS BIG Endian)
+ #define CSWAP32(_x)    (_x)           // (result ALWAYS BIG Endian)
+ #define CSWAP64(_x)    (_x)           // (result ALWAYS BIG Endian)
+ #define CSWAP128(_x)   (_x)           // (result ALWAYS BIG Endian)
+
+#else                                  // LE (Little Endian) host...
+
+// (_x) = Z guest BE format, result thus ALWAYS LE (Little Endian)...
+
+ #define CSWAP16(_x)    bswap_16(_x)   // (result ALWAYS Little Endian)
+ #define CSWAP32(_x)    bswap_32(_x)   // (result ALWAYS Little Endian)
+ #define CSWAP64(_x)    bswap_64(_x)   // (result ALWAYS Little Endian)
+ #define CSWAP128(_x)   bswap_128(_x)  // (result ALWAYS Little Endian)
+
 #endif
 
- #define SWAP16(_x)     bswap_16(_x)    // (result OPPOSITE of input)
- #define SWAP32(_x)     bswap_32(_x)    // (result OPPOSITE of input)
- #define SWAP64(_x)     bswap_64(_x)    // (result OPPOSITE of input)
- #define SWAP128(_x)    bswap_128(_x)   // (result OPPOSITE of input)
+ #define SWAP16(_x)     bswap_16(_x)   // (result OPPOSITE of input)
+ #define SWAP32(_x)     bswap_32(_x)   // (result OPPOSITE of input)
+ #define SWAP64(_x)     bswap_64(_x)   // (result OPPOSITE of input)
+ #define SWAP128(_x)    bswap_128(_x)  // (result OPPOSITE of input)
 
  #define SWAP_OFF_T(o)  (sizeof(o) <= 4 ? SWAP32((U32)o) : SWAP64(o))
 
@@ -3567,6 +3575,23 @@ DEF_INST(convert_dfp_ext_to_packed);
 DEF_INST(convert_dfp_long_to_packed);
 #endif
 
+#if defined( FEATURE_084_MISC_INSTR_EXT_FACILITY_4 )
+DEF_INST( bit_deposit );
+DEF_INST( bit_extract );
+DEF_INST( count_leading_zeros );
+DEF_INST( count_trailing_zeros );
+DEF_INST( load_logical_indexed_address_shift_0 );
+DEF_INST( load_logical_indexed_address_shift_1 );
+DEF_INST( load_logical_indexed_address_shift_2 );
+DEF_INST( load_logical_indexed_address_shift_3 );
+DEF_INST( load_logical_indexed_address_shift_4 );
+DEF_INST( load_indexed_address_shift_0 );
+DEF_INST( load_indexed_address_shift_1 );
+DEF_INST( load_indexed_address_shift_2 );
+DEF_INST( load_indexed_address_shift_3 );
+DEF_INST( load_indexed_address_shift_4 );
+#endif
+
 #if defined( FEATURE_129_ZVECTOR_FACILITY )
 DEF_INST(vector_load_element_8);
 DEF_INST(vector_load_element_16);
@@ -3795,6 +3820,22 @@ DEF_INST(vector_convert_hfp_to_scaled_decimal);
 DEF_INST( load_bear );
 DEF_INST( store_bear );
 DEF_INST( load_program_status_word_extended_y );
+#endif
+
+#if defined( FEATURE_198_VECTOR_ENH_FACILITY_3 )
+ DEF_INST( vector_generate_element_masks );
+ DEF_INST( vector_evaluate );
+ DEF_INST( vector_blend );
+ DEF_INST( vector_divide_logical );
+ DEF_INST( vector_remainder_logical );
+ DEF_INST( vector_divide );
+ DEF_INST( vector_remainder );
+#endif
+
+#if defined( FEATURE_199_VECT_PACKDEC_ENH_FACILITY_3 )
+ DEF_INST( vector_convert_to_decimal_128 );
+ DEF_INST( vector_convert_to_binary_128 );
+ DEF_INST( vector_test_zoned );
 #endif
 
 /*-------------------------------------------------------------------*/

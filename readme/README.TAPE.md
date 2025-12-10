@@ -223,7 +223,7 @@ The following works okay:
 ```
       ONECHAR DC  C'Z'                    (one byte filename)
 
-      CCW   X'4B',ONECHAR,X'20',L'ONECHAR        (automount)
+      CCW   X'4B',ONECHAR,X'20',L'ONECHAR        (automount)  (one byte succeeds because it's not chained)
 ```
 
 The following works okay:
@@ -247,17 +247,15 @@ The following works okay:
 ```
 
 The following will **FAIL**:
-
-```
+<pre>
       ONECHAR DC  C'Z'                    (one byte filename)
       VOL1LBL DC  CL80' '
 
-      CCW   X'4B',ONECHAR,X'60',L'ONECHAR        (automount)
+      CCW   X'4B',ONECHAR,X'60',L'ONECHAR        (automount)  (one byte <b><i>FAILS</i></b> because it <b><i>IS</i></b> chained!)
       CCW   X'07',*,X'60',1                      (rewind)
       CCW   X'02',VOL1LBL,X'60',L'VOL1LBL        (read VOL1)
       CCW   X'07',*,X'20',1                      (rewind)
-```
-
+</pre>
 
 ### Summary:
 

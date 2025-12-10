@@ -18,8 +18,7 @@
 #include "opcode.h"
 #include "herc_getopt.h"
 
-#define MAX_TRACE_LEN 128
-
+#define MAX_TRACE_LEN      128
 #define FROM_GUEST         '<'
 #define TO_GUEST           '>'
 #define NO_DIRECTION       ' '
@@ -237,9 +236,9 @@ int  LCS_Init( DEVBLK* pDEVBLK, int argc, char *argv[] )
     char        thread_name[32];        // Thread name
 
 
-    pDEVBLK->devtype = 0x3088;
-
-    pDEVBLK->excps   = 0;
+    pDEVBLK->devtype  = 0x3088;
+    pDEVBLK->numsense = 2;
+    pDEVBLK->excps    = 0;
 
     // Return when an existing group has been joined but is still incomplete
     if (!group_device( pDEVBLK, 0 ) && pDEVBLK->group)
@@ -440,7 +439,8 @@ int  LCS_Init( DEVBLK* pDEVBLK, int argc, char *argv[] )
             rc = TUNTAP_CreateInterface( pLCSBLK->pszTUNDevice,
                                          IFF_TAP | IFF_NO_PI,
                                          &pLCSPORT->fd,
-                                         pLCSPORT->szNetIfName );
+                                         pLCSPORT->szNetIfName,
+                                         &pLCSPORT->internal );
 
             if (rc < 0)
             {
@@ -753,9 +753,8 @@ void  LCS_ExecuteCCW( DEVBLK* pDEVBLK, BYTE  bCode,
         break;
 
     case 0x02:  // MMMMMM10  READ
-    case 0x0C:  // MMMM1100  RDBACK
         // -----------------------------------------------------------
-        // READ & READ BACKWARDS
+        // READ
         // -----------------------------------------------------------
 
         // Read data and set unit status and residual byte count
@@ -812,6 +811,7 @@ void  LCS_ExecuteCCW( DEVBLK* pDEVBLK, BYTE  bCode,
     case 0x43:  // 00XXX011  SBM
         // -----------------------------------------------------------
         // SET BASIC MODE
+        // -----------------------------------------------------------
         // Also called Enable Compatability Mode (ECM) by SNA,
         // ECM is the last CCW issued after the XCA is inactivated.
         // -----------------------------------------------------------
@@ -836,6 +836,7 @@ void  LCS_ExecuteCCW( DEVBLK* pDEVBLK, BYTE  bCode,
     case 0xC3:  // 11000011  SEM
         // -----------------------------------------------------------
         // SET EXTENDED MODE
+        // -----------------------------------------------------------
         // Also called Disable Compatability Mode (DCM) by SNA.
         // DCM is the first CCW issued after the XCA is activated.
         // -----------------------------------------------------------
@@ -937,8 +938,6 @@ void  LCS_ExecuteCCW( DEVBLK* pDEVBLK, BYTE  bCode,
         pDEVBLK->sense[0] = SENSE_CR;
         *pUnitStat        = CSW_CE | CSW_DE | CSW_UC;
     }
-
-    return;
 }
 
 // ====================================================================
@@ -1418,6 +1417,7 @@ void  LCS_Write( DEVBLK* pDEVBLK,   U32   sCount,
                 WRMSG( HHC00936, "E",
                         SSID_TO_LCSS(pDEVBLK->ssid), pDEVBLK->devnum, pDEVBLK->filename,
                         strerror( errno ) );
+                *pResidual = sCount - ((BYTE*)pLCSHDR - pIOBuf);
                 pDEVBLK->sense[0] = SENSE_EC;
                 *pUnitStat = CSW_CE | CSW_DE | CSW_UC;
                 LCS_EndMWrite( pDEVBLK, nEthBytes, nEthFrames );
@@ -1556,6 +1556,7 @@ void  LCS_Write( DEVBLK* pDEVBLK,   U32   sCount,
             // "%1d:%04X CTC: lcs write: unsupported frame type 0x%2.2X"
             WRMSG( HHC00937, "E", SSID_TO_LCSS(pDEVBLK->ssid), pDEVBLK->devnum, pLCSHDR->bType );
             ASSERT( FALSE );
+            *pResidual = sCount - ((BYTE*)pLCSHDR - pIOBuf);
             pDEVBLK->sense[0] = SENSE_EC;
             *pUnitStat = CSW_CE | CSW_DE | CSW_UC;
             LCS_EndMWrite( pDEVBLK, nEthBytes, nEthFrames );
@@ -2699,7 +2700,7 @@ static void*  LCS_PortThread( void* arg)
 
     // We must do the close since we were the one doing the i/o...
 
-    VERIFY( pLCSPORT->fd == -1 || TUNTAP_Close( pLCSPORT->fd ) == 0 );
+    VERIFY( pLCSPORT->fd == -1 || TUNTAP_Close( pLCSPORT->fd, pLCSPORT->internal ) == 0 );
 
     // Housekeeping - Cleanup Port Block
 
@@ -4494,6 +4495,7 @@ void  LCS_Write_SNA( DEVBLK* pDEVBLK,   U32   sCount,
                     PTT_DEBUG(        "REL  InOutLock    ", 000, pDEVBLK->devnum, -1 );
                     release_lock( &pLCSDEV->InOutLock   );
                     ASSERT( FALSE );
+                    *pResidual = sCount - ((BYTE*)pLCSHDR - pIOBuf);
                     pDEVBLK->sense[0] = SENSE_EC;
                     *pUnitStat = CSW_CE | CSW_DE | CSW_UC;
 //??                LCS_EndMWrite( pDEVBLK, nEthBytes, nEthFrames );
@@ -4614,6 +4616,7 @@ void  LCS_Write_SNA( DEVBLK* pDEVBLK,   U32   sCount,
                 // "%1d:%04X CTC: lcs write: unsupported frame type 0x%2.2X"
                 WRMSG( HHC00937, "E", SSID_TO_LCSS(pDEVBLK->ssid), pDEVBLK->devnum, pLCSHDR->bType );
                 ASSERT( FALSE );
+                *pResidual = sCount - ((BYTE*)pLCSHDR - pIOBuf);
                 pDEVBLK->sense[0] = SENSE_EC;
                 *pUnitStat = CSW_CE | CSW_DE | CSW_UC;
 //??            LCS_EndMWrite( pDEVBLK, nEthBytes, nEthFrames );
@@ -4642,6 +4645,7 @@ void  LCS_Write_SNA( DEVBLK* pDEVBLK,   U32   sCount,
         WRMSG( HHC00936, "E", SSID_TO_LCSS(pDEVBLK->ssid), pDEVBLK->devnum,
                               pDEVBLK->filename, strerror( pLCSDEV->iTuntapErrno ) );
 
+        *pResidual = sCount - ((BYTE*)pLCSHDR - pIOBuf);
         pDEVBLK->sense[0] = SENSE_EC;
         *pUnitStat = CSW_CE | CSW_DE | CSW_UC;
 

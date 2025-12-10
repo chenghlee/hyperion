@@ -36,6 +36,8 @@ facility  code  test#   Instruction                                             
     vd       x   04     E63D VECTOR STORE RIGHTMOST WITH LENGTH                 VSTRL       VSI
     vd       x   09     E63F VECTOR STORE RIGHTMOST WITH LENGTH  (reg)          VSTRLR      VRS-d
     vd       x   10     E649 VECTOR LOAD IMMEDIATE DECIMAL                      VLIP        VRI-h
+    vd3      x          E64A VECTOR CONVERT TO DECIMAL (128)                    VCVDQ       VRI-j
+    vd3      x          E64E VECTOR CONVERT TO BINARY (128)                     VCVBQ       VRR-k
     vd       x   11     E650 VECTOR CONVERT TO BINARY (32)                      VCVB        VRR-i
     vd2      x   12     E651 VECTOR COUNT LEADING ZERO DIGITS                   VCLZDP      VRR-k
     vd       x   11     E652 VECTOR CONVERT TO BINARY (64)                      VCVBG       VRR-i
@@ -59,6 +61,7 @@ facility  code  test#   Instruction                                             
     vd2      x   18     E67C DECIMAL SCALE AND CONVERT AND SPLIT TO HFP         VSCSHP      VRR-b
     vd2      x   19     E67D VECTOR CONVERT HFP TO SCALED DECIMAL               VCSPH       VRR-j
     vd       x   05     E67E VECTOR SHIFT AND DIVIDE DECIMAL                    VSDP        VRI-f
+    vd3                 E67F VECTOR TEST ZONED                                  VTZ         VRI-l
 
     The following E6 z/arch vector instructions are implemented in nnpa.c:
     nn                  E655 VECTOR FP CONVERT TO NNP                           VCNF        VRR-a
@@ -72,6 +75,7 @@ facility  code  test#   Instruction                                             
     v2  -   148 - Vector-enhancements facility 2
     vd  -   134 - Vector packed-decimal facility
     vd2 -   192 - Vector-packed-decimal-enhancement facility 2
+    vd3 -   199 - Vector-packed-decimal-enhancement facility 3
 
   test#:
     Instruction test are named 'zvector-e6-xx-hint' where 'xx' is the test# and 'hint' provides a hint of the
@@ -80,8 +84,6 @@ facility  code  test#   Instruction                                             
     instruction format, e.g. load type instructions in one test and store type instructions in a second test.
 
   Implemented instruction are organized by ascending opcode.
-
-  Unimplemented instructions are located after implemented instructions and raise an operation exception.
 -------------------------------------------------------------------------------------------------------------*/
 
 #include "hstdinc.h"
@@ -92,6 +94,8 @@ facility  code  test#   Instruction                                             
 #include "hercules.h"
 #include "opcode.h"
 #include "inline.h"
+
+#include "zvector.h"
 
 #if defined(FEATURE_129_ZVECTOR_FACILITY)
 
@@ -218,33 +222,6 @@ facility  code  test#   Instruction                                             
     #define _USE_128_
 #endif
 
-/*-------------------------------------------------------------------*/
-/* U128                                                              */
-/*-------------------------------------------------------------------*/
-typedef union {
-        QW   Q;
-#if defined( _USE_128_ )
-    unsigned __int128 u_128;
-#endif
-        U64  u_64[2];
-        U32  u_32[4];
-        U16  u_16[8];
-        U8   u_8[16];
-
-#if defined( _USE_128_ )
-    __int128 s_128;
-#endif
-        S64  s_64[2];
-        S32  s_32[4];
-        S16  s_16[8];
-        S8   s_8[16];
-
-#if defined(__V128_SSE__)
-        __m128i V;          // intrinsic type vector
-#endif
-
-}  U128  ;
-
 /*===================================================================*/
 /* LOCAL Registers (saved vector registers)                          */
 /*     local vector registers ensure source input of a vector        */
@@ -275,150 +252,6 @@ typedef struct
 
 #if !defined(_ZVECTOR2_ARCH_INDEPENDENT_)
 #define _ZVECTOR2_ARCH_INDEPENDENT_
-
-/*===================================================================*/
-/* U128 Arithmetic (add, sub, mul)                                   */
-/*===================================================================*/
-
-/*-------------------------------------------------------------------*/
-/* U128 Add: return a + b                                            */
-/*-------------------------------------------------------------------*/
-static inline U128 U128_add( U128 a, U128 b)
-{
-#if defined( _USE_128_ )
-    U128 temp;                           /* temp (return) value      */
-
-    temp.u_128 =  a.u_128 + b.u_128;
-    return temp;
-
-#else
-    U128 temp;                           /* temp (return) value      */
-
-    temp.Q.D.H.D =  a.Q.D.H.D + b.Q.D.H.D;
-    temp.Q.D.L.D =  a.Q.D.L.D + b.Q.D.L.D;
-    if (temp.Q.D.L.D < b.Q.D.L.D) temp.Q.D.H.D++;
-    return temp;
-#endif
-}
-/*-------------------------------------------------------------------*/
-/* U128 Subtract: return a - b                                       */
-/*-------------------------------------------------------------------*/
-static inline U128 U128_sub( U128 a, U128 b)
-{
-#if defined( _USE_128_ )
-    U128 temp;                           /* temp (return) value      */
-
-    temp.u_128 =  a.u_128 - b.u_128;
-    return temp;
-
-#else
-    U128 temp;                           /* temp (return) value      */
-
-    temp.Q.D.H.D =  a.Q.D.H.D - b.Q.D.H.D;
-    if (a.Q.D.L.D < b.Q.D.L.D) temp.Q.D.H.D--;
-    temp.Q.D.L.D =  a.Q.D.L.D - b.Q.D.L.D;
-
-    return temp;
-#endif
-}
-
-/*-------------------------------------------------------------------*/
-/* U128 * U32 Multiply: return a * b (overflow ignored)              */
-/*                                                                   */
-/* Very simple, standard approach to arithmetic multiply             */
-/*                                                                   */
-/*                                                                   */
-/*-------------------------------------------------------------------*/
-static inline U128 U128_U32_mul( U128 a, U32 b)
-{
-#if defined( _USE_128_ )
-    U128 temp;                           /* temp (return) value      */
-
-    temp.u_128 =  a.u_128 * b;
-    return temp;
-
-#else
-    U128 r;                           /* return value                */
-    U64 t;                            /* temp                        */
-
-
-    /* initialize result */
-    r.Q.D.H.D = 0UL;
-    r.Q.D.L.D = 0UL;
-
-    if (b == 0) return r;
-
-    /* 1st 32 bits : LL */
-    if (a.Q.F.LL.F != 0) r.Q.D.L.D = (U64) a.Q.F.LL.F * (U64) b;
-
-    /* 2nd 32 bits : LH */
-    if( a.Q.F.LH.F != 0)
-    {
-        t = (U64) a.Q.F.LH.F  * (U64) b  +  (U64) r.Q.F.LH.F;
-        r.Q.F.LH.F = t & 0xFFFFFFFFUL;
-        r.Q.F.HL.F = t >> 32;
-    }
-
-    /* 3rd 32 bits : HL */
-    if( a.Q.F.HL.F != 0)
-    {
-        t = (U64) a.Q.F.HL.F  * (U64) b  +  (U64) r.Q.F.HL.F;
-        r.Q.F.HL.F = t & 0xFFFFFFFFUL;
-        r.Q.F.HH.F = t >> 32;
-    }
-
-    /* 4th 32 bits : HH */
-    if( a.Q.F.HH.F != 0)
-    {
-        t = (U64) a.Q.F.HH.F  * (U64) b  +  (U64) r.Q.F.HH.F;
-        r.Q.F.HH.F = t & 0xFFFFFFFFUL;
-    }
-    return r;
-#endif
-}
-
-/*-------------------------------------------------------------------*/
-/* Debug helper for U128                                             */
-/*                                                                   */
-/* Input:                                                            */
-/*      msg     pointer to logmsg context string                     */
-/*      u       U128 number                                          */
-/*                                                                   */
-/*-------------------------------------------------------------------*/
-static inline void u128_logmsg(const char * msg, U128 u)
-{
-    logmsg("%s: u128=%16.16"PRIX64".%16.16"PRIX64" \n", msg, u.Q.D.H.D, u.Q.D.L.D);
-}
-
-
-/*===================================================================*/
-/* Utility Helpers                                                   */
-/*===================================================================*/
-
-/*-------------------------------------------------------------------*/
-/* Set 16 bytes (128 bits) to zero                                   */
-/*                                                                   */
-/* Input:                                                            */
-/*      addr    address of 16-byte asrea to zero                     */
-/*                                                                   */
-/* version depends on whether intrinsics are being used              */
-/*-------------------------------------------------------------------*/
-#if defined(__V128_SSE__)
-
-static inline void SetZero_128 (void* addr)
-{
-    __m128i v = _mm_setzero_si128();
-    memcpy( addr, &v, sizeof( __m128i ));
-}
-
-#else
-
-static inline void SetZero_128 (void* addr)
-{
-    memset( addr, 0, sizeof(U128) );
-}
-
-#endif
 
 /*===================================================================*/
 /* decNumbers Helpers                                                */
@@ -680,8 +513,108 @@ static inline bool  vr_packed_valid_digits ( REGS* regs, int v1 )
     return valid;
 }
 
+static inline bool  vr_packed_valid_digits_enhanced ( REGS* regs, int v1,
+                             int et,   /* Enhanced Testing (ET) (value FALSE or TRUE) */
+                             int bpt,  /* Byte-Padding Test (BPT) (value FALSE or TRUE) */
+                             int dc )  /* Digits Count (DC) (value 0-31) */
+{
+    int     i, j;                           /* Array subscript           */
+    bool    valid = TRUE;                   /* valid result              */
+
+    if (et == FALSE)
+    {
+        /* Enhanced Testing (ET) is not required. */
+        /* Codes 0-9 are considered valid in all digit positions. */
+        for (i=0, j=0; i < MAX_DECIMAL_DIGITS && valid; i++)
+        {
+            if (i & 1)
+                valid = PACKED_LOW ( regs->VR_B( v1, j++ ) ) < 10;
+            else
+                valid = PACKED_HIGH ( regs->VR_B( v1, j ) ) < 10;
+        }
+    }
+    else
+    {
+        /* Enhanced Testing (ET) is required */
+        if (dc == 0)
+        {
+            /* N=0                                                   */
+            /* Codes 0-F are considered valid in all digit positions */
+            /* (that is, none of the digit positions are tested for  */
+            /* validity).                                            */
+        }
+        else
+        {
+            /* N>0                                                   */
+            i = MAX_DECIMAL_DIGITS - dc;
+            j = i / 2;
+            if (dc & 1)
+            {
+                /* N>0 and odd                                       */
+                /* Codes 0-9 are considered valid in the rightmost N */
+                /* digit positions. Codes 0-F are considered valid   */
+                /* in the remaining leftmost digit positions (that   */
+                /* is, the remaining leftmost digit positions are    */
+                /* not tested for validity).                         */
+                for ( ; i < MAX_DECIMAL_DIGITS && valid; i++)
+                {
+                    if (i & 1)
+                        valid = PACKED_LOW ( regs->VR_B( v1, j++ ) ) < 10;
+                    else
+                        valid = PACKED_HIGH ( regs->VR_B( v1, j ) ) < 10;
+                }
+            }
+            else
+            {
+                /* N>0 and even                                      */
+                if (bpt == FALSE)
+                {
+                    /* N>0 and even & BPT=0                          */
+                    /* Codes 0-9 are considered valid in the         */
+                    /* rightmost N digit positions. Codes 0-F are    */
+                    /* considered valid in the remaining leftmost    */
+                    /* digit positions (that is, the remaining       */
+                    /* leftmost digit positions are not tested for   */
+                    /* validity)                                     */
+                    for ( ; i < MAX_DECIMAL_DIGITS && valid; i++)
+                    {
+                        if (i & 1)
+                            valid = PACKED_LOW ( regs->VR_B( v1, j++ ) ) < 10;
+                        else
+                            valid = PACKED_HIGH ( regs->VR_B( v1, j ) ) < 10;
+                    }
+                }
+                else
+                {
+                    /* N>0 and even & BPT=1                          */
+                    /* Codes 0-9 are considered valid in the         */
+                    /* rightmost N digit positions. Code 0 is        */
+                    /* considered valid in the digit position        */
+                    /* immediately to the left of the rightmost N    */
+                    /* digit positions.                              */
+                    /* Codes 0-F are considered valid in the         */
+                    /* remaining leftmost digit positions (that is,  */
+                    /* the remaining leftmost digit positions are    */
+                    /* not tested for validity).                     */
+                    valid = PACKED_HIGH ( regs->VR_B( v1, j ) ) == 0;
+                    i++;
+                    for ( ; i < MAX_DECIMAL_DIGITS && valid; i++)
+                    {
+                        if (i & 1)
+                            valid = PACKED_LOW ( regs->VR_B( v1, j++ ) ) < 10;
+                        else
+                            valid = PACKED_HIGH ( regs->VR_B( v1, j ) ) < 10;
+                    }
+                }
+            }
+        }
+    }
+
+    return valid;
+}
+
 /*-------------------------------------------------------------------*/
-/* Check a signed packed decimal VR for a valid signb                */
+/* Check a signed packed decimal VR for a valid sign                 */
 /*                                                                   */
 /* Input:                                                            */
 /*      regs    CPU register context for VR access                   */
@@ -694,6 +627,98 @@ static inline bool  vr_packed_valid_digits ( REGS* regs, int v1 )
 static inline bool  vr_packed_valid_sign ( REGS* regs, int v1 )
 {
     return PACKED_SIGN ( regs->VR_B( v1, VR_PACKED_SIGN ) ) > 9;
+}
+
+static inline bool  vr_packed_valid_sign_enhanced ( REGS* regs, int v1,
+                             int et,   /* Enhanced Testing (ET) (value FALSE or TRUE) */
+                             int stc,  /* Sign-Test Control (STC) (value 0-7) */
+                             int dc )  /* Digits Count (DC) (value 0-31) */
+{
+    int     sign;                           /* Sign                      */
+    int     i, j;                           /* Array subscript           */
+    bool    allzeros = TRUE;                /* All N digits are zeros    */
+    bool    valid = TRUE;                   /* valid result              */
+
+    sign = PACKED_SIGN (regs->VR_B( v1, VR_PACKED_SIGN ));
+
+    if (et == FALSE)
+    {
+        /* Enhanced Testing (ET) is not required. */
+        valid = sign >= 0xA;
+    }
+    else
+    {
+        /* Enhanced Testing (ET) is required */
+
+        switch (stc)
+        {
+        case 1:  /* STC = 001 */
+        case 3:  /* STC = 011 */
+        case 7:  /* STC = 111 */
+            if (dc == 0)
+            {
+                /* N=0 */
+                allzeros = FALSE;
+            }
+            else
+            {
+                /* N>0 */
+                i = MAX_DECIMAL_DIGITS - dc;
+                j = i / 2;
+                if (!(dc & 1)) i++;
+                for ( ; i < MAX_DECIMAL_DIGITS && allzeros; i++)
+                {
+                    if (i & 1)
+                        allzeros = PACKED_LOW ( regs->VR_B( v1, j++ ) ) == 0;
+                    else
+                        allzeros = PACKED_HIGH ( regs->VR_B( v1, j ) ) == 0;
+                }
+            }
+            break;
+        default:
+            break;
+        }
+
+        switch (stc)
+        {
+        case 0:  /* STC = 000 */
+            valid = sign >= 0xA;
+            break;
+        case 1:  /* STC = 001 */
+            if (!allzeros)
+                valid = sign >= 0xA;
+            else
+                valid = sign == 0xA || sign == 0xC || sign == 0xE || sign == 0xF;
+            break;
+        case 2:  /* STC = 010 */
+            valid = sign == 0xC || sign == 0xD;
+            break;
+        case 3:  /* STC = 011 */
+            if (!allzeros)
+                valid = sign == 0xC || sign == 0xD;
+            else
+                valid = sign == 0xC;
+            break;
+        case 4:  /* STC = 100 */
+        case 5:  /* STC = 101 */
+            valid = sign == 0xF;
+            break;
+        case 6:  /* STC = 110 */
+            valid = sign == 0xC || sign == 0xD || sign == 0xF;
+            break;
+        case 7:  /* STC = 111 */
+            if (!allzeros)
+                valid = sign == 0xC || sign == 0xD || sign == 0xF;
+            else
+                valid = sign == 0xC || sign == 0xF;
+            break;
+        default:
+            break;
+        }
+
+    }
+
+    return valid;
 }
 
 /*-------------------------------------------------------------------*/
@@ -754,10 +779,10 @@ static inline U128 vr_to_U128( REGS* regs, int v1, bool forcePositive )
 
         if (digit != 0)
         {
-            temp128 = U128_U32_mul (scale, digit);
+            temp128 = U128_mul_32 (scale, digit);
             result  = U128_add ( result, temp128 );
         }
-        scale = U128_U32_mul (scale, 10);
+        scale = U128_mul_32 (scale, 10);
 
         // debug
         // logmsg("vr_to_u128: i=%d, digit=%d \n", i, digit);
@@ -1532,6 +1557,130 @@ static inline void hexNumberToExtendedFloat( hexNumber* hn, EXTENDED_FLOAT* ef )
     ef->expo = hn->exponent + hn->digits +64;
 }
 
+
+/*-------------------------------------------------------------------*/
+/* Extended Zone Format helpers                                        */
+/*-------------------------------------------------------------------*/
+
+/* zoned byte  */
+enum ZONED_BYTE_FORMAT
+{
+    SD_BYTE =1,         // SD-byte format (sign and digit)
+    ZD_BYTE,            // ZD-byte format (zone and digit)
+    SP_BYTE,            // SP-byte format (space)
+    SS_BYTE             // SS-byte format (separate sign)
+};
+
+/*-------------------------------------------------------------------*/
+/* Check a zoned source vector sign is valid                         */
+/*                                                                   */
+/* Input:                                                            */
+/*      sign    signed byte                                          */
+/*      zsf     zoned byte format of sign                            */
+/*      isZero  is the zoned =number zero?                           */
+/*      stc     Sign-Test Control (STC) (value 0-7)                  */
+/*                                                                   */
+/* Returns:                                                          */
+/*              true:  the sign is valid                             */
+/*              false: the sign is invalid                           */
+/*-------------------------------------------------------------------*/
+static inline bool  zoned_valid_sign_enhanced (
+                            BYTE sign,        /* zoned byte containing the sign     */
+                            enum ZONED_BYTE_FORMAT zsf,  /* sign format              */
+                            bool isZero,     /* is the zone number zero?           */
+                            int  stc)        /* Sign-Test Control (STC) (value 0-7) */
+{
+    bool    valid = TRUE;                   /* valid result              */
+
+    if (zsf == SS_BYTE)
+    {
+        /* SS formated sign */
+        switch (stc)
+        {
+            case 2: /* STC = 010 */
+                valid =  sign == 0X4E || sign == 0X60;
+                break;
+
+            case 3: /* STC = 010 */
+                if (isZero)
+                {
+                    valid =  sign == 0X4E;
+                }
+                else
+                {
+                    valid =  sign == 0X4E || sign == 0X60;
+                }
+                break;
+
+            default:
+                break;
+        }
+    }
+
+    else
+    {
+        /* SD formated sign */
+        sign = ZONED_SIGN( sign ) ;
+        switch (stc)
+        {
+            case 0:  /* STC = 000 */
+                valid =  sign >= 0X0A;
+                break;
+
+            case 1:  /* STC = 001 */
+                if (isZero)
+                {
+                    valid =  sign == 0x0A || sign == 0x0C || sign == 0x0E || sign == 0x0F;
+                }
+                else
+                {
+                    valid =  sign >= 0X0A;
+                }
+                break;
+
+            case 2:  /* STC = 010 */
+                valid =  sign == 0x0C || sign == 0x0D;
+                break;
+
+            case 3:  /* STC = 011 */
+                if (isZero)
+                {
+                    valid =  sign == 0X0C;
+                }
+                else
+                {
+                    valid =  sign == 0x0C || sign == 0x0D;
+                }
+                break;
+
+            case 4:  /* STC = 100 */
+            case 5:  /* STC = 101 */
+                valid =  sign == 0X0F;
+                break;
+
+            case 6:  /* STC = 110 */
+                valid =  sign == 0x0C || sign == 0x0D || sign == 0x0F;
+                break;
+
+            case 7:  /* STC = 111 */
+                if (isZero)
+                {
+                    valid =  sign == 0x0C || sign == 0x0F;
+                }
+                else
+                {
+                    valid =  sign == 0x0C || sign == 0x0D || sign == 0x0F;
+                }
+                break;
+
+            default:
+                break;
+        }
+    }
+
+    return valid;
+}
+
 #endif /*!defined(_ZVECTOR2_ARCH_INDEPENDENT_)*/
 
 
@@ -2224,6 +2373,154 @@ DEF_INST( vector_load_immediate_decimal )
     ZVECTOR_END( regs );
 }
 
+#if defined( FEATURE_199_VECT_PACKDEC_ENH_FACILITY_3 )
+/*-------------------------------------------------------------------*/
+/* E64A VCVDQ  - VECTOR CONVERT TO DECIMAL (128)             [VRI-j] */
+/*-------------------------------------------------------------------*/
+DEF_INST( vector_convert_to_decimal_128 )
+{
+    int     v1, v2, i3, m4;      /* Instruction parts                */
+    bool    iom;                 /* Instruction-Overflow Mask (IOM)  */
+    int     rdc;                 /* Result Digits Count(RDC) Bit 3-7 */
+    bool    p1;                  /* Force Operand 1 Positive (P1)    */
+    bool    lb;                  /* Logical Binary (LB)              */
+    bool    cs;                  /* Condition Code Set (CS)          */
+
+    bool    possign;             /* result has positive sign         */
+    U128    convert128;          /* value to convert                 */
+    U128    tempv2;              /* copy of v2 copy to convert       */
+    int     i;                   /* Loop variable                    */
+    U8      digit;               /* digit of packed byte             */
+    U128    digit128;            /* digit of packed byte             */
+    U128    ten128;              /* U128 number 10                   */
+    int     temp;                /* temp                             */
+    bool    overflow;            /* did an overfor occur             */
+
+    VRI_J( inst, regs, v1, v2, i3, m4 );
+
+    ZVECTOR_CHECK( regs );
+
+                              /* i3 reserved bits 1-2 must be zero    */
+    if ( i3 & 0x60 )          /*  not zero => Specficitcation excp    */
+        ARCH_DEP( program_interrupt )( regs, PGM_SPECIFICATION_EXCEPTION );
+
+    /* i3 parts */
+    iom = (i3 & 0x80) ? true : false;
+    rdc = (i3 & 0x1F);
+
+    if ( rdc == 0 )          /* zero rdc => Specficitcation excp    */
+        ARCH_DEP( program_interrupt )( regs, PGM_SPECIFICATION_EXCEPTION );
+
+    /* m4 parts */
+    lb = (m4 & 0x08) ? true : false;
+    p1 = (m4 & 0x02) ? true : false;
+    cs = (m4 & 0x01) ? true : false;
+
+    /* get sign and value to convert */
+    tempv2.Q = regs->VR_Q( v2 );  /* 128-bits to convert */
+    if (lb)
+    {
+        convert128 = tempv2;        /* unsigned */
+        possign = true;
+    }
+    else
+    {                               /* signed */
+        if (S128_isNeg( tempv2 ) )
+        {
+            possign = false;
+            convert128 = S128_neg( tempv2 );
+        }
+        else
+        {
+            possign = true;
+            convert128 = tempv2;
+        }
+    }
+
+    /* start with zero vector */
+    regs->VR_Q( v1 ) = U128_zero().Q;
+
+    // logmsg("VECTOR CONVERT TO DECIMAL (128): lb=%d, p1=%d, cs=%d \n", lb, p1, cs);
+    // U128_logmsg("VECTOR CONVERT TO DECIMAL (128): tempv2    ", tempv2);
+    // U128_logmsg("VECTOR CONVERT TO DECIMAL (128): convert128", convert128);
+
+    /* do convertion to decimal digits */
+    ten128 = U128_U64( 10 );
+
+    for (i = 30, temp = rdc; temp >0 && i >= 0 && !U128_isZero( convert128 ); i--, temp--)
+    {
+        // digit = convert % 10;
+        // convert = convert / 10;
+        convert128 = U128_divrem( convert128, ten128, &digit128 );
+        digit = digit128.Q.D.L.D;
+
+        regs->VR_B( v1, i / 2) |=  ( i & 1) ? digit : digit << 4;
+    }
+
+    overflow = !U128_isZero( convert128 );     /* did not convert all (rdc limited result) */
+
+    /* set sign */
+    if (p1)
+        regs->VR_B( v1, VR_PACKED_SIGN) |= 0x0F;   /* forces b'1111' positive sign */
+    else
+        regs->VR_B( v1, VR_PACKED_SIGN) |= (possign) ? PREFERRED_PLUS :  PREFERRED_MINUS ;
+
+    /* set condition code */
+    if (cs)
+        regs->psw.cc = (overflow) ? 3 : 0;
+
+    /* note: operation is completed before any fixed-point overflow exception */
+    /* masked overflow? */
+    if ( !iom && overflow && DOMASK(&regs->psw))
+        ARCH_DEP(program_interrupt) ( regs, PGM_DECIMAL_OVERFLOW_EXCEPTION );
+
+    // U128_logmsg("VECTOR CONVERT TO DECIMAL (128):         V1", (U128) regs->VR_Q( v1) );
+    // U128_logmsg("VECTOR CONVERT TO DECIMAL (128): convert128", convert128);
+
+    ZVECTOR_END( regs );
+}
+#endif /* defined( FEATURE_199_VECT_PACKDEC_ENH_FACILITY_3 ) */
+
+#if defined( FEATURE_199_VECT_PACKDEC_ENH_FACILITY_3 )
+/*-------------------------------------------------------------------*/
+/* E64E VCVBQ  - VECTOR CONVERT TO BINARY (128)              [VRR-k] */
+/*-------------------------------------------------------------------*/
+DEF_INST( vector_convert_to_binary_128 )
+{
+    int     v1, v2, m3;          /* Instruction parts                */
+    bool    p2;                  /* Force Operand 2 Positive (P2)    */
+    bool    lb;                  /* Logical Binary (LB)              */
+    U128    result;              /* converted binary                 */
+
+    bool    valid_sign2;         /* v2: is sign valid?               */
+    bool    valid_decimals2;     /* v2: are decimals valid?          */
+
+    VRR_K( inst, regs, v1, v2, m3 );
+
+    ZVECTOR_CHECK( regs );
+
+    /* m3 parts */
+    p2 = (m3 & 0x08) ? true : false;
+    lb = (m3 & 0x02) ? true : false;
+
+    /* valid checks */
+    valid_decimals2 = vr_packed_valid_digits( regs, v2 );
+    valid_sign2 = (p2) ? true : vr_packed_valid_sign( regs, v2 );
+
+    if ( !valid_decimals2 || !valid_sign2 )
+    {
+        regs->dxc = DXC_DECIMAL;
+        ARCH_DEP(program_interrupt) ( regs, PGM_DATA_EXCEPTION );
+    }
+
+    result = vr_to_U128( regs, v2, ( (lb) ? true : p2 ) );
+
+    regs->VR_Q(v1) = result.Q;
+
+    ZVECTOR_END( regs );
+}
+#endif /* defined( FEATURE_199_VECT_PACKDEC_ENH_FACILITY_3 ) */
+
 /*-------------------------------------------------------------------*/
 /* E650 VCVB   - VECTOR CONVERT TO BINARY (32)               [VRR-i] */
 /*-------------------------------------------------------------------*/
@@ -2234,6 +2531,7 @@ DEF_INST( vector_convert_to_binary_32 )
     bool    lb;                  /* Logical Binary (LB)              */
     bool    cs;                  /* Condition Code Set (CS)          */
     bool    iom;                 /* Instruction-Overflow Mask (IOM)  */
+    bool    orc;                 /* Overflow-Result Control (ORC)    */
     U128    result;              /* converted binary                 */
     bool    overflow;            /* did an overflow occur            */
 
@@ -2251,11 +2549,31 @@ DEF_INST( vector_convert_to_binary_32 )
 
     /* m4 parts */
     iom = (m4 & 0x08) ? true : false;
+    orc = (m4 & 0x04) ? true : false;
 
-#if !defined( FEATURE_152_VECT_PACKDEC_ENH_FACILITY )
-    if (iom)
-        ARCH_DEP(program_interrupt)( regs, PGM_SPECIFICATION_EXCEPTION );
-#endif
+    /*  Note:
+        Z16: POP SA22-7832-13
+            Instruction-Overflow Mask (IOM): When the
+            vector-packed-decimal-enhancement facility 1 is
+            not installed, bit 0 is reserved and must contain zero; otherwise,
+            a specification exception is recognized.
+
+        Z17: POP SA22-7832-14
+            Instruction-Overflow Mask (IOM): When the
+            vector-packed-decimal-enhancement facility 1 is
+            not installed, bit 0 is reserved and should be
+            zero; otherwise the program may not operate
+            compatibly in the future.
+
+        Use SA22-7832-14 definition; just ignore IOM if
+        vector-packed-decimal-enhancement facility 1 is not installed.
+    */
+    if (iom && !FACILITY_ENABLED( 152_VECT_PACKDEC_ENH, regs ))
+        iom = false;
+        /* ARCH_DEP(program_interrupt)( regs, PGM_SPECIFICATION_EXCEPTION ); */
+
+    if (orc && !FACILITY_ENABLED( 199_VECT_PACKDEC_ENH_3, regs ))
+        orc = false;
 
     /* valid checks */
     valid_decimals2 = vr_packed_valid_digits( regs, v2 );
@@ -2282,8 +2600,11 @@ DEF_INST( vector_convert_to_binary_32 )
 
     /* CC and 32 bit results */
     //logmsg("... result=%16.16lX.%16.16lX \n", result.Q.D.H.D, result.Q.D.L.D);
+    if (orc && overflow)
+        regs->GR_L(r1) = 0;
+    else
+        regs->GR_L(r1) = (U32) (result.Q.D.L.D & 0xFFFFFFFF);
 
-    regs->GR_L(r1) = (U32) (result.Q.D.L.D & 0xFFFFFFFF);
     if (cs) regs->psw.cc = ( overflow ) ? 3 : 0;
 
     /* note: operation is completed before any fixed-point overflow exception */
@@ -2383,9 +2704,9 @@ DEF_INST( vector_convert_to_binary_64 )
     bool    lb;                  /* Logical Binary (LB)              */
     bool    cs;                  /* Condition Code Set (CS)          */
     bool    iom;                 /* Instruction-Overflow Mask (IOM)  */
+    bool    orc;                 /* Overflow-Result Control (ORC)    */
     U128    result;              /* converted binary                 */
     bool    overflow;            /* did an overfor occur             */
-
     bool    valid_sign2;         /* v2: is sign valid?               */
     bool    valid_decimals2;     /* v2: are decimals valid?          */
 
@@ -2400,11 +2721,31 @@ DEF_INST( vector_convert_to_binary_64 )
 
     /* m4 parts */
     iom = (m4 & 0x08) ? true : false;
+    orc = (m4 & 0x04) ? true : false;
 
-#if !defined( FEATURE_152_VECT_PACKDEC_ENH_FACILITY )
-    if (iom)
-        ARCH_DEP(program_interrupt)( regs, PGM_SPECIFICATION_EXCEPTION );
-#endif
+    /*  Note:
+        Z16: POP SA22-7832-13
+            Instruction-Overflow Mask (IOM): When the
+            vector-packed-decimal-enhancement facility 1 is
+            not installed, bit 0 is reserved and must contain zero; otherwise,
+            a specification exception is recognized.
+
+        Z17: POP SA22-7832-14
+            Instruction-Overflow Mask (IOM): When the
+            vector-packed-decimal-enhancement facility 1 is
+            not installed, bit 0 is reserved and should be
+            zero; otherwise the program may not operate
+            compatibly in the future.
+
+        Use SA22-7832-14 definition; just ignore IOM if
+        vector-packed-decimal-enhancement facility 1 is not installed.
+    */
+    if (iom && !FACILITY_ENABLED( 152_VECT_PACKDEC_ENH, regs ))
+        iom = false;
+        /* ARCH_DEP(program_interrupt)( regs, PGM_SPECIFICATION_EXCEPTION ); */
+
+    if (orc && !FACILITY_ENABLED( 199_VECT_PACKDEC_ENH_3, regs ))
+        orc = false;
 
     /* valid checks */
     valid_decimals2 = vr_packed_valid_digits( regs, v2 );
@@ -2429,10 +2770,13 @@ DEF_INST( vector_convert_to_binary_64 )
             overflow = ( result.Q.D.H.D != (U64) -1 ) || ( (result.Q.D.L.D & 0x8000000000000000ULL) == 0 );
     }
 
-    /* CC and 32 bit results */
+    /* CC and 64 bit results */
     //logmsg("... result=%16.16lX.%16.16lX \n", result.Q.D.H.D, result.Q.D.L.D);
+    if (orc && overflow)
+        regs->GR_G(r1) = 0;
+    else
+        regs->GR_G(r1) = result.Q.D.L.D;
 
-    regs->GR_G(r1) = result.Q.D.L.D;
     if (cs) regs->psw.cc = ( overflow ) ? 3 : 0;
 
     /* note: operation is completed before any fixed-point overflow exception */
@@ -2545,10 +2889,8 @@ DEF_INST( vector_convert_to_decimal_32 )
     iom = (i3 & 0x80) ? true : false;
     rdc = (i3 & 0x1F);
 
-#if !defined( FEATURE_152_VECT_PACKDEC_ENH_FACILITY )
-    if (iom)
+    if (iom && !FACILITY_ENABLED( 152_VECT_PACKDEC_ENH, regs ))
         ARCH_DEP(program_interrupt)( regs, PGM_SPECIFICATION_EXCEPTION );
-#endif
 
     if ( rdc == 0 )          /* zero rdc => Specficitcation excp    */
         ARCH_DEP( program_interrupt )( regs, PGM_SPECIFICATION_EXCEPTION );
@@ -2658,10 +3000,12 @@ DEF_INST( vector_shift_and_round_decimal )
     iom = (i3 & 0x80) ? true : false;
     rdc = (i3 & 0x1F);
 
-#if !defined( FEATURE_152_VECT_PACKDEC_ENH_FACILITY )
-    if (iom)
+
+    if (iom && !FACILITY_ENABLED( 152_VECT_PACKDEC_ENH, regs ))
         ARCH_DEP(program_interrupt)( regs, PGM_SPECIFICATION_EXCEPTION );
-#endif
+
+    if (rdc == 0)
+        ARCH_DEP(program_interrupt)( regs, PGM_SPECIFICATION_EXCEPTION );
 
     /* i4 parts */
     drd   = (i4 & 0x80) ? true : false;
@@ -2784,10 +3128,8 @@ DEF_INST( vector_convert_to_decimal_64 )
     iom = (i3 & 0x80) ? true : false;
     rdc = (i3 & 0x1F);
 
-#if !defined( FEATURE_152_VECT_PACKDEC_ENH_FACILITY )
-    if (iom)
+    if (iom && !FACILITY_ENABLED( 152_VECT_PACKDEC_ENH, regs ))
         ARCH_DEP(program_interrupt)( regs, PGM_SPECIFICATION_EXCEPTION );
-#endif
 
     if ( rdc == 0 )          /* zero rdc => Specficitcation excp    */
         ARCH_DEP( program_interrupt )( regs, PGM_SPECIFICATION_EXCEPTION );
@@ -2859,15 +3201,19 @@ DEF_INST( vector_convert_to_decimal_64 )
 DEF_INST( vector_perform_sign_operation_decimal )
 {
     int     v1, v2, i4, m5, i3; /* Instruction parts                 */
+
                                /* i3 bits                            */
     bool    iom;               /* Instruction-Overflow Mask (IOM)    */
     int     rdc;               /* Result Digits Count (RDC): Bits 3-7*/
+
                                /* i4 bits                            */
     bool    nv;                /* No Validation (NV): bit 0          */
     bool    nz;                /* Negative Zero (NZ): bit 1          */
+    bool    ps;                /* Preserve sign (PS) control: bit 3  */
     U8      so;                /* Sign Operation (SO): Bits 4-5      */
     bool    pc;                /* Positive Sign Code (PC): bit 6     */
     bool    sv;                /* Op 2 Sign Validation (SV): bit 7   */
+
                                /* m5 bits                            */
     bool    cs;                /* Condition Code Set (CS):     bit 3 */
 
@@ -2892,10 +3238,8 @@ DEF_INST( vector_perform_sign_operation_decimal )
     iom = (i3 & 0x80) ? true : false;
     rdc = (i3 & 0x1F);
 
-#if !defined( FEATURE_152_VECT_PACKDEC_ENH_FACILITY )
-    if (iom)
+    if (iom && !FACILITY_ENABLED( 152_VECT_PACKDEC_ENH, regs ))
         ARCH_DEP(program_interrupt)( regs, PGM_SPECIFICATION_EXCEPTION );
-#endif
 
     if ( rdc == 0 )          /* zero rdc => Specficitcation excp    */
         ARCH_DEP( program_interrupt )( regs, PGM_SPECIFICATION_EXCEPTION );
@@ -2903,17 +3247,24 @@ DEF_INST( vector_perform_sign_operation_decimal )
     /* i4 parts */
     nv = (i4 & 0x80) ? true : false;
     nz = (i4 & 0x40) ? true : false;
+    ps = (i4 & 0x10) ? true : false;
     so = (i4 & 0x0C) >> 2;
     pc = (i4 & 0x02) ? true : false;
     sv = (i4 & 0x01) ? true : false;
 
+    if (!FACILITY_ENABLED( 152_VECT_PACKDEC_ENH, regs ))
+    {
+        nv = false;        /* validate digits  */
+        nz = false;        /* no negative zero */
+    }
+
+    if ( !FACILITY_ENABLED( 199_VECT_PACKDEC_ENH_3, regs ) )
+    {
+        ps = false;        /* preserve sign  */
+    }
+
     /* m5 parts */
     cs = (m5 & 0x01) ? true : false;
-
-#if !defined( FEATURE_152_VECT_PACKDEC_ENH_FACILITY )
-    nv = false;        /* validate digits  */
-    nz = false;        /* no negative zero */
-#endif
 
     /* valid checks */
     valid_decimals2 = ( nv ) ? true : vr_packed_valid_digits( regs, v2 );
@@ -2946,39 +3297,60 @@ DEF_INST( vector_perform_sign_operation_decimal )
     {
         case 0x00:                     /* 00 (maintain)       */
         {
-            if (isZero)
-            {
-               if ( LV_HAS_PLUS_SIGN( LV2 ) && pc )
-                    { cc = 0; SET_VR_SIGN( v1, PREFERRED_ZONE);  break;  }
+            if (ps)
+            {   /* PS==1; Perserve Sign*/
+                if (isZero)
+                {
+                        { cc = 0; break;  }
+                }
+                else
+                {
+                    if ( LV_HAS_PLUS_SIGN( LV2 ) )
+                        { cc = 2; break;  }
 
-                if ( LV_HAS_PLUS_SIGN( LV2 ) && !pc )
-                    { cc = 0; SET_VR_SIGN( v1, PREFERRED_PLUS);  break;  }
+                    if ( LV_HAS_MINUS_SIGN( LV2 ) )
+                        { cc = 1;  break;  }
 
-                if ( LV_HAS_MINUS_SIGN( LV2 ) && !pc && !nz )
-                    { cc = 0; SET_VR_SIGN( v1, PREFERRED_PLUS);  break;  }
-
-                if ( LV_HAS_MINUS_SIGN( LV2 ) && pc && !nz )
-                    { cc = 0; SET_VR_SIGN( v1, PREFERRED_ZONE);  break;  }
-
-                if ( LV_HAS_MINUS_SIGN( LV2 ) && nz )
-                    { cc = 0; SET_VR_SIGN( v1, PREFERRED_MINUS);  break;  }
-
-                if ( !LV_HAS_VALID_SIGN( LV2 ) )
-                    { cc = 0; break;  }
+                    if ( !LV_HAS_VALID_SIGN( LV2 ) )
+                        { cc = 2; break;  }
+                }
             }
             else
-            {
+            {   /* PS==0; Perserve Sign*/
+                if (isZero)
+                {
                 if ( LV_HAS_PLUS_SIGN( LV2 ) && pc )
-                    { cc = 2; SET_VR_SIGN( v1, PREFERRED_ZONE);  break;  }
+                        { cc = 0; SET_VR_SIGN( v1, PREFERRED_ZONE);  break;  }
 
-                if ( LV_HAS_PLUS_SIGN( LV2 ) && !pc )
-                    { cc = 2; SET_VR_SIGN( v1, PREFERRED_PLUS);  break;  }
+                    if ( LV_HAS_PLUS_SIGN( LV2 ) && !pc )
+                        { cc = 0; SET_VR_SIGN( v1, PREFERRED_PLUS);  break;  }
 
-                if ( LV_HAS_MINUS_SIGN( LV2 ) )
-                    { cc = 1; SET_VR_SIGN( v1, PREFERRED_MINUS);  break;  }
+                    if ( LV_HAS_MINUS_SIGN( LV2 ) && !pc && !nz )
+                        { cc = 0; SET_VR_SIGN( v1, PREFERRED_PLUS);  break;  }
 
-                if ( !LV_HAS_VALID_SIGN( LV2 ) )
-                    { cc = 2; break;  }
+                    if ( LV_HAS_MINUS_SIGN( LV2 ) && pc && !nz )
+                        { cc = 0; SET_VR_SIGN( v1, PREFERRED_ZONE);  break;  }
+
+                    if ( LV_HAS_MINUS_SIGN( LV2 ) && nz )
+                        { cc = 0; SET_VR_SIGN( v1, PREFERRED_MINUS);  break;  }
+
+                    if ( !LV_HAS_VALID_SIGN( LV2 ) )
+                        { cc = 0; break;  }
+                }
+                else
+                {
+                    if ( LV_HAS_PLUS_SIGN( LV2 ) && pc )
+                        { cc = 2; SET_VR_SIGN( v1, PREFERRED_ZONE);  break;  }
+
+                    if ( LV_HAS_PLUS_SIGN( LV2 ) && !pc )
+                        { cc = 2; SET_VR_SIGN( v1, PREFERRED_PLUS);  break;  }
+
+                    if ( LV_HAS_MINUS_SIGN( LV2 ) )
+                        { cc = 1; SET_VR_SIGN( v1, PREFERRED_MINUS);  break;  }
+
+                    if ( !LV_HAS_VALID_SIGN( LV2 ) )
+                        { cc = 2; break;  }
+                }
             }
         }
         break;
@@ -3164,20 +3536,40 @@ DEF_INST( vector_unpack_zoned_low )
 /*-------------------------------------------------------------------*/
 DEF_INST( vector_test_decimal )
 {
-    int     v1;                /* Instruction parts                  */
+    int     v1, i2;            /* Instruction parts                  */
+    int     et;                /* Enhanced Testing (ET)              */
+    int     bpt;               /* Byte-Padding Test (BPT)            */
+    int     stc;               /* Sign-Test Control (STC)            */
+    int     dc;                /* Digits Count (DC)                  */
     bool    valid_decimal;     /* decimal validation failed?         */
     bool    valid_sign;        /* sign validation failed?            */
     U8      cc;                /* condition code                     */
 
-    VRR_G( inst, regs, v1 );
+    VRR_G( inst, regs, v1, i2 );
 
     ZVECTOR_CHECK( regs );
 
+    /* i2 parts */
+    et  = FALSE;
+    bpt = FALSE;
+    stc = 0;
+    dc  = 0;
+    if ( FACILITY_ENABLED( 199_VECT_PACKDEC_ENH_3, regs ) )
+    {
+        et  = (i2 & 0x8000) ? TRUE : FALSE;
+        if ( et )
+        {
+            bpt = (i2 & 0x4000) ? TRUE : FALSE;
+            stc = (i2 & 0x00E0) >> 5;
+            dc  = i2 & 0x001F;
+        }
+    }
+
     /* validate decimals */
-    valid_decimal = vr_packed_valid_digits( regs, v1 );
+    valid_decimal = vr_packed_valid_digits_enhanced( regs, v1, et, bpt, dc );
 
     /* validate sign */
-    valid_sign = vr_packed_valid_sign( regs, v1 );
+    valid_sign = vr_packed_valid_sign_enhanced( regs, v1, et, stc, dc );
 
     /* set condition code */
     cc = (valid_decimal) ?  ( (valid_sign) ? 0 : 1) :
@@ -3216,11 +3608,6 @@ DEF_INST( vector_pack_zoned_register )
     bool    valid_sign;        /* is sign valid?                     */
     bool    valid_decimals;    /* are decimals valid?                */
     BYTE    cc;                /* condition code                     */
-
-
-#if !defined( FEATURE_192_VECT_PACKDEC_ENH_2_FACILITY )
-    ARCH_DEP(program_interrupt)( regs, PGM_OPERATION_EXCEPTION );
-#endif
 
     VRI_F( inst, regs, v1, v2, v3, m5, i4 );
 
@@ -3361,10 +3748,8 @@ DEF_INST( vector_add_decimal )
     iom = (i4 & 0x80) ? true : false;
     rdc = (i4 & 0x1F);
 
-#if !defined( FEATURE_152_VECT_PACKDEC_ENH_FACILITY )
-    if (iom)
+    if (iom && !FACILITY_ENABLED( 152_VECT_PACKDEC_ENH, regs ))
         ARCH_DEP(program_interrupt)( regs, PGM_SPECIFICATION_EXCEPTION );
-#endif
 
     if ( rdc == 0 )          /* zero rdc => Specficitcation excp    */
         ARCH_DEP( program_interrupt )( regs, PGM_SPECIFICATION_EXCEPTION );
@@ -3469,10 +3854,11 @@ DEF_INST( vector_shift_and_round_decimal_register )
     drd = (i4 & 0x40) ? true : false;
     rdc = (i4 & 0x1F);
 
-#if !defined( FEATURE_152_VECT_PACKDEC_ENH_FACILITY )
-    if (iom)
+    if (iom && !FACILITY_ENABLED( 152_VECT_PACKDEC_ENH, regs ))
         ARCH_DEP(program_interrupt)( regs, PGM_SPECIFICATION_EXCEPTION );
-#endif
+
+    if (rdc == 0)
+        ARCH_DEP(program_interrupt)( regs, PGM_SPECIFICATION_EXCEPTION );
 
     /* m5 parts */
     p2 = (m5 & 0x08) ? true : false;
@@ -3603,10 +3989,8 @@ DEF_INST( vector_subtract_decimal )
     iom = (i4 & 0x80) ? true : false;
     rdc = (i4 & 0x1F);
 
-#if !defined( FEATURE_152_VECT_PACKDEC_ENH_FACILITY )
-    if (iom)
+    if (iom && !FACILITY_ENABLED( 152_VECT_PACKDEC_ENH, regs ))
         ARCH_DEP(program_interrupt)( regs, PGM_SPECIFICATION_EXCEPTION );
-#endif
 
     if ( rdc == 0 )          /* zero rdc => Specficitcation excp    */
         ARCH_DEP( program_interrupt )( regs, PGM_SPECIFICATION_EXCEPTION );
@@ -3732,11 +4116,7 @@ DEF_INST( decimal_scale_and_convert_to_hfp )
     /* scale factor:                                         */
     /*      limited to values less than 8 otherwise results  */
     /*      are unpredictable.                               */
-    if (scale >= 8)
-    {
-        /* unpredicatable --> do nothing  */
-        return;
-    }
+    scale &= 0x07;
 
     /* operands as decNumber and context */
     vr_to_decNumber( regs, v2, &dnv2, false );
@@ -3903,10 +4283,8 @@ DEF_INST( vector_multiply_decimal )
     iom = (i4 & 0x80) ? true : false;
     rdc = (i4 & 0x1F);
 
-#if !defined( FEATURE_152_VECT_PACKDEC_ENH_FACILITY )
-    if (iom)
+    if (iom && !FACILITY_ENABLED( 152_VECT_PACKDEC_ENH, regs ))
         ARCH_DEP(program_interrupt)( regs, PGM_SPECIFICATION_EXCEPTION );
-#endif
 
     if ( rdc == 0 )          /* zero rdc => Specficitcation excp    */
         ARCH_DEP( program_interrupt )( regs, PGM_SPECIFICATION_EXCEPTION );
@@ -4007,10 +4385,8 @@ DEF_INST( vector_multiply_and_shift_decimal )
     iom   = (i4 & 0x80) ? true : false;
     shamt = (i4 & 0x1F);
 
-#if !defined( FEATURE_152_VECT_PACKDEC_ENH_FACILITY )
-    if (iom)
+    if (iom && !FACILITY_ENABLED( 152_VECT_PACKDEC_ENH, regs ))
         ARCH_DEP(program_interrupt)( regs, PGM_SPECIFICATION_EXCEPTION );
-#endif
 
     /* m5 parts */
     p2 = (m5 & 0x08) ? true : false;
@@ -4112,10 +4488,8 @@ DEF_INST( vector_divide_decimal )
     iom = (i4 & 0x80) ? true : false;
     rdc = (i4 & 0x1F);
 
-#if !defined( FEATURE_152_VECT_PACKDEC_ENH_FACILITY )
-    if (iom)
+    if (iom && !FACILITY_ENABLED( 152_VECT_PACKDEC_ENH, regs ))
         ARCH_DEP(program_interrupt)( regs, PGM_SPECIFICATION_EXCEPTION );
-#endif
 
     if ( rdc == 0 )          /* zero rdc => Specficitcation excp    */
         ARCH_DEP( program_interrupt )( regs, PGM_SPECIFICATION_EXCEPTION );
@@ -4217,10 +4591,8 @@ DEF_INST( vector_remainder_decimal )
     iom = (i4 & 0x80) ? true : false;
     rdc = (i4 & 0x1F);
 
-#if !defined( FEATURE_152_VECT_PACKDEC_ENH_FACILITY )
-    if (iom)
+    if (iom && !FACILITY_ENABLED( 152_VECT_PACKDEC_ENH, regs ))
         ARCH_DEP(program_interrupt)( regs, PGM_SPECIFICATION_EXCEPTION );
-#endif
 
     if ( rdc == 0 )          /* zero rdc => Specficitcation excp    */
         ARCH_DEP( program_interrupt )( regs, PGM_SPECIFICATION_EXCEPTION );
@@ -4338,11 +4710,7 @@ DEF_INST(decimal_scale_and_convert_and_split_to_hfp )
     /* scale factor:                                         */
     /*      limited to values less than 8 otherwise results  */
     /*      are unpredictable.                               */
-    if (scale >= 8)
-    {
-        /* unpredicatable --> do nothing  */
-        return;
-    }
+    scale &= 0x07;
 
     /* operands as decNumber and context */
     vr_to_decNumber( regs, v2, &dnv2, false );
@@ -4409,11 +4777,7 @@ DEF_INST( vector_convert_hfp_to_scaled_decimal )
     /* scale factor:                                         */
     /*      must be less than 32 otherwise the result is     */
     /*      unpredictable.                                   */
-    if (scale >= 32)
-    {
-        /* unpredicatable --> do nothing  */
-        return;
-    }
+    scale &= 0x1F;
 
     /* zero check */
     if ( vr_is_true_zero( regs, v2) )
@@ -4505,10 +4869,8 @@ DEF_INST( vector_shift_and_divide_decimal )
     iom   = (i4 & 0x80) ? true : false;
     shamt = (i4 & 0x1F);
 
-#if !defined( FEATURE_152_VECT_PACKDEC_ENH_FACILITY )
-    if (iom)
+    if (iom && !FACILITY_ENABLED( 152_VECT_PACKDEC_ENH, regs ))
         ARCH_DEP(program_interrupt)( regs, PGM_SPECIFICATION_EXCEPTION );
-#endif
 
     /* m5 parts */
     p2 = (m5 & 0x08) ? true : false;
@@ -4575,6 +4937,224 @@ DEF_INST( vector_shift_and_divide_decimal )
 
 #endif /* defined( FEATURE_134_ZVECTOR_PACK_DEC_FACILITY ) */
 
+#if defined( FEATURE_199_VECT_PACKDEC_ENH_FACILITY_3 )
+/*-------------------------------------------------------------------*/
+/* E67F VTZ    - Vector Test Zoned                           [VRI-l] */
+/*-------------------------------------------------------------------*/
+DEF_INST( vector_test_zoned )
+{
+    int     v1, v2, i3;        /* Instruction parts                        */
+
+                               /* i3 bits                                  */
+    bool    ssc;               /* Separate-Sign Control (SSC): bit 1       */
+    bool    ls;                /* Leading Sign (LS): bit 2                 */
+    U8      dsc;               /* Disallowed-Spaces Count (DSC): bits 3-7  */
+    U8      stc;               /* Sign-Test Control (STC): Bits 8-10       */
+    U8      dc;                /* Digits Count (DC): Bits 11-15            */
+
+    SV      temp;              /* 32 byte source vector                    */
+    bool    valid_decimal;     /* decimal validation failed?               */
+    bool    valid_sign;        /* sign validation failed?                  */
+    U8      cc;                /* condition code                           */
+
+    int     i;                  /* array index                             */
+    bool    isZero;             /* is the zoned value 0?                   */
+    BYTE    sign;               /* sign byte                               */
+    enum ZONED_BYTE_FORMAT zsf; /* zoned sign byte format                  */
+
+    VRI_L( inst, regs, v1, v2, i3 );
+
+    ZVECTOR_CHECK( regs );
+
+    valid_decimal =  true;
+    valid_sign = true;
+    isZero = false;
+
+    SV_D( temp, 0 ) = regs->VR_D( v1, 0 );
+    SV_D( temp, 1 ) = regs->VR_D( v1, 1 );
+    SV_D( temp, 2 ) = regs->VR_D( v2, 0 );
+    SV_D( temp, 3 ) = regs->VR_D( v2, 1 );
+
+    /* i3 parts */
+    ssc = (i3 & 0x4000) ? true : false;
+    ls  = (i3 & 0x2000) ? true : false;
+    dsc = (i3 & 0x1F00) >> 8;
+    stc = (i3 & 0x00E0) >> 5;
+    dc  = (i3 & 0x001F);
+
+    // logmsg("VTZ: i3=%d, ssc: %d, ls: %d, dsc: %d, stc: %d, dc: %d\n", i3, ssc, ls, dsc, stc, dc);
+
+    if ( dc == 0 )          /* zero dc => Specficitcation excp    */
+        ARCH_DEP( program_interrupt )( regs, PGM_SPECIFICATION_EXCEPTION );
+
+    /* validation depends on the type of zoned format   */
+    /* Pop SA22-7832-14: Figure 25-7, page 25-34        */
+
+    if ( ssc == 0 && ls == 0 && dsc == dc )
+    {   /* ETS-type-zoned format */
+        zsf = SD_BYTE;
+        sign = SV_B( temp, 31);
+
+        /* validate digits & check isZero */
+        /* sign byte */
+        isZero = (sign & 0X0F) ? false : true;
+        valid_decimal =  ( (sign & 0X0F) <= 9 ) ? true : false;
+
+        /* N-1 ZD bytes */
+        for (i=1; i < dc ; i++)
+        {
+            if ( SV_B( temp, 31-i) < 0xF0 || SV_B( temp, 31-i) > 0xF9 )
+                {
+                    valid_decimal = false;
+                    isZero = false;
+                }
+            else
+                if ( SV_B( temp, 31-i) != 0xF0 )
+                    isZero = false;
+        }
+
+        /* validate sign */
+        valid_sign = zoned_valid_sign_enhanced( sign, zsf, isZero, stc);
+
+        // logmsg("VTZ: ETS-type: sign: %x, isZero: %d, valid_decimal: %d, valid_sign: %d\n", sign, isZero, valid_decimal, valid_sign);
+    }
+
+    else if ( ssc == 0 && ls == 0 && dsc < dc )
+    {   /* SETS-type-zoned format */
+        zsf = SD_BYTE;
+        sign = SV_B( temp, 31);
+
+        /* validate digits & check isZero */
+        /* sign byte */
+        isZero = (sign & 0X0F) ? false : true;
+        valid_decimal =  ( (sign & 0X0F) <= 9 ) ? true : false;
+
+        /* dsc ZD bytes */
+        for (i=1; i < dsc ; i++)
+        {
+            if ( SV_B( temp, 31-i) < 0xF0 || SV_B( temp, 31-i) > 0xF9 )
+                {
+                    valid_decimal = false;
+                    isZero = false;
+                }
+            else
+                if ( SV_B( temp, 31-i) != 0xF0 )
+                    isZero = false;
+        }
+
+        /* dc-dsc ZD bytes */
+        for (i=dsc; i < dc ; i++)
+        {
+            if ( SV_B( temp, 31-i) != 0x40 && ( SV_B( temp, 31-i) < 0xF0 || SV_B( temp, 31-i) > 0xF9 ) )
+                {
+                    valid_decimal = false;
+                    isZero = false;
+                }
+            else
+                if ( SV_B( temp, 31-i) != 0xF0 )
+                    isZero = false;
+        }
+
+        /* validate sign */
+        valid_sign = zoned_valid_sign_enhanced( sign, zsf, isZero, stc);
+
+        // logmsg("VTZ: SETS-type: sign: %x, isZero: %d, valid_decimal: %d, valid_sign: %d\n", sign, isZero, valid_decimal, valid_sign);
+    }
+
+    else if ( ssc == 0 && ls == 1 )
+    {   /* ELS-type-zoned format */
+        zsf = SD_BYTE;
+        sign = SV_B( temp, 31 - dc );    //imbedded sign
+
+        /* validate digits & check isZero */
+        /* sign byte */
+        isZero = (sign & 0X0F) ? false : true;
+        valid_decimal =  ( (sign & 0X0F) <= 9 ) ? true : false;
+
+        /* N-1 ZD bytes */
+        for (i=0; i < dc-1 ; i++)
+        {
+            if ( SV_B( temp, 31-i) < 0xF0 || SV_B( temp, 31-i) > 0xF9 )
+                {
+                    valid_decimal = false;
+                    isZero = false;
+                }
+            else
+                if ( SV_B( temp, 31-i) != 0xF0 )
+                    isZero = false;
+        }
+
+        /* validate sign */
+        valid_sign = zoned_valid_sign_enhanced( sign, zsf, isZero, stc);
+
+        // logmsg("VTZ: ELS-type: sign: %x, isZero: %d, valid_decimal: %d, valid_sign: %d\n", sign, isZero, valid_decimal, valid_sign);
+    }
+
+    else if ( ssc == 1 && ls == 0 )
+    {   /* STS-type-zoned format */
+        zsf = SS_BYTE;
+        sign = SV_B( temp, 31);
+
+        /* validate digits & check isZero */
+        isZero = true;
+        valid_decimal =  true;
+
+        /* N-1 ZD bytes */
+        for (i=1; i < dc ; i++)
+        {
+            if ( SV_B( temp, 31-i) < 0xF0 || SV_B( temp, 31-i) > 0xF9 )
+                {
+                    valid_decimal = false;
+                    isZero = false;
+                }
+            else
+                if ( SV_B( temp, 31-i) != 0xF0 )
+                    isZero = false;
+        }
+
+        valid_sign = zoned_valid_sign_enhanced( sign, zsf, isZero, stc);
+
+        // logmsg("VTZ: STS-type: sign: %x, isZero: %d, valid_decimal: %d, valid_sign: %d\n", sign, isZero, valid_decimal, valid_sign);
+    }
+
+    else if ( ssc == 1 && ls == 1 )
+    {   /* SLS-type-zoned format */
+        zsf = SS_BYTE;
+        sign = SV_B( temp, 31 - dc );     //separate leading sign
+
+        /* validate digits & check isZero */
+        isZero = true;
+        valid_decimal =  true;
+
+        /* N-1 ZD bytes */
+        for (i=0; i < dc ; i++)
+        {
+            if ( SV_B( temp, 31-i) < 0xF0 || SV_B( temp, 31-i) > 0xF9 )
+                {
+                    valid_decimal = false;
+                    isZero = false;
+                }
+            else
+                if ( SV_B( temp, 31-i) != 0xF0 )
+                    isZero = false;
+        }
+
+        valid_sign = zoned_valid_sign_enhanced( sign, zsf, isZero, stc);
+
+        // logmsg("VTZ: SLS-type: sign: %x, isZero: %d, valid_decimal: %d, valid_sign: %d\n", sign, isZero, valid_decimal, valid_sign);
+    }
+
+    /* set condition code */
+    cc = (valid_decimal) ?  ( (valid_sign) ? 0 : 1) :
+                            ( (valid_sign) ? 2 : 3) ;
+
+    // logmsg("VTZ: cc: %d\n", cc);
+
+    regs->psw.cc = cc;
+
+    ZVECTOR_END( regs );
+}
+#endif /* defined( FEATURE_199_VECT_PACKDEC_ENH_FACILITY_3 ) */
 
 #endif /* defined(FEATURE_129_ZVECTOR_FACILITY) */
 

@@ -115,6 +115,7 @@
 //efine FEATURE_078_ENHANCED_DAT_FACILITY_2
 #define FEATURE_080_DFP_PACK_CONV_FACILITY
 #define FEATURE_081_PPA_IN_ORDER_FACILITY
+#define FEATURE_084_MISC_INSTR_EXT_FACILITY_4
 #define FEATURE_129_ZVECTOR_FACILITY
 //efine FEATURE_130_INSTR_EXEC_PROT_FACILITY
 //efine FEATURE_131_SIDE_EFFECT_ACCESS_FACILITY
@@ -144,6 +145,8 @@
 //efine FEATURE_194_RESET_DAT_PROT_FACILITY
 //efine FEATURE_196_PROC_ACT_FACILITY
 //efine FEATURE_197_PROC_ACT_EXT_1_FACILITY
+#define FEATURE_198_VECTOR_ENH_FACILITY_3
+#define FEATURE_199_VECT_PACKDEC_ENH_FACILITY_3
 
 /*-------------------------------------------------------------------*/
 /*      FEATUREs that DON'T have any facility bits defined           */
@@ -237,17 +240,23 @@
 #define FEATURE_VM_BLOCKIO
 /* INTEL X64 processor? */
 #if defined( __x86_64__ ) || defined( _M_X64 )
-  /* MSVC on X64: intrinsics are available and should be used for optimization */
+  /* MSVC on X64: intrinsics are available and could be used for optimization */
   #if defined( _MSC_VER ) || defined( _MSVC_ )
     #define FEATURE_V128_SSE  1
 
-    /* For MSC, assume all HW features are recognized  */
-    /* at compile time and runtime hardware checks are */
-    /* used to determine whether or not an instinsic   */
-    /* is executed.                                    */
+    /* NOTE:                                           */
+    /* MSVC optimization of 16-byte vectors is VERY    */
+    /* limited. Only enable Hardware features when     */
+    /* a performance test confirms significant         */
+    /* performance improvement.                        */
 
-    /* Compile-time Hardware Feature: Carry-less multiply */
-    #define FEATURE_HW_CLMUL  1
+    /* Compile-time Hardware Feature: Carry-less multiply  */
+    /* --------------------------------------------------  */
+    /* MSVC performance test showed a 275% performance     */
+    /* degradation (compared to clang-15 75% improvement). */
+    /* May 2025: Do not enable.                            */
+
+    // #define FEATURE_HW_CLMUL  1
 
 
   /* gcc/clang on X64: intrinsics are available and should be used for optimization */

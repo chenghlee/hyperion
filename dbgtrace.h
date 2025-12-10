@@ -32,12 +32,53 @@
 /*                                                                   */
 /*-------------------------------------------------------------------*/
 
+#undef ISSUE_UNEXPECTED_MSG
+
+#define ISSUE_UNEXPECTED_MSG()                                      \
+    do                                                              \
+    {                                                               \
+        const char*  file  = __FILE__;                              \
+        const char*  func  = __FUNCTION__;                          \
+        int          line  = __LINE__;                              \
+                                                                    \
+        char*   p = strrchr( file, '\\' );   /* Windows */          \
+        if (!p) p = strrchr( file, '/' );    /* non-Windows */      \
+        if (p) ++p;                                                 \
+        if (p) file = p;                                            \
+                                                                    \
+        /* HHC02218 "** UNEXPECTED! ** file \"%s\", line %d, function \"%s\"" */ \
+                                                                    \
+        fprintf( stdout, "HHC02218E ** UNEXPECTED! ** file \"%s\", line %d, function \"%s\"\n", \
+            file, line, func );                                     \
+    }                                                               \
+    while(0)
+
 #undef BREAK_INTO_DEBUGGER
 
 #if defined( _MSVC_ )
-  #define BREAK_INTO_DEBUGGER()     do { if (IsDebuggerPresent())         __debugbreak();  } while(0)
+
+  #define BREAK_INTO_DEBUGGER()                                     \
+                                                                    \
+    do                                                              \
+    {                                                               \
+      ISSUE_UNEXPECTED_MSG();                                       \
+      if (IsDebuggerPresent())                                      \
+        __debugbreak();                                             \
+    }                                                               \
+    while(0)
+
 #else
-  #define BREAK_INTO_DEBUGGER()     do { if (sysblk.is_debugger_present) raise( SIGTRAP ); } while(0)
+
+  #define BREAK_INTO_DEBUGGER()                                     \
+                                                                    \
+    do                                                              \
+    {                                                               \
+      ISSUE_UNEXPECTED_MSG();                                       \
+      if (sysblk.is_debugger_present)                               \
+        raise( SIGTRAP );                                           \
+    }                                                               \
+    while(0)
+
 #endif
 
 /*-------------------------------------------------------------------*/
@@ -148,7 +189,7 @@
   #ifndef _ENABLE_TRACING_STMTS_DEBUGGERTRACE_DEFINED
   #define _ENABLE_TRACING_STMTS_DEBUGGERTRACE_DEFINED
 
-    static inline void DebuggerTrace( char* fmt, ...) 
+    static inline void DebuggerTrace( char* fmt, ...)
     {
         const int       chunksize  = 512;
               int       buffsize   = 0;

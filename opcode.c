@@ -907,6 +907,22 @@ DISABLE_GCC_UNUSED_FUNCTION_WARNING;
  UNDEF_INST( load_program_status_word_extended_y )
 #endif
 
+#if !defined( FEATURE_198_VECTOR_ENH_FACILITY_3 )
+     UNDEF_INST( vector_generate_element_masks )
+     UNDEF_INST( vector_evaluate )
+     UNDEF_INST( vector_blend )
+     UNDEF_INST( vector_divide_logical )
+     UNDEF_INST( vector_remainder_logical )
+     UNDEF_INST( vector_divide )
+     UNDEF_INST( vector_remainder )
+#endif
+
+#if !defined( FEATURE_199_VECT_PACKDEC_ENH_FACILITY_3 )
+     UNDEF_INST( vector_convert_to_decimal_128 )
+     UNDEF_INST( vector_convert_to_binary_128 )
+     UNDEF_INST( vector_test_zoned )
+#endif
+
 /*-------------------------------------------------------------------*/
 /*      FEATUREs that DON'T have any facility bits defined           */
 /*-------------------------------------------------------------------*/
@@ -1749,6 +1765,9 @@ FWD_REF_IPRINT_FUNC( ASMFMT_VRI_F );
 FWD_REF_IPRINT_FUNC( ASMFMT_VRI_G );
 FWD_REF_IPRINT_FUNC( ASMFMT_VRI_H );
 FWD_REF_IPRINT_FUNC( ASMFMT_VRI_I );
+FWD_REF_IPRINT_FUNC( ASMFMT_VRI_J );
+FWD_REF_IPRINT_FUNC( ASMFMT_VRI_K );
+FWD_REF_IPRINT_FUNC( ASMFMT_VRI_L );
 FWD_REF_IPRINT_FUNC( ASMFMT_VRR_A );
 FWD_REF_IPRINT_FUNC( ASMFMT_VRR_A_VV );
 FWD_REF_IPRINT_FUNC( ASMFMT_VRR_A_VVM3 );
@@ -2182,11 +2201,11 @@ static INSTR_FUNC ARCH_DEP( gen_opcode_e6xx )[256][NUM_INSTR_TAB_PTRS] =
  /*E647*/ AD_GENx___x___x___ ,
  /*E648*/ AD_GENx___x___x___ ,
  /*E649*/ AD_GENx___x___x900 ("VLIP"     , VRI_H  , ASMFMT_VRI_H          , vector_load_immediate_decimal                     ),
- /*E64A*/ AD_GENx___x___x___ ,
+ /*E64A*/ AD_GENx___x___x900 ("VCVDQ"    , VRI_J  , ASMFMT_VRI_J          , vector_convert_to_decimal_128                     ),
  /*E64B*/ AD_GENx___x___x___ ,
  /*E64C*/ AD_GENx___x___x___ ,
  /*E64D*/ AD_GENx___x___x___ ,
- /*E64E*/ AD_GENx___x___x___ ,
+ /*E64E*/ AD_GENx___x___x900 ("VCVBQ"    , VRR_K  , ASMFMT_VRR_K          , vector_convert_to_binary_128                      ),
  /*E64F*/ AD_GENx___x___x___ ,
  /*E650*/ AD_GENx___x___x900 ("VCVB"     , VRR_I  , ASMFMT_VRR_I          , vector_convert_to_binary_32                       ),
  /*E651*/ AD_GENx___x___x900 ("VCLZDP"   , VRR_K  , ASMFMT_VRR_K          , vector_count_leading_zero_digits                  ),
@@ -2235,7 +2254,7 @@ static INSTR_FUNC ARCH_DEP( gen_opcode_e6xx )[256][NUM_INSTR_TAB_PTRS] =
  /*E67C*/ AD_GENx___x___x900 ("VSCSHP"   , VRR_B  , ASMFMT_VRR_B_VVV      , decimal_scale_and_convert_and_split_to_hfp        ),
  /*E67D*/ AD_GENx___x___x900 ("VCSPH"    , VRR_J  , ASMFMT_VRR_J          , vector_convert_hfp_to_scaled_decimal              ),
  /*E67E*/ AD_GENx___x___x900 ("VSDP"     , VRI_F  , ASMFMT_VRI_F          , vector_shift_and_divide_decimal                   ),
- /*E67F*/ AD_GENx___x___x___ ,
+ /*E67F*/ AD_GENx___x___x900 ("VTZ"      , VRI_L  , ASMFMT_VRI_L          , vector_test_zoned                                 ),
  /*E680*/ AD_GENx___x___x___ ,
  /*E681*/ AD_GENx___x___x___ ,
  /*E682*/ AD_GENx___x___x___ ,
@@ -3318,6 +3337,33 @@ IPRINT_FUNC(ASMFMT_VRI_I);
     m4 = ( (inst[3] & 0xF0) >> 4);
     i3 = ( (inst[3] & 0x0F) << 4) | ( (inst[4] & 0xF0) >> 4);
     IPRINT_PRINT("%d,%d,%d,%d", v1, r2, i3, m4)
+
+IPRINT_FUNC(ASMFMT_VRI_J);
+    int v1, v2, i3, m4;
+    UNREFERENCED(regs);
+    v1 = ((inst[1] >> 4) & 0x0F) | ((inst[4] & 0x08) << 1);
+    v2 = ((inst[1] >> 0) & 0x0F) | ((inst[4] & 0x04) << 2);
+    i3 = ( (inst[3] & 0x0F) << 4) | ( (inst[4] & 0xF0) >> 4);
+    m4 = ( (inst[3] & 0xF0) >> 4);
+    IPRINT_PRINT("%d,%d,%d,%d", v1, v2, i3, m4)
+
+IPRINT_FUNC(ASMFMT_VRI_K);
+    int v1, v2, v3, v4, i5;
+    UNREFERENCED(regs);
+    v1 = ((inst[1] >> 4) & 0x0F) | ((inst[4] & 0x08) << 1);
+    v2 = ((inst[1] >> 0) & 0x0F) | ((inst[4] & 0x04) << 2);
+    v3 = ((inst[2] >> 4) & 0x0F) | ((inst[4] & 0x02) << 3);
+    v4 = ((inst[4] >> 4) & 0x0F) | ((inst[4] & 0x01) << 4);
+    i5 = inst[3];
+    IPRINT_PRINT("%d,%d,%d,%d,%d", v1, v2, v3, v4, i5)
+
+IPRINT_FUNC(ASMFMT_VRI_L);
+    int v1, v2, i3;
+    UNREFERENCED(regs);
+    v1 = ((inst[1] >> 0) & 0x0F) | ((inst[4] & 0x04) << 2);
+    v2 = ((inst[2] >> 4) & 0x0F) | ((inst[4] & 0x02) << 3);
+    i3 = ((inst[2] & 0x0F) << 12) | ((inst[3] & 0xFF) << 4) | ((inst[4] & 0xF0) >> 4);
+    IPRINT_PRINT("%d,%d,%d", v1, v2, i3)
 
 IPRINT_FUNC(ASMFMT_VRR_A);
     int v1, v2, m3, m4, m5;
@@ -4530,12 +4576,12 @@ static INSTR_FUNC gen_opcode_b9xx[256][NUM_INSTR_TAB_PTRS] =
  /*B965*/ GENx___x___x900 ( "OCGRK"     , RRF_a, ASMFMT_RRR      , or_register_long_with_complement                    ),
  /*B966*/ GENx___x___x900 ( "NOGRK"     , RRF_a, ASMFMT_RRR      , nor_register_long                                   ),
  /*B967*/ GENx___x___x900 ( "NXGRK"     , RRF_a, ASMFMT_RRR      , not_xor_register_long                               ),
- /*B968*/ GENx___x___x___ ,
- /*B969*/ GENx___x___x___ ,
+ /*B968*/ GENx___x___x900 ( "CLZG"      , RRE  , ASMFMT_RRE      , count_leading_zeros                                 ),
+ /*B969*/ GENx___x___x900 ( "CTZG"      , RRE  , ASMFMT_RRE      , count_trailing_zeros                                ),
  /*B96A*/ GENx___x___x___ ,
  /*B96B*/ GENx___x___x___ ,
- /*B96C*/ GENx___x___x___ ,
- /*B96D*/ GENx___x___x___ ,
+ /*B96C*/ GENx___x___x900 ( "BEXTG"     , RRF_a, ASMFMT_RRR      , bit_extract                                         ),
+ /*B96D*/ GENx___x___x900 ( "BDEPG"     , RRF_a, ASMFMT_RRR      , bit_deposit                                         ),
  /*B96E*/ GENx___x___x___ ,
  /*B96F*/ GENx___x___x___ ,
  /*B970*/ GENx___x___x___ ,
@@ -4902,16 +4948,16 @@ static INSTR_FUNC gen_opcode_e3xx[256][NUM_INSTR_TAB_PTRS] =
  /*E35D*/ GENx___x___x___ ,
  /*E35E*/ GENx37Xx___x900 ( "ALY"       , RXY_a, ASMFMT_RXY      , add_logical_y                                       ),
  /*E35F*/ GENx37Xx___x900 ( "SLY"       , RXY_a, ASMFMT_RXY      , subtract_logical_y                                  ),
- /*E360*/ GENx___x___x___ ,
- /*E361*/ GENx___x___x___ ,
- /*E362*/ GENx___x___x___ ,
- /*E363*/ GENx___x___x___ ,
- /*E364*/ GENx___x___x___ ,
- /*E365*/ GENx___x___x___ ,
- /*E366*/ GENx___x___x___ ,
- /*E367*/ GENx___x___x___ ,
- /*E368*/ GENx___x___x___ ,
- /*E369*/ GENx___x___x___ ,
+ /*E360*/ GENx___x___x900 ( "LXAB"      , RXY_c, ASMFMT_RXY      , load_indexed_address_shift_0                        ),
+ /*E361*/ GENx___x___x900 ( "LLXAB"     , RXY_c, ASMFMT_RXY      , load_logical_indexed_address_shift_0                ),
+ /*E362*/ GENx___x___x900 ( "LXAH"      , RXY_c, ASMFMT_RXY      , load_indexed_address_shift_1                        ),
+ /*E363*/ GENx___x___x900 ( "LLXAH"     , RXY_c, ASMFMT_RXY      , load_logical_indexed_address_shift_1                ),
+ /*E364*/ GENx___x___x900 ( "LXAF"      , RXY_c, ASMFMT_RXY      , load_indexed_address_shift_2                        ),
+ /*E365*/ GENx___x___x900 ( "LLXAF"     , RXY_c, ASMFMT_RXY      , load_logical_indexed_address_shift_2                ),
+ /*E366*/ GENx___x___x900 ( "LXAG"      , RXY_c, ASMFMT_RXY      , load_indexed_address_shift_3                        ),
+ /*E367*/ GENx___x___x900 ( "LLXAG"     , RXY_c, ASMFMT_RXY      , load_logical_indexed_address_shift_3                ),
+ /*E368*/ GENx___x___x900 ( "LXAQ"      , RXY_c, ASMFMT_RXY      , load_indexed_address_shift_4                        ),
+ /*E369*/ GENx___x___x900 ( "LLXAQ"     , RXY_c, ASMFMT_RXY      , load_logical_indexed_address_shift_4                ),
  /*E36A*/ GENx___x___x___ ,
  /*E36B*/ GENx___x___x___ ,
  /*E36C*/ GENx___x___x___ ,
@@ -5438,7 +5484,7 @@ static INSTR_FUNC gen_opcode_e7xx[256][NUM_INSTR_TAB_PTRS] =
  /*E751*/ GENx___x___x___ ,
  /*E752*/ GENx___x___x900("VCTZ"   , VRR_A  , ASMFMT_VRR_A_VVM3    , vector_count_trailing_zeros                            ),
  /*E753*/ GENx___x___x900("VCLZ"   , VRR_A  , ASMFMT_VRR_A_VVM3    , vector_count_leading_zeros                             ),
- /*E754*/ GENx___x___x___ ,
+ /*E754*/ GENx___x___x900("VGEM"   , VRR_A  , ASMFMT_VRR_A_VVM3    , vector_generate_element_masks                          ),
  /*E755*/ GENx___x___x___ ,
  /*E756*/ GENx___x___x900("VLR"    , VRR_A  , ASMFMT_VRR_A_VV      , vector_load_vector                                     ),
  /*E757*/ GENx___x___x___ ,
@@ -5490,8 +5536,8 @@ static INSTR_FUNC gen_opcode_e7xx[256][NUM_INSTR_TAB_PTRS] =
  /*E785*/ GENx___x___x900("VBPERM" , VRR_C  , ASMFMT_VRR_C_VVV     , vector_bit_permute                                     ),
  /*E786*/ GENx___x___x900("VSLD"   , VRI_D  , ASMFMT_VRI_D_VVVI4   , vector_shift_left_double_by_bit                        ),
  /*E787*/ GENx___x___x900("VSRD"   , VRI_D  , ASMFMT_VRI_D_VVVI4   , vector_shift_right_double_by_bit                       ),
- /*E788*/ GENx___x___x___ ,
- /*E789*/ GENx___x___x___ ,
+ /*E788*/ GENx___x___x900("VEVAL"  , VRI_K  , ASMFMT_VRI_K         , vector_evaluate                                        ),
+ /*E789*/ GENx___x___x900("VBLEND" , VRR_D  , ASMFMT_VRR_D         , vector_blend                                           ),
  /*E78A*/ GENx___x___x900("VSTRC"  , VRR_D  , ASMFMT_VRR_D         , vector_string_range_compare                            ),
  /*E78B*/ GENx___x___x900("VSTRS"  , VRR_D  , ASMFMT_VRR_D         , vector_string_search                                   ),
  /*E78C*/ GENx___x___x900("VPERM"  , VRR_E  , ASMFMT_VRR_E_VVVV    , vector_permute                                         ),
@@ -5530,10 +5576,10 @@ static INSTR_FUNC gen_opcode_e7xx[256][NUM_INSTR_TAB_PTRS] =
  /*E7AD*/ GENx___x___x900("VMALO"  , VRR_D  , ASMFMT_VRR_D_VVVVM5  , vector_multiply_and_add_logical_odd                    ),
  /*E7AE*/ GENx___x___x900("VMAE"   , VRR_D  , ASMFMT_VRR_D_VVVVM5  , vector_multiply_and_add_even                           ),
  /*E7AF*/ GENx___x___x900("VMAO"   , VRR_D  , ASMFMT_VRR_D_VVVVM5  , vector_multiply_and_add_odd                            ),
- /*E7B0*/ GENx___x___x___ ,
- /*E7B1*/ GENx___x___x___ ,
- /*E7B2*/ GENx___x___x___ ,
- /*E7B3*/ GENx___x___x___ ,
+ /*E7B0*/ GENx___x___x900("VDL"    , VRR_C  , ASMFMT_VRR_C_VVVM4M5 , vector_divide_logical                                  ),
+ /*E7B1*/ GENx___x___x900("VRL"    , VRR_C  , ASMFMT_VRR_C_VVVM4M5 , vector_remainder_logical                               ),
+ /*E7B2*/ GENx___x___x900("VD"     , VRR_C  , ASMFMT_VRR_C_VVVM4M5 , vector_divide                                          ),
+ /*E7B3*/ GENx___x___x900("VR"     , VRR_C  , ASMFMT_VRR_C_VVVM4M5 , vector_remainder                                       ),
  /*E7B4*/ GENx___x___x900("VGFM"   , VRR_C  , ASMFMT_VRR_C_VVVM4   , vector_galois_field_multiply_sum                       ),
  /*E7B5*/ GENx___x___x___ ,
  /*E7B6*/ GENx___x___x___ ,

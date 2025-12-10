@@ -676,7 +676,7 @@ extern              U64  thread_cputime_us(const REGS*);    /* Thread real CPU u
                                     \
     ((tod_value.high & 0x00FFFFFFFFFFFFFFULL) + (_regs)->tod_epoch)
 
-#define INT_TIMER(_regs)            \
+#define INTERVAL_TIMER(_regs)       \
                                     \
     ((S32)TOD_TO_ITIMER((S64)((_regs)->int_timer - hw_tod.high)))
 

@@ -364,6 +364,9 @@ init_retry:
             return -1;
         }
 
+        // Correct for endianness difference between server and client, as devt is U16.
+        svr_cu.devt = CSWAP16(SWAP16(svr_cu.devt));
+
         /* verify control unit type and model are the same */
 
         if (0
@@ -2083,7 +2086,11 @@ char     trcmsg[32];
         case SHRD_CU:
         {
             struct { U16 devt; BYTE model; } temp;
-            temp.devt  = dev->ckdcu->devt;
+
+            // Correct for endianness difference between server and client, as devt is U16, and little-endian is needed.
+            // This is for the server side, the same correction was applied higher up on the client side.
+            temp.devt  = CSWAP16 (SWAP16 (dev->ckdcu->devt ));
+
             temp.model = dev->ckdcu->model;
             SHRD_SET_HDR (hdr, 0, 0, dev->devnum, id, sizeof( temp ));
             serverSend (dev, ix, hdr, (BYTE*)&temp, (U32)sizeof( temp ));

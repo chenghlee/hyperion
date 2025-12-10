@@ -1011,7 +1011,7 @@ atomic_update64( &sysblk.txf_stats[ contran ? 1 : 0 ].txf_ ## ctr, +1 )
                 sys_reset:1,            /* 1 = system in reset state */
                 ipled:1,                /* 1 = guest has been IPL'ed */
                 sfcmd:1,                /* 1 = 'sf' command issued   */
-                daemon_mode:1,          /* Daemon mode active        */
+                NoUI_mode:1,            /* No User Interface mode    */
                 panel_init:1,           /* Panel display initialized */
                 herclin:1,              /* herclin.exe has no panel  */
                 npquiet:1,              /* New Panel quiet indicator */
@@ -1953,6 +1953,9 @@ struct DEVBLK {                         /* Device configuration block*/
                                         /* Line above ISW20030819-1  */
         u_int   ckdfakewr:1;            /* 1=Fake successful write
                                              for read only file      */
+        u_int   ckdUCnxt:1;             /* 1=CMDREJ next chained CCW     :AE: */
+        u_int   ckdPostRSSD:1;          /* 1=Prev CCW was RSSD           :AE: */
+        u_int   ckdPostSSM:1;           /* 1=Prev CCW was SSM            :AE: */
         BYTE    ckdnvs:1;               /* 1=NVS defined             */
         BYTE    ckdraid:1;              /* 1=RAID device             */
         U16     ckdssdlen;              /* #of bytes of data prepared

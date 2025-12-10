@@ -253,10 +253,10 @@ LOGM_DLL_IMPORT int  panel_command_capture( char* cmd, char** resp, bool quiet )
 // reserve 20-39 for option related
 #define HHC00020 "Test timeout factor %s outside of valid range 1.0 to %3.1f"
 #define HHC00021 "Test timeout factor = %3.1f"
-//efine HHC00022 (available)
-#define HHC00023 "Invalid/unsupported option: %s"
-#define HHC00024 "Unrecognized option: %s"
-#define HHC00025 "Invalid help option argument: %s"
+#define HHC00022 "Option \"%s\" has been deprecated; use \"%s\" instead"
+#define HHC00023 "Invalid/unsupported option: \"%s\""
+#define HHC00024 "Unrecognized option: \"%s\""
+#define HHC00025 "Invalid help option argument: \"%s\""
 #define HHC00026 "WARNING: Host does not support the '%s' instruction"
 //efine HHC00027 - HHC00069 (available)
 
@@ -485,15 +485,15 @@ LOGM_DLL_IMPORT int  panel_command_capture( char* cmd, char** resp, bool quiet )
 #define HHC00384 "Collecting garbage for CCKD%s file[%d] %1d:%04X %s..."
 #define HHC00385 "Skipping garbage collection for CCKD%s file[%d] %1d:%04X %s due to space errors"
 #define HHC00386 "Collected %u bytes of garbage for CCKD%s file[%d] %1d:%04X %s..."
-#define HHC00387 "%1d:%04X CCKD%s image %s is SEVERELY fragmented!"
-#define HHC00388 "%1d:%04X CCKD%s image %s is moderately fragmented"
-#define HHC00389 "%1d:%04X CCKD%s image %s is slightly fragmented"
+#define HHC00387 "%1d:%04X CCKD%s image %s is very fragmented."
+#define HHC00388 "%1d:%04X CCKD%s image %s is moderately fragmented."
+#define HHC00389 "%1d:%04X CCKD%s image %s is slightly fragmented."
 #define HHC00390 "%1d:%04X CCKD file: device has no shadow files"
 #define HHC00391 "Starting CCKD Dasd Hardener pass..."
 #define HHC00392 "CCKD Dasd Hardener pass complete."
 #define HHC00393 "Thread '%s': sleeping for %d seconds at %s..."
-//efine HHC00394 (available)
-//efine HHC00395 (available)
+#define HHC00394 "Waiting %d seconds to start next CCKD garbage collection cycle..."
+#define HHC00395 "Hardening CCKD%s dasd %1d:%04X"
 #define HHC00396 "%1d:%04X %s" // (cckd_trace)
 //efine HHC00397 (available)
 #define HHC00398 "%s" // (trace table)
@@ -514,7 +514,7 @@ LOGM_DLL_IMPORT int  panel_command_capture( char* cmd, char** resp, bool quiet )
 #define HHC00411 "%1d:%04X %s file %s: ckd header inconsistent with file size"
 #define HHC00412 "%1d:%04X %s file %s: ckd header high cylinder incorrect"
 #define HHC00413 "%1d:%04X %s file %s: maximum CKD files exceeded: %d"
-#define HHC00414 "%1d:%04X %s file %s: model %s cyls %d heads %d tracks %d trklen %d"
+#define HHC00414 "%1d:%04X %s file %s: model %s cu %s cyls %d heads %d tracks %d trklen %d"
 #define HHC00415 "%1d:%04X CKD file %s: device type %4.4X not found in dasd table"
 #define HHC00416 "%1d:%04X %s file %s: control unit %s not found in dasd table"
 #define HHC00417 "%1d:%04X CKD file %s: cache hits %d, misses %d, waits %d"
@@ -571,7 +571,7 @@ LOGM_DLL_IMPORT int  panel_command_capture( char* cmd, char** resp, bool quiet )
 #define HHC00467 "Maximum %s supported is %u"
 #define HHC00468 "For larger capacity DASD volumes, use %s"
 #define HHC00469 "%1d:%04X %s file %s: shadow files not supported for %s dasd"
-#define HHC00470 "%1d:%04X %s file %s: model %s cyls %d heads %d tracks %d trklen %d"
+#define HHC00470 "%1d:%04X %s file %s: model %s cu %s cyls %d heads %d tracks %d trklen %d"
 //efine HHC00471 (available)
 #define HHC00472 "%1d:%04X CKD64 file %s: creating %4.4X volume %s: %u cyls, %u trks/cyl, %u bytes/track"
 //efine HHC00473 (available)
@@ -999,7 +999,8 @@ LOGM_DLL_IMPORT int  panel_command_capture( char* cmd, char** resp, bool quiet )
 #define HHC01111 "%1d:%04X Printer: channel 1 is undefined"
 #define HHC01112 "%1d:%04X Printer: invalid fcb: maximum channel codes exceeded"
 #define HHC01113 "%1d:%04X Printer: incompatible '%s' and 'lpp' values detected"
-//efine HHC01114 - HHC01149 (available)
+#define HHC01114 "%1d:%04X Printer: sending pipe receiver with pid %d signal %d"
+//efine HHC01115 - HHC01149 (available)
 
 // HIM device (him.c)
 #define HHC01150 "%1d:%04X HIM: Error in function %s: %s"
@@ -1101,7 +1102,7 @@ LOGM_DLL_IMPORT int  panel_command_capture( char* cmd, char** resp, bool quiet )
 #define HHC01404 "Could not create the Automatic Operator thread"
 #define HHC01405 "Script file %s not found"
 #define HHC01406 "Startup parm -l: maximum loadable modules %d exceeded; remainder not loaded"
-#define HHC01407 "Usage: %s [--help[=SHORT|LONG|VERSION|BUILD]] -f config-filename|\"none\" [-o logfile-name] [-r rcfile-name] [-d] [-b logo-filename] [-s sym=val] [-t [factor]] [-p dyn-load-dir] [[-l dynmod-to-load]...] [> logfile]"
+#define HHC01407 "Usage: %s [--help[=SHORT|LONG|VERSION|BUILD]] -f config-filename|\"none\" [-o logfile-name] [-r rcfile-name] [-n] [-b logo-filename] [-s sym=val] [-t [factor]] [-p dyn-load-dir] [[-l dynmod-to-load]...] [> logfile]"
 #define HHC01408 "Hercules terminating, see previous messages for reason"
 #define HHC01409 "Load of dyngui.dll failed, Hercules terminated"
 #define HHC01410 "Cannot register %s handler: %s"
@@ -1407,7 +1408,7 @@ LOGM_DLL_IMPORT int  panel_command_capture( char* cmd, char** resp, bool quiet )
 #define HHC02215 "Command quiet ignored: external GUI active"
 #define HHC02216 "Empty list"
 #define HHC02217 "%c%s"
-#define HHC02218 "Logic error"
+#define HHC02218 "** UNEXPECTED! ** file \"%s\", line %d, function \"%s\""
 #define HHC02219 "Error in function %s: %s"
 #define HHC02220 "Entry deleted%s"
 #define HHC02221 "Entry not found"
@@ -1467,7 +1468,7 @@ LOGM_DLL_IMPORT int  panel_command_capture( char* cmd, char** resp, bool quiet )
 #define HHC02275 "SCSI auto-mount: %s"
 #define HHC02276 "Floating point control register: %08"PRIX32
 #define HHC02277 "Prefix register: %s"
-#define HHC02278 "Program status word: %s"
+#define HHC02278 "Processor %s%02X PSW: %s"
 #define HHC02279 "%s" // devlist command
 #define HHC02280 "%s" // qd command
 #define HHC02281 "%s" // pgmtrace_cmd
@@ -1502,7 +1503,7 @@ LOGM_DLL_IMPORT int  panel_command_capture( char* cmd, char** resp, bool quiet )
 #define HHC02310 "Panel command %s is not supported in this build; see option %s"
 #define HHC02311 "%s completed"
 #define HHC02312 "Empty list"
-//efine HHC02313 (available)
+#define HHC02313 "State: %s" // 'psw_cmd' state: enabled wait, instuction step, running normal,  etc.
 #define HHC02314 "No scripts currently running"
 #define HHC02315 "Script id:%d, tid:"TIDPAT", level:%d, name:%s"
 #define HHC02316 "Script %s not found"
@@ -1622,7 +1623,7 @@ LOGM_DLL_IMPORT int  panel_command_capture( char* cmd, char** resp, bool quiet )
        "HHC02410I options:\n" \
        "HHC02410I   -r     replace existing output file\n" \
        "HHC02410I   -q     suppress progress messages%s"
-#define HHC02411 "Usage: %s [-f] [-level] [-ro] file1 [file2 ...]\n" \
+#define HHC02411 "Usage: %s [-f] [-ro] [-n] file1 [file2 ...]\n" \
        "HHC02410I   file    name of DASD image file\n" \
        "HHC02411I options:\n" \
        "HHC02411I   -f      force check even if OPENED bit is on\n" \
@@ -2287,7 +2288,8 @@ LOGM_DLL_IMPORT int  panel_command_capture( char* cmd, char** resp, bool quiet )
 #define HHC02960 "Dasd image file format unsupported or unrecognized: %s"
 #define HHC02961 "DASD operation completed"
 #define HHC02962 "Converting \"%s\" to CCKD64 file format..."
-//efine HHC02963 - HHC02974 (available)
+#define HHC02963 "Output file cannot be the same as input file!"
+//efine HHC02964 - HHC02974 (available)
 
 // dasdpdsu
 #define HHC02975 "Usage: %s infile [sf=shadow-file] pdsname [ASCII] [odir]" "\n" \
@@ -2363,9 +2365,9 @@ LOGM_DLL_IMPORT int  panel_command_capture( char* cmd, char** resp, bool quiet )
 #define HHC03041 "***********************************************************"
 #define HHC03042 "%-8s 0x%10.10"PRIX64"  0x%10.10"PRIX64" %11"PRIu64"%s"
 #define HHC03043 "Total active tracks    = %"PRIu32" tracks"
-#define HHC03044 "Avg. L2-to-track seek  = %.3f MB"
+#define HHC03044 "Avg. L2-to-track seek  = %s"
 #define HHC03045 "Total active blkgrps   = %"PRIu32" groups"
-#define HHC03046 "Avg. L2-to-block seek  = %.3f MB"
+#define HHC03046 "Avg. L2-to-block seek  = %s"
 #define HHC03047 "         File offset    Size (hex)         Size  group(s)"
 #define HHC03048                                                            "\n" \
        "HHC03048I   dh_devid:      %s        (%s-bit C%s%s %s)"             "\n" \
@@ -2376,7 +2378,7 @@ LOGM_DLL_IMPORT int  panel_command_capture( char* cmd, char** resp, bool quiet )
        "HHC03048I   dh_highcyl:    %u"                                      "\n" \
        "HHC03048I   dh_serial:     %s"
 #define HHC03049 "Total unknown space    = %s bytes"
-#define HHC03050 "Image is %s fragmented%s"
+#define HHC03050 "Image is %s fragmented."
 //efine HHC03051 - HHC03099 (available)
 
 // dasdser
@@ -2869,5 +2871,8 @@ LOGM_DLL_IMPORT int  panel_command_capture( char* cmd, char** resp, bool quiet )
 // range 97000 - 97999 available
 // range 98000 - 98999 available
 // range 99000 - 99999 available
+
+#define HHC99998 "FreeBSD: %s %s"   // Dumping all FreeBSD debugging in one spot
+#define HHC99999 "FreeBSD: %s" 	    // Dumping all FreeBSD debugging in one spot
 
 #endif // _MSGENU_H_
